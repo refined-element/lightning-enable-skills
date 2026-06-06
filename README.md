@@ -12,22 +12,22 @@ unlocks.
 
 ## Skills
 
-### 🫙 `restock-from-photo`
+| Skill | What it does |
+|---|---|
+| 🫙 **[restock-from-photo](skills/restock-from-photo/)** | Photo of a product + "I'm running low" → identify → confirm → **reorder** over L402 → claim link. |
+| 📚 **[cited-answer](skills/cited-answer/)** | Answer a question by **buying** exactly the paid data it needs over L402, cite every figure, show the sats receipt. |
+| 🏷️ **[sell-this](skills/sell-this/)** | Turn a resource into a **paid endpoint** — mint an L402 paywall, verify payment, then deliver. (Producer side.) |
+| 📊 **[l402-meter](skills/l402-meter/)** | A running **satoshi meter + guardrail** for an agent's spend — warns at 80%, stops at 100%. |
+| 🔁 **[standing-order](skills/standing-order/)** | **Recurring restock** over Lightning — no card on file, a human yes every cycle. |
+| 🤝 **[negotiate-and-buy](skills/negotiate-and-buy/)** | **Agent-to-agent commerce**: discover another agent's service over Nostr, vet it, agree terms, settle over Lightning. |
 
-Show a photo of a product you own and say *"I'm running low"* — the agent
-identifies it, confirms with you, and reorders it over Lightning via L402,
-then hands back a claim link to finish shipping.
+Each skill folder has a human-facing `README.md` (what it is) and an agent-facing
+`SKILL.md` (the instructions Claude loads).
 
-- Photo → product identification (Claude is natively multimodal).
-- Real L402 purchase: `402 Payment Required` → pay the invoice from your MCP
-  wallet → preimage → order placed.
-- Human stays in control: it always confirms before spending, respects your
-  wallet budget, and never invents addresses.
-- Works today against the example stores **Great Ghee** (`greatghee`) and
-  **Salt of the Earth / SOTE** (`drinksote`); add your own in
-  [`references/stores.md`](skills/restock-from-photo/references/stores.md).
-
-See [`skills/restock-from-photo/SKILL.md`](skills/restock-from-photo/SKILL.md).
+**Buy + sell, end to end:** `cited-answer` / `restock-from-photo` / `standing-order`
+are the buyer side; `sell-this` is the seller side; `negotiate-and-buy` is two
+agents transacting with each other; `l402-meter` keeps any of them honest about
+spend.
 
 ## What works where
 
@@ -69,16 +69,16 @@ Every skill here that spends money follows the same rules:
 
 ## Ideas / roadmap
 
-This repo is meant to grow. Candidate skills (PRs / suggestions welcome):
+This repo is meant to grow. Candidate next skills (PRs / suggestions welcome):
 
-- **`pantry-watch`** — periodically check a shopping list and reorder staples
-  when you confirm.
-- **`pay-per-call-research`** — answer a question by buying exactly the paid
-  data it needs over L402 (FRED, market data, etc.) and citing it.
-- **`api-meter-guard`** — watch an L402 API spend and alert / cap before a
-  budget blows.
-- **`agent-vending`** — let your agent *sell* a resource over L402 (producer
-  side), not just buy.
+- **`gift-it`** — "send my friend a jar of ghee" → checkout to a gift address,
+  pay over Lightning.
+- **`discover-and-try`** — "find me a weather/health/finance API I can use" →
+  discover on the L402 registry, show what you can afford, run a sample paid call.
+- **`pantry-from-receipt`** — photograph a grocery receipt or shelf → match items
+  to L402 stores → offer to reorder what you're low on.
+- **`api-arbitrage`** — compare multiple L402 providers for the same data, buy
+  the cheapest, show the savings.
 
 ## License
 

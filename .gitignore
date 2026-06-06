@@ -14,3 +14,8 @@ Thumbs.db
 # Local env / secrets — never commit
 .env
 *.local
+
+# Skill local state (per-user, never commit)
+.l402-meter.json
+.le-standing-orders.json
+.test-*.json
