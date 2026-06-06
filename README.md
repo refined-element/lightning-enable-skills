@@ -19,6 +19,7 @@ unlocks.
 | 🏷️ **[sell-this](skills/sell-this/)** | Turn a resource into a **paid endpoint** — mint an L402 paywall, verify payment, then deliver. (Producer side.) |
 | 📊 **[l402-meter](skills/l402-meter/)** | A running **satoshi meter + guardrail** for an agent's spend — warns at 80%, stops at 100%. |
 | 🔁 **[standing-order](skills/standing-order/)** | **Recurring restock** over Lightning — no card on file, a human yes every cycle. |
+| 🎁 **[gift-it](skills/gift-it/)** | Buy a product as a **gift** and ship it to someone else, paid over Lightning. |
 | 🤝 **[negotiate-and-buy](skills/negotiate-and-buy/)** | **Agent-to-agent commerce**: discover another agent's service over Nostr, vet it, agree terms, settle over Lightning. |
 
 Each skill folder has a human-facing `README.md` (what it is) and an agent-facing
@@ -71,8 +72,6 @@ Every skill here that spends money follows the same rules:
 
 This repo is meant to grow. Candidate next skills (PRs / suggestions welcome):
 
-- **`gift-it`** — "send my friend a jar of ghee" → checkout to a gift address,
-  pay over Lightning.
 - **`discover-and-try`** — "find me a weather/health/finance API I can use" →
   discover on the L402 registry, show what you can afford, run a sample paid call.
 - **`pantry-from-receipt`** — photograph a grocery receipt or shelf → match items

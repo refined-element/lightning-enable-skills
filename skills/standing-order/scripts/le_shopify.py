@@ -15,9 +15,17 @@ Usage:
   le_shopify.py catalog  <slug>
   le_shopify.py checkout <slug> <variantId> <buyerLocation> [quantity]
   le_shopify.py complete <slug> <variantId> <buyerLocation> <macaroonB64> <preimage> [quantity]
+  le_shopify.py claim    <slug> <claimToken> <email> <shippingAddressJson>
 
 buyerLocation format: {country}-{state}-{zip}, e.g. US-FL-34787
-  — this is the BUYER's location, used server-side for sales-tax calculation.
+  — the location goods ship to, used server-side for sales-tax calculation.
+    For a self-restock that's your zip; for a gift it's the recipient's zip.
+
+shippingAddressJson (for `claim`): a JSON object, e.g.
+  '{"firstName":"A","lastName":"B","address1":"1 Main St","city":"Orlando",
+    "province":"FL","zip":"32801","country":"US"}'
+  (optional "address2"). `claim` finalizes an order once it is paid +
+  AwaitingDetails — the token alone is sufficient at that point.
 """
 import json
 import sys
@@ -81,6 +89,21 @@ def complete(slug, variant_id, buyer_location, macaroon_b64, preimage, qty=1):
     print(json.dumps({"status": status, "claim": body}, indent=2))
 
 
+def claim(slug, claim_token, email, shipping_json):
+    # Finalize a paid order with a shipping address. Used for GIFTS (ship to
+    # someone else) — after `complete` returns the claim token, submit the
+    # recipient's address here. The token alone is accepted once the order is
+    # paid + AwaitingDetails. For a normal self-restock you can instead hand the
+    # human the claim-page URL from `complete` and let them fill this in.
+    address = json.loads(shipping_json)
+    status, body = _req(
+        "POST",
+        f"/api/shopify/{slug}/claim",
+        body={"claimToken": claim_token, "email": email, "shippingAddress": address},
+    )
+    print(json.dumps({"status": status, "order": body}, indent=2))
+
+
 def main(argv):
     if len(argv) < 2:
         print(__doc__)
@@ -94,6 +117,8 @@ def main(argv):
         elif cmd == "complete" and len(argv) in (7, 8):
             complete(argv[2], argv[3], argv[4], argv[5], argv[6],
                      argv[7] if len(argv) == 8 else 1)
+        elif cmd == "claim" and len(argv) == 6:
+            claim(argv[2], argv[3], argv[4], argv[5])
         else:
             print(__doc__)
             return 1
