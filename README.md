@@ -1,5 +1,8 @@
 # lightning-enable-skills
 
+[![Discord](https://img.shields.io/discord/1405389254892195951?label=community&logo=discord&color=5865F2)](https://discord.gg/rX7NxHY8vx)
+
+
 Inventive [Claude Skills](https://support.claude.com/en/articles/12512180-use-skills-in-claude)
 that put **agentic commerce** to work over Bitcoin Lightning + the
 [L402 protocol](https://github.com/lightninglabs/L402), powered by the
