@@ -21,21 +21,24 @@ unlocks.
 | 🔁 **[standing-order](skills/standing-order/)** | **Recurring restock** over Lightning — no card on file, a human yes every cycle. |
 | 🎁 **[gift-it](skills/gift-it/)** | Buy a product as a **gift** and ship it to someone else, paid over Lightning. |
 | 🤝 **[negotiate-and-buy](skills/negotiate-and-buy/)** | **Agent-to-agent commerce**: discover another agent's service over Nostr, vet it, agree terms, settle over Lightning. |
+| ⚡ **[pay-l402-anywhere](skills/pay-l402-anywhere/)** | Give an agent a **bounded Lightning wallet** and it pays for any L402-gated resource or API **anywhere** — discover, confirm, pay per-call. The general buyer wedge. |
 
 Each skill folder has a human-facing `README.md` (what it is) and an agent-facing
 `SKILL.md` (the instructions Claude loads).
 
-**Buy + sell, end to end:** `cited-answer` / `restock-from-photo` / `standing-order`
-are the buyer side; `sell-this` is the seller side; `negotiate-and-buy` is two
-agents transacting with each other; `l402-meter` keeps any of them honest about
-spend.
+**Buy + sell, end to end:** `pay-l402-anywhere` is the general buyer;
+`cited-answer` / `restock-from-photo` / `standing-order` are task-specific buyers;
+`sell-this` is the seller side; `negotiate-and-buy` is two agents transacting with
+each other; `l402-meter` keeps any of them honest about spend.
 
 ## What works where
 
 | Surface | Status | Why |
 |---|---|---|
 | **Claude Code / Desktop** | ✅ Works now | Has a shell (to run the helper script) + the local Lightning Enable MCP wallet. |
-| **Claude mobile app** | ⏳ Not yet | Mobile only supports *remote* MCP connectors and can't run scripts. The logic must move into a hosted MCP tool. See [`docs/mobile-readiness.md`](docs/mobile-readiness.md). |
+| **Hermes** (Telegram/Signal/etc.) | ✅ Works now | Runs locally with a shell + the local MCP wallet **and** bridges to your phone over chat apps — the mobile path *without* a hosted MCP. See [Run L402 anywhere: Hermes + NWC](https://docs.lightningenable.com/products/l402-microtransactions/hermes-nwc-setup). |
+| **Cursor / Codex CLI** | ✅ Works now | `SKILL.md` follows the [agentskills.io](https://agentskills.io) standard — the same skill file loads unmodified. |
+| **Claude mobile app** | ⏳ Not yet | Claude's own mobile app only supports *remote* MCP connectors and can't run scripts. Use **Hermes** (above) for mobile today. See [`docs/mobile-readiness.md`](docs/mobile-readiness.md). |
 
 ## Install
 
