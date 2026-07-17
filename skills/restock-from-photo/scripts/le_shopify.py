@@ -25,7 +25,11 @@ shippingAddressJson (for `claim`): a JSON object, e.g.
   '{"firstName":"A","lastName":"B","address1":"1 Main St","city":"Orlando",
     "province":"FL","zip":"32801","country":"US"}'
   (optional "address2"). `claim` finalizes an order once it is paid +
-  AwaitingDetails — the token alone is sufficient at that point.
+    AwaitingDetails — the token alone is sufficient at that point.
+
+Exit codes: 0 ok, 1 usage, 2 exception, 3 the API rejected the call. On a
+non-zero exit the JSON body is still printed (read "status") — but do NOT report
+the step as done: a failed claim is not a placed order.
 """
 import json
 import sys
@@ -33,6 +37,10 @@ import urllib.error
 import urllib.request
 
 BASE = "https://api.lightningenable.com"
+
+
+def _ok(status, also=()):
+    return 200 <= status < 300 or status in also
 
 
 def _req(method, path, headers=None, body=None):
@@ -59,6 +67,7 @@ def _req(method, path, headers=None, body=None):
 def catalog(slug):
     status, body = _req("GET", f"/api/shopify/{slug}/catalog")
     print(json.dumps({"status": status, "catalog": body}, indent=2))
+    return _ok(status)
 
 
 def checkout(slug, variant_id, buyer_location, qty=1):
@@ -71,12 +80,15 @@ def checkout(slug, variant_id, buyer_location, qty=1):
         body={"items": [{"variantId": int(variant_id), "quantity": int(qty)}]},
     )
     print(json.dumps({"status": status, "checkout": body}, indent=2))
+    return _ok(status, also=(402,))
 
 
 def complete(slug, variant_id, buyer_location, macaroon_b64, preimage, qty=1):
     # Standard L402 retry: the SAME checkout endpoint, now carrying the paid
     # credential. The server delegates to claim logic and returns the claim
     # token + claim-page URL the human uses to enter shipping.
+    # A 402 here is NOT healthy (unlike `checkout`): it means the paid credential
+    # was rejected — money may be gone with no order to show for it.
     status, body = _req(
         "POST",
         f"/api/shopify/{slug}/checkout",
@@ -87,6 +99,7 @@ def complete(slug, variant_id, buyer_location, macaroon_b64, preimage, qty=1):
         body={"items": [{"variantId": int(variant_id), "quantity": int(qty)}]},
     )
     print(json.dumps({"status": status, "claim": body}, indent=2))
+    return _ok(status)
 
 
 def claim(slug, claim_token, email, shipping_json):
@@ -102,6 +115,7 @@ def claim(slug, claim_token, email, shipping_json):
         body={"claimToken": claim_token, "email": email, "shippingAddress": address},
     )
     print(json.dumps({"status": status, "order": body}, indent=2))
+    return _ok(status)
 
 
 def main(argv):
@@ -111,21 +125,23 @@ def main(argv):
     cmd = argv[1]
     try:
         if cmd == "catalog" and len(argv) == 3:
-            catalog(argv[2])
+            ok = catalog(argv[2])
         elif cmd == "checkout" and len(argv) in (5, 6):
-            checkout(argv[2], argv[3], argv[4], argv[5] if len(argv) == 6 else 1)
+            ok = checkout(argv[2], argv[3], argv[4], argv[5] if len(argv) == 6 else 1)
         elif cmd == "complete" and len(argv) in (7, 8):
-            complete(argv[2], argv[3], argv[4], argv[5], argv[6],
-                     argv[7] if len(argv) == 8 else 1)
+            ok = complete(argv[2], argv[3], argv[4], argv[5], argv[6],
+                          argv[7] if len(argv) == 8 else 1)
         elif cmd == "claim" and len(argv) == 6:
-            claim(argv[2], argv[3], argv[4], argv[5])
+            ok = claim(argv[2], argv[3], argv[4], argv[5])
         else:
             print(__doc__)
             return 1
     except Exception as e:  # noqa: BLE001 - surface any failure as JSON for the agent
         print(json.dumps({"error": str(e)}))
         return 2
-    return 0
+    # The API's own verdict decides the exit code: never report a rejected call
+    # as success just because the request itself completed.
+    return 0 if ok else 3
 
 
 if __name__ == "__main__":
