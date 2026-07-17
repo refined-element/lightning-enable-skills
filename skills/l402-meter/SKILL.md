@@ -20,7 +20,10 @@ quietly drain a wallet.
 
 - **Lightning Enable MCP** (`get_budget_status`, `check_wallet_balance`,
   `get_payment_history`, `configure_budget`).
-- `scripts/ledger.py` for the session tally (Python 3, stdlib only).
+- `scripts/ledger.py` for the session tally (Python 3, stdlib only). It keeps
+  state in `.l402-meter.json` next to the skill (override with `L402_METER_FILE`)
+  — **not** in the current directory, so the tally survives the agent changing
+  directory mid-session.
 
 ## Flow
 
@@ -41,14 +44,19 @@ python scripts/ledger.py add <sats> "<what it bought>"
 ```
 python scripts/ledger.py show --budget <ceiling_sats>
 ```
-Renders the per-call table, the running total, and a budget bar. It prints a
-**⚠️ warning at 80%** and a **⛔ stop at/over 100%**.
+Renders the per-call table, the running total, and a budget bar. It prints
+`[WARN]` at 80% and `[STOP]` at/over 100%. The markers are **ASCII, not emoji** —
+match on the literal text `[WARN]` / `[STOP]`.
 
 ### Enforce
-- When the meter says **⛔ over budget**, stop making paid calls and tell the
-  user. Do not "just one more."
-- When it says **⚠️ over 80%**, warn the user before the next paid call and let
-  them decide.
+- When the meter prints **`[STOP]`**, stop making paid calls and tell the user.
+  Do not "just one more." `[STOP]` covers two different states, and both mean
+  stop:
+  - `[STOP] OVER BUDGET` — the ceiling is spent.
+  - `[STOP] LEDGER UNREADABLE` — the ledger won't parse, so spend this session is
+    **unknown**. Treat unknown spend as over budget, never as zero. (Exit code 2.)
+- When it prints **`[WARN]`** (over 80%), warn the user before the next paid call
+  and let them decide.
 - Cross-check against `get_budget_status` periodically — if the MCP's own budget
   is tighter, the most restrictive wins.
 
@@ -64,6 +72,10 @@ payment is refused.
 - The hard MCP budget is the floor of trust; never try to route around it.
 - Always surface the meter when the user asks "how much have I spent."
 - Most-restrictive budget wins (MCP limit vs. the session ceiling).
+- **Unknown spend is not zero spend.** If `ledger.py` exits non-zero, you do not
+  know what has been spent — stop and say so rather than assuming the meter is at
+  0. Only `ledger.py reset` (which discards history) clears an unreadable ledger,
+  and that is the user's call to make, not yours.
 
 ## Example
 
