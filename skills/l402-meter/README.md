@@ -12,8 +12,8 @@ and stops the agent before it crosses the line.
 - **Visibility.** A running ledger of every paid call — what it bought and what
   it cost — with a budget bar.
 - **Warn before the wall.** The Lightning Enable MCP enforces a *hard* budget (it
-  refuses payments past the limit). This adds a *soft* layer: a ⚠️ at 80% and a
-  ⛔ at 100%, so you (and the agent) see it coming.
+  refuses payments past the limit). This adds a *soft* layer: a `[WARN]` at 80%
+  and a `[STOP]` at 100%, so you (and the agent) see it coming.
 - **Useful to anyone running paid agents** — not tied to any specific store or
   API. Drop it alongside `cited-answer`, `restock-from-photo`, or any skill that
   spends sats.
@@ -27,6 +27,11 @@ and stops the agent before it crosses the line.
    bar with warn/stop markers.
 4. The agent honors the markers — warns at 80%, stops at 100%, and never routes
    around the MCP's hard limit.
+
+If the ledger is ever missing, it means nothing has been spent. If it's
+*unreadable*, that's a different thing entirely — spend is **unknown**, and the
+meter says `[STOP]` and exits non-zero rather than cheerfully reporting 0. A
+meter that under-reports is worse than no meter, because you'd trust it.
 
 The "most restrictive budget wins": the MCP's enforced cap and your session
 ceiling are both respected.

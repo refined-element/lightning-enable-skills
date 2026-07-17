@@ -29,12 +29,25 @@ def _today():
     return datetime.date.today().isoformat()
 
 
+class OrdersUnreadable(Exception):
+    """The file exists but can't be trusted — order history is UNKNOWN, not empty."""
+
+
 def _load():
     try:
         with open(STATE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
+            d = json.load(f)
+    except FileNotFoundError:
+        # No file yet: genuinely no standing orders.
         return {"orders": [], "next_id": 1}
+    except (json.JSONDecodeError, OSError) as e:
+        # The file exists but won't parse/read. Returning empty here would still
+        # fail closed on money (no orders -> nothing due -> no spend), but the
+        # next _save() would overwrite real order history with a blank file.
+        raise OrdersUnreadable(str(e)) from e
+    if not isinstance(d, dict) or not isinstance(d.get("orders"), list):
+        raise OrdersUnreadable('malformed file: expected {"orders": [...], "next_id": N}')
+    return d
 
 
 def _save(d):
@@ -131,6 +144,14 @@ def main(argv):
         else:
             print(__doc__)
             return 1
+    except OrdersUnreadable as e:
+        print(json.dumps({
+            "error": f"standing-orders file unreadable: {e}",
+            "file": STATE,
+            "meaning": "order history is UNKNOWN, not empty - nothing was read, nothing due, nothing written",
+            "fix": "repair the file by hand; do not re-add orders (a write would overwrite the history)",
+        }, indent=2))
+        return 2
     except Exception as e:  # noqa: BLE001
         print(json.dumps({"error": str(e)}))
         return 2
