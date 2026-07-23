@@ -1,0 +1,31 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # The guardrail suite is stdlib-only; the only dependency is pytest itself.
+      - name: Install pytest
+        run: python -m pip install --upgrade pip pytest
+
+      # Run exactly as documented in the repo: `pytest` from the root, which
+      # reads pytest.ini (testpaths = tests). xfail_strict is not set, so the
+      # one xfail (the P5 next_id collision gap) stays non-fatal.
+      - name: Run tests
+        run: python -m pytest
