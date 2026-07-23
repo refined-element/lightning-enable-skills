@@ -33,6 +33,12 @@ class OrdersUnreadable(Exception):
     """The file exists but can't be trusted — order history is UNKNOWN, not empty."""
 
 
+def _is_int(x):
+    # JSON has no distinct int type from bool, but a boolean id/counter is
+    # nonsense — treat True/False as not-an-integer.
+    return isinstance(x, int) and not isinstance(x, bool)
+
+
 def _load():
     try:
         with open(STATE, "r", encoding="utf-8") as f:
@@ -47,6 +53,24 @@ def _load():
         raise OrdersUnreadable(str(e)) from e
     if not isinstance(d, dict) or not isinstance(d.get("orders"), list):
         raise OrdersUnreadable('malformed file: expected {"orders": [...], "next_id": N}')
+    # Every order needs a usable integer id — without one we can't safely
+    # allocate the next id, nor address it with mark-ordered / remove. An
+    # unknown id is a malformed file, not a recoverable one.
+    ids = []
+    for i, o in enumerate(d["orders"], 1):
+        if not isinstance(o, dict) or not _is_int(o.get("id")):
+            raise OrdersUnreadable(f"order {i} has no usable integer id")
+        ids.append(o["id"])
+    # next_id must be a real integer. Missing or non-numeric means the file is
+    # malformed — fail closed, don't guess (matches the fail-loud pattern above).
+    if not _is_int(d.get("next_id")):
+        raise OrdersUnreadable('malformed file: "next_id" must be an integer')
+    # A well-formed counter that has fallen behind — one that collides with, or
+    # sits at/below, an existing id — must NEVER hand out a duplicate id. Repair
+    # it upward to a value guaranteed free of every live id. This closes the
+    # fail-open bug where a colliding next_id wrote duplicate ids ([1, 1]), after
+    # which `remove <id>` deleted both and `mark-ordered <id>` marked only one.
+    d["next_id"] = max(int(d["next_id"]), max(ids, default=0) + 1)
     return d
 
 

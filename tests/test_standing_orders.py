@@ -1,15 +1,15 @@
 """Guardrail tests for skills/standing-order/scripts/standing_orders.py.
 
 Pins the "fail loud on unknown state" behavior from PR #3 for the standing-order
-ledger, plus the ledger P5 note: ``next_id`` is not validated in ``_load()``.
+ledger, plus the ledger P5 fix: ``next_id`` is validated/repaired in ``_load()``
+so a colliding or stale counter can never write a duplicate order id.
 
 Money-safety property under test: an unknown / unusable order file must never
 silently proceed to write (which would overwrite real order history) or add an
-order the code can't give a valid id. It must fail closed -- exit 2, no write.
+order the code can't give a valid, unique id. It must fail closed -- exit 2, no
+write -- and a recoverable counter must be repaired, never reused.
 """
 import json
-
-import pytest
 
 
 # --------------------------------------------------------------------------- #
@@ -77,6 +77,9 @@ def test_missing_next_id_fails_closed_without_writing(run_standing, tmp_path):
     result = run_standing("add", "coffee", "42", "30", "US", "Coffee beans", orders_file=orders)
 
     assert result.returncode == 2, "add with no next_id must fail closed"
+    # A missing counter is a malformed file -> a clean OrdersUnreadable, not a raw
+    # KeyError leaking through the generic handler.
+    assert "next_id" in json.loads(result.stdout)["error"]
     # No order was appended and the existing history was not overwritten.
     assert orders.read_text(encoding="utf-8") == original
     after = json.loads(orders.read_text(encoding="utf-8"))
@@ -91,27 +94,60 @@ def test_nonnumeric_next_id_fails_closed_without_writing(run_standing, tmp_path)
     result = run_standing("add", "coffee", "42", "30", "US", "Coffee beans", orders_file=orders)
 
     assert result.returncode == 2, "add with a non-numeric next_id must fail closed"
-    # The TypeError happens before _save, so the file is untouched.
+    # Rejected loud in _load() before any _save(), so the file is untouched.
+    assert "next_id" in json.loads(result.stdout)["error"]
     assert orders.read_text(encoding="utf-8") == original
 
 
-@pytest.mark.xfail(
-    reason="P5 residual gap: next_id is not validated against existing ids, so a "
-    "colliding next_id writes duplicate order ids. Not fixed in PR #3. This test "
-    "asserts the SAFE behavior (unique ids) so it flips to XPASS when fixed.",
-    strict=False,
-)
-def test_colliding_next_id_should_not_create_duplicate_ids(run_standing, tmp_path):
+def test_colliding_next_id_does_not_create_duplicate_ids(run_standing, tmp_path):
+    """The P5 fail-open bug, now fixed: a next_id that collides with an existing
+    order id must never write a duplicate id. _load() repairs the stale counter
+    upward, so add() allocates a guaranteed-free id."""
     orders = tmp_path / "collide.json"
     # next_id (1) collides with the existing order's id (1).
     orders.write_text(json.dumps({**_ONE_ORDER, "next_id": 1}), encoding="utf-8")
 
     result = run_standing("add", "coffee", "42", "30", "US", "New", orders_file=orders)
-    assert result.returncode == 0
+    assert result.returncode == 0, result.stdout
 
-    ids = [o["id"] for o in json.loads(orders.read_text(encoding="utf-8"))["orders"]]
-    # SAFE expectation: ids stay unique. (Currently produces [1, 1] -> xfail.)
+    saved = json.loads(orders.read_text(encoding="utf-8"))
+    ids = [o["id"] for o in saved["orders"]]
     assert len(ids) == len(set(ids)), f"duplicate order ids created: {ids}"
+    assert ids == [1, 2], f"the new order must get a fresh id, got {ids}"
+    # The counter is left ahead of every live id.
+    assert saved["next_id"] > max(ids)
+
+
+def test_colliding_id_is_addressable_after_fix(run_standing, tmp_path):
+    """Because ids stay unique, `remove`/`mark-ordered` address exactly one order
+    (the pre-fix duplicate-id state broke both)."""
+    orders = tmp_path / "collide2.json"
+    orders.write_text(json.dumps({**_ONE_ORDER, "next_id": 1}), encoding="utf-8")
+    run_standing("add", "coffee", "42", "30", "US", "New", orders_file=orders)
+
+    # Remove the newly added order (#2); the original (#1) must survive.
+    rm = run_standing("remove", "2", orders_file=orders)
+    assert rm.returncode == 0
+    remaining = [o["id"] for o in json.loads(orders.read_text(encoding="utf-8"))["orders"]]
+    assert remaining == [1], f"remove hit the wrong/both orders: {remaining}"
+
+
+def test_behind_counter_does_not_reuse_or_collide(run_standing, tmp_path):
+    """A counter that has fallen behind a live id (id 3, next_id 1) must be
+    repaired so the new order neither reuses nor eventually collides with id 3."""
+    orders = tmp_path / "behind.json"
+    behind = {
+        "orders": [{**_ONE_ORDER["orders"][0], "id": 3}],
+        "next_id": 1,
+    }
+    orders.write_text(json.dumps(behind), encoding="utf-8")
+
+    result = run_standing("add", "coffee", "42", "30", "US", "New", orders_file=orders)
+    assert result.returncode == 0, result.stdout
+    ids = [o["id"] for o in json.loads(orders.read_text(encoding="utf-8"))["orders"]]
+    assert len(ids) == len(set(ids)), f"duplicate ids: {ids}"
+    assert 3 in ids and ids != [3, 3]
+    assert max(ids) >= 4, f"new id must clear the existing max, got {ids}"
 
 
 # --------------------------------------------------------------------------- #
