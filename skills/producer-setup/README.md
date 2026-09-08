@@ -36,11 +36,17 @@ API to sell, and the price. Everything between those decisions is a tool call.
    Lane challenge and stores the API key. The MCP restarts once so the
    producer tools unlock.
 4. **Wire the receive wallet** — `l402_producer action=configure_receive` points
-   the merchant at the same NWC wallet, so sales land where you expect.
+   the merchant at the same NWC wallet, so sales land where you expect. With no
+   argument it reuses the MCP's own wallet; it refuses (and says so) if that
+   wallet is LND, Strike, or OpenNode, since none of those is a connection
+   string.
 5. **Publish a priced endpoint** — `create_proxy` → `add_endpoint` → `publish`,
-   which hands back the OpenAPI and manifest URLs buyers and agents read.
+   which hands back a per-proxy OpenAPI 3.1 document at
+   `/l402/proxy/{proxyId}/openapi.json` (every operation carries an `x-payment`
+   extension with the price) and the JSON manifest agents and the L402 registry
+   read.
 6. **Self-test** — `access_l402_resource` against the new endpoint, then
-   `list_challenges` to see the paid challenge.
+   `list_challenges challenge_status=paid` to see the sale land.
 7. **Hand off** — what to share, what to watch, how to add endpoints and change
    prices, and what happens when the 30-day trial ends.
 
@@ -53,6 +59,18 @@ API to sell, and the price. Everything between those decisions is a tool call.
   not create or fund a wallet.
 - A publicly reachable upstream API. Private and localhost addresses are refused
   on purpose — that is SSRF protection, not a bug.
+
+## Caveats
+
+- **Two actions need a newer Lightning Enable API than the one in production
+  today.** `configure_receive` needs the NWC receiving lane and `list_challenges`
+  needs the challenge-listing route; both ship with the API release this version
+  targets. `create`, `verify`, `create_proxy`, `add_endpoint`, and `publish` work
+  against every build. Run `l402_producer action=status` first — it degrades
+  gracefully and reports what the deployment you are pointed at supports.
+- **Argument names differ by package.** The Python server takes `snake_case`
+  (`target_base_url`, `challenge_status`); the .NET server takes the camelCase
+  equivalents. The skill documents the Python spelling and names the mapping.
 
 ## Safety
 
@@ -74,7 +92,7 @@ gets you a live endpoint that can charge — buyers are still your problem.
 > budget for setup."
 
 → connects the wallet → pays 100 sats for an account → wires the receive wallet →
-publishes `/v1/forecast` at 10 sats → buys one call from itself → "Live and
+publishes `/forecast` at 10 sats → buys one call from itself → "Live and
 charging. Share this OpenAPI URL. Spent 110 sats. Trial ends in 30 days; without
 billing it drops to the Free Producer Sandbox."
 
