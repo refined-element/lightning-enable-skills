@@ -25,14 +25,17 @@ unlocks.
 | 🎁 **[gift-it](skills/gift-it/)** | Buy a product as a **gift** and ship it to someone else, paid over Lightning. |
 | 🤝 **[negotiate-and-buy](skills/negotiate-and-buy/)** | **Agent-to-agent commerce**: discover another agent's service over Nostr, vet it, agree terms, settle over Lightning. |
 | ⚡ **[pay-l402-anywhere](skills/pay-l402-anywhere/)** | Give an agent a **bounded Lightning wallet** and it pays for any L402-gated resource or API **anywhere** — discover, confirm, pay per-call. The general buyer wedge. |
+| 🏗️ **[producer-setup](skills/producer-setup/)** | From nothing to a **live paid API** on the agent's own wallet, no human in the payment plumbing — connect, self-signup over L402, publish, self-test. |
 
 Each skill folder has a human-facing `README.md` (what it is) and an agent-facing
 `SKILL.md` (the instructions Claude loads).
 
 **Buy + sell, end to end:** `pay-l402-anywhere` is the general buyer;
 `cited-answer` / `restock-from-photo` / `standing-order` are task-specific buyers;
-`sell-this` is the seller side; `negotiate-and-buy` is two agents transacting with
-each other; `l402-meter` keeps any of them honest about spend.
+`sell-this` is the seller side, and `producer-setup` is how an agent *becomes* a
+seller from a standing start — wallet, account, published endpoint, proven with a
+self-test purchase; `negotiate-and-buy` is two agents transacting with each other;
+`l402-meter` keeps any of them honest about spend.
 
 ## What works where
 
