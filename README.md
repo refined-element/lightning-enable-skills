@@ -88,6 +88,11 @@ This repo is meant to grow. Candidate next skills (PRs / suggestions welcome):
 - **`api-arbitrage`** — compare multiple L402 providers for the same data, buy
   the cheapest, show the savings.
 
+## Support
+
+If something's broken or not working, email support@lightningenable.com — a real person reads it. For general questions, join the Discord: https://discord.gg/rX7NxHY8vx.
+Bug reports and feature requests: open an issue on this repo.
+
 ## License
 
 MIT — see [LICENSE](LICENSE). Built by [Refined Element, LLC](https://refinedelement.com).
