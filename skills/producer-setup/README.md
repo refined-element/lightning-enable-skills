@@ -48,7 +48,9 @@ API to sell, and the price. Everything between those decisions is a tool call.
 6. **Self-test** — `access_l402_resource` against the new endpoint, then
    `list_challenges challenge_status=paid` to see the sale land.
 7. **Hand off** — what to share, what to watch, how to add endpoints and change
-   prices, and what happens when the 30-day trial ends.
+   prices, what happens when the 30-day trial ends, and how the agent renews
+   the plan in sats with `renew_lightning_enable_subscription` (MCP 2.1.0 or
+   later).
 
 ## Requirements
 
