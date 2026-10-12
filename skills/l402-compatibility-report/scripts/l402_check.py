@@ -41,7 +41,18 @@ import l402_report  # noqa: E402
 ROOT_METADATA_PATHS = ("/openapi.json", "/llms.txt")
 PROG = "l402_check.py"
 MAX_TIMEOUT = 30.0
+_TOKEN = re.compile(r"[!#$%&'*+\-.^_`|~0-9A-Za-z]+")  # RFC 7230 tchar
 _METHOD = re.compile(r"[!#$%&'*+\-.^_`|~0-9A-Za-z]{1,32}")
+_FRAGMENTS = l402_http.CREDENTIAL_HEADER_FRAGMENTS
+REFUSED_FRAGMENTS = ", ".join(_FRAGMENTS[:-1]) + ", or " + _FRAGMENTS[-1]
+# Fixed text for each refusal; the header's value never reaches a message.
+REFUSAL_REASONS = {
+    "credential_header": ("credential-bearing headers (Authorization, Cookie, Proxy-Authorization, or a name "
+                          f"containing {REFUSED_FRAGMENTS}) are never sent"),
+    "reserved_header": "Host, Content-Length, Transfer-Encoding, and Connection are set by the probe itself",
+    "invalid_header_name": "the name is not a valid HTTP header name",
+    "invalid_header_value": "the value contains a CR, LF, NUL, or non-Latin-1 character",
+}
 
 EPILOG = """\
 Paid check: the agent pays once with the Lightning Enable MCP tool
@@ -62,10 +73,21 @@ Exit status:
 
 
 def parse_header(text: str) -> tuple[str, str]:
+    """(name, value) from NAME=VALUE. The name must be an HTTP token; the error never includes the input."""
     name, sep, value = text.partition("=")
-    if not sep or not name.strip():
-        raise argparse.ArgumentTypeError("headers take the form Name=value")
-    return name.strip(), value.strip()
+    name = name.strip()
+    if not sep or not _TOKEN.fullmatch(name):
+        # A curl-style "Authorization: Bearer x=" would otherwise turn the token into a header name.
+        raise argparse.ArgumentTypeError("header must be NAME=VALUE with a token name")
+    return name, value.strip()
+
+
+def refusal_message(exc: l402_http.RefusedHeaderError) -> str:
+    """Fixed text for a refused header, naming it only when the name is a plain HTTP token."""
+    reason = REFUSAL_REASONS.get(exc.reason, "the header cannot be sent")
+    name = str(exc.header_name).strip()
+    which = f"the header {name}" if _TOKEN.fullmatch(name) else "a header"
+    return f"refusing to send {which}: {reason}. --header takes non-secret headers only."
 
 
 def parse_method(text: str) -> str:
@@ -85,10 +107,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--method", default="GET", type=parse_method,
                         help="HTTP method for the unpaid request (default GET)")
     parser.add_argument("--header", action="append", default=[], type=parse_header, metavar="NAME=VALUE",
-                        help="extra non-secret request header; credential headers (Authorization, Cookie, or a "
-                             "name containing key, token, secret, password, session, auth, macaroon, credential, "
-                             "or preimage), Host and framing headers, and values with CR, LF, NUL, or non-Latin-1 "
-                             "characters are refused")
+                        help="extra non-secret request header; NAME must be an HTTP token. Credential headers "
+                             "(Authorization, Cookie, Proxy-Authorization, or a name containing "
+                             f"{REFUSED_FRAGMENTS}), Host and framing headers, and values with CR, LF, NUL, or "
+                             "non-Latin-1 characters are refused")
     parser.add_argument("--body", help="request body to send; never printed")
     parser.add_argument("--timeout", type=float, default=l402_http.DEFAULT_TIMEOUT,
                         help=f"seconds for the whole check (more than 0, at most {MAX_TIMEOUT:g})")
@@ -97,10 +119,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--allow-private", action="store_true",
                         help="local testing only: allow loopback, private, and link-local targets, and plain "
                              "http to them; cloud metadata addresses and plain http to a public host stay refused")
-    parser.add_argument("--evidence", help="validate a paid-check evidence file (use - for stdin)")
-    parser.add_argument("--mode-a", help="with --evidence: the read-only report saved with --json")
+    parser.add_argument("--evidence", help="validate a paid-check evidence file (a file path, never -)")
+    parser.add_argument("--mode-a", help="with --evidence: the read-only report saved with --json (a file path, "
+                                         "never -)")
     parser.add_argument("--credential-stdin", action="store_true",
-                        help="with --evidence: read the L402 token, <macaroon>:<preimage>, from stdin")
+                        help="with --evidence: read the L402 token, <macaroon>:<preimage>, from piped stdin "
+                             "(never from a terminal)")
     return parser
 
 
@@ -159,9 +183,16 @@ def read_credential(stdin) -> str | None:
     return text or None
 
 
-def _read_text(path: str, label: str, stdin) -> str:
+def _is_terminal(stream) -> bool:
     try:
-        return stdin.read() if path == "-" else Path(path).read_text(encoding="utf-8")
+        return bool(stream.isatty())
+    except (AttributeError, ValueError, OSError):
+        return False
+
+
+def _read_text(path: str, label: str) -> str:
+    try:
+        return Path(path).read_text(encoding="utf-8")
     except UnicodeDecodeError:
         raise l402_evidence.EvidenceError(f"{label} is not UTF-8 text") from None
     except OSError as exc:
@@ -178,26 +209,38 @@ def _load_json(text: str, label: str):
         raise l402_evidence.EvidenceError(f"{label} is not valid JSON") from None
 
 
-def run_mode_b(args, stdin) -> tuple[dict, set[str]]:
-    """Validate the evidence of one paid check; return (report, secrets). Raises EvidenceError."""
-    if args.credential_stdin and args.evidence == "-":
-        raise l402_evidence.EvidenceError("--credential-stdin needs the evidence in a file, not on stdin")
-    evidence = _load_json(_read_text(args.evidence, "the evidence file", stdin), "the evidence file")
-    if args.mode_a and isinstance(evidence, dict):
+def run_mode_b(args, stdin) -> str:
+    """Validate the evidence of one paid check and render it; return the text. Raises EvidenceError.
+
+    stdin carries the credential only, so it is read at most once: never for
+    the evidence or the Mode A file, and never from a terminal.
+    """
+    if "-" in (args.evidence, args.mode_a):
+        raise l402_evidence.EvidenceError(
+            "--evidence and --mode-a take file paths, not -: stdin carries the credential only")
+    if args.credential_stdin and _is_terminal(stdin):
+        raise l402_evidence.EvidenceError(
+            "--credential-stdin reads a piped credential and never reads one from a terminal; "
+            "pipe the token, for example with printf")
+    evidence = _load_json(_read_text(args.evidence, "the evidence file"), "the evidence file")
+    if args.mode_a is not None and isinstance(evidence, dict):
         if "mode_a_report" in evidence:
             raise l402_evidence.EvidenceError(
                 "evidence.mode_a_report is set and --mode-a was given; give the read-only report one way only")
         # Merged first; evaluate then refuses credential keys before reading any field.
-        evidence["mode_a_report"] = _load_json(_read_text(args.mode_a, "the --mode-a file", stdin),
-                                               "the --mode-a file")
+        evidence["mode_a_report"] = _load_json(_read_text(args.mode_a, "the --mode-a file"), "the --mode-a file")
     credential = read_credential(stdin) if args.credential_stdin else None
     secrets = l402_evidence.credential_secrets(credential)
+    render = l402_report.to_json if args.json else l402_report.to_markdown
     try:
-        return l402_evidence.evaluate(evidence, credential), secrets
+        return render(l402_evidence.evaluate(evidence, credential), secrets)
     except l402_evidence.EvidenceError as exc:
         raise l402_evidence.EvidenceError(l402_report.scrub(str(exc), secrets)) from None
-    except (ValueError, TypeError, KeyError) as exc:
-        raise l402_evidence.EvidenceError(f"the evidence could not be evaluated ({type(exc).__name__})") from None
+    except (ValueError, TypeError, KeyError, AttributeError, IndexError) as exc:
+        # A Mode A report or evidence file of the wrong shape. Fixed text: no value is echoed.
+        raise l402_evidence.EvidenceError(
+            f"the evidence or the read-only report has a field of the wrong shape ({type(exc).__name__}); "
+            "produce the read-only report again with --json and check evidence.json") from None
 
 
 def main(argv: list[str] | None = None, *, stdin=None, stdout=None, resolver=None, transport=None, now=None) -> int:
@@ -211,14 +254,14 @@ def main(argv: list[str] | None = None, *, stdin=None, stdout=None, resolver=Non
         if args.url:
             parser.error("give a URL for the read-only check or --evidence for the paid check, not both")
         try:
-            report, secrets = run_mode_b(args, stdin)
+            text = run_mode_b(args, stdin)
         except l402_evidence.EvidenceError as exc:
             print(f"evidence error: {exc}", file=sys.stderr)
             return 2
-        stdout.write(render(report, secrets))
+        stdout.write(text)
         return 0
 
-    if args.mode_a or args.credential_stdin:
+    if args.mode_a is not None or args.credential_stdin:
         parser.error("--mode-a and --credential-stdin go with --evidence")
     if not args.url:
         parser.error("a URL is required unless --evidence is given")
@@ -238,8 +281,8 @@ def main(argv: list[str] | None = None, *, stdin=None, stdout=None, resolver=Non
             now=now or datetime.now(timezone.utc), resolver=resolver, transport=transport,
         )
     except l402_http.RefusedHeaderError as exc:
-        # The message names the header, never its value.
-        print(f"{PROG}: error: {exc}. --header takes non-secret headers only.", file=sys.stderr)
+        # Fixed text: names the header only when the name is a plain token, never its value.
+        print(f"{PROG}: error: {refusal_message(exc)}", file=sys.stderr)
         return 2
     stdout.write(render(report, secrets))
     return 0

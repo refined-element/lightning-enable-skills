@@ -165,6 +165,44 @@ def test_credential_framing_and_unsendable_headers_are_refused_without_echoing_t
     assert "fixture-string" not in err
 
 
+@pytest.mark.parametrize("header", ["Authorization: Bearer fixtureSECRETtoken==",
+                                    "X-Note fixtureSECRETtoken=v", "fixtureSECRETtoken:=v"])
+def test_a_curl_style_header_is_a_usage_error_that_echoes_nothing(header, capsys):
+    out = io.StringIO()
+    with pytest.raises(SystemExit) as caught:
+        l402_check.main(["https://api.example.com/x", "--header", header], stdout=out)
+    assert caught.value.code == 2
+    captured = capsys.readouterr()
+    assert "header must be NAME=VALUE with a token name" in captured.err
+    for text in (captured.err, captured.out, out.getvalue()):
+        assert "fixtureSECRET" not in text
+        assert "Bearer" not in text
+
+
+@pytest.mark.parametrize("reason", ["credential_header", "reserved_header", "invalid_header_name",
+                                    "invalid_header_value", "fixture-string-unknown"])
+def test_refusal_messages_are_fixed_text_and_name_only_a_token_header(reason):
+    refused = l402_check.l402_http.RefusedHeaderError("Bad Name: fixture-string-secret", reason,
+                                                      "fixture-string-secret in the message")
+    message = l402_check.refusal_message(refused)
+    assert "fixture-string" not in message
+    assert message.startswith("refusing to send a header: ")
+    named = l402_check.l402_http.RefusedHeaderError("X-Api-Key", reason, "fixture-string-secret")
+    assert l402_check.refusal_message(named).startswith("refusing to send the header X-Api-Key: ")
+
+
+def test_skill_md_and_help_list_every_refused_header_fragment():
+    skill = (support.SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")
+    step0 = skill.split("### 0. Ask what to check", 1)[1].split("\n### ", 1)[0]
+    helptext = l402_check.build_parser().format_help()
+    for fragment in l402_check.l402_http.CREDENTIAL_HEADER_FRAGMENTS:
+        assert f"`{fragment}`" in step0
+        assert fragment in helptext
+    for name in ("Authorization", "Cookie", "Proxy-Authorization", "Host", "Content-Length",
+                 "Transfer-Encoding", "Connection"):
+        assert f"`{name}`" in step0
+
+
 def test_body_is_sent_but_never_printed():
     fixture = support.load_fixture("le-test-ping")
     log = []
@@ -331,11 +369,83 @@ def test_the_evidence_file_credential_refusal_runs_after_the_mode_a_merge(tmp_pa
     assert preimage not in err
 
 
-def test_credential_stdin_needs_the_evidence_in_a_file(capsys):
-    code, text = run(["--evidence", "-", "--credential-stdin"], stdin=io.StringIO("{}"))
+@pytest.mark.parametrize("flags", [["--evidence", "-"], ["--evidence", "EVIDENCE", "--mode-a", "-"],
+                                   ["--evidence", "-", "--mode-a", "-"]])
+def test_stdin_is_never_a_file_so_the_credential_is_read_at_most_once(tmp_path, capsys, flags):
+    evidence, _, preimage = _evidence_files(tmp_path)
+    flags = [str(evidence) if f == "EVIDENCE" else f for f in flags]
+    stdin = CountingStdin(f"L402 fixture-string-macaroon:{preimage}\n")
+    code, text = run([*flags, "--credential-stdin"], stdin=stdin)
     assert code == 2
     assert text == ""
-    assert "evidence error" in capsys.readouterr().err
+    assert stdin.reads == 0
+    err = capsys.readouterr().err
+    assert "file paths, not -" in err
+    assert preimage not in err
+    assert "fixture-string" not in err
+
+
+class TerminalStdin(CountingStdin):
+    def isatty(self):
+        return True
+
+
+def test_the_credential_is_never_read_from_a_terminal(tmp_path, capsys):
+    evidence, mode_a, _ = _evidence_files(tmp_path)
+    stdin = TerminalStdin("fixture-string-typed\n")
+    code, text = run(["--evidence", str(evidence), "--mode-a", str(mode_a), "--credential-stdin"], stdin=stdin)
+    assert code == 2
+    assert text == ""
+    assert stdin.reads == 0
+    err = capsys.readouterr().err
+    assert "evidence error" in err
+    assert "terminal" in err
+
+
+def test_a_terminal_stdin_is_fine_without_credential_stdin(tmp_path):
+    evidence, mode_a, _ = _evidence_files(tmp_path)
+    stdin = TerminalStdin("")
+    code, _ = run(["--evidence", str(evidence), "--mode-a", str(mode_a), "--json"], stdin=stdin)
+    assert code == 0
+    assert stdin.reads == 0
+
+
+@pytest.mark.parametrize("key, value", [
+    ("target", []), ("target", {"url": "x"}), ("transport", []), ("challenge", "fixture-string-x"),
+    ("invoice", []), ("binding", 5), ("marketplace", {"checks": 5}), ("marketplace", {"checks": [1]}),
+    ("findings", 5), ("findings", ["fixture-string-x"]), ("evidence", []), ("rerun", "x"),
+])
+def test_a_malformed_read_only_report_is_an_evidence_error_not_a_traceback(tmp_path, capsys, key, value):
+    evidence, mode_a, preimage = _evidence_files(tmp_path)
+    report = json.loads(mode_a.read_text(encoding="utf-8"))
+    report[key] = value
+    mode_a.write_text(json.dumps(report), encoding="utf-8")
+    for extra in ([], ["--json"]):
+        code, text = run(["--evidence", str(evidence), "--mode-a", str(mode_a), "--credential-stdin", *extra],
+                         stdin=io.StringIO(f"L402 fixture-string-macaroon:{preimage}\n"))
+        err = capsys.readouterr().err
+        assert code == 2
+        assert text == ""
+        assert f"evidence error: evidence.mode_a_report.{key}" in err
+        assert preimage not in err
+        assert "fixture-string" not in err
+
+
+# Shapes _require accepts but the Markdown renderer can't use: still an evidence error, never a traceback.
+@pytest.mark.parametrize("key", ["transport", "challenge"])
+def test_a_report_the_renderer_cannot_use_is_an_evidence_error(tmp_path, capsys, key):
+    evidence, mode_a, preimage = _evidence_files(tmp_path)
+    report = json.loads(mode_a.read_text(encoding="utf-8"))
+    report[key] = {"fixture-string-field": "fixture-string-value"}
+    mode_a.write_text(json.dumps(report), encoding="utf-8")
+    code, text = run(["--evidence", str(evidence), "--mode-a", str(mode_a), "--credential-stdin"],
+                     stdin=io.StringIO(f"L402 fixture-string-macaroon:{preimage}\n"))
+    err = capsys.readouterr().err
+    assert code == 2
+    assert text == ""
+    assert "evidence error" in err and "wrong shape" in err
+    assert preimage not in err
+    assert "fixture-string" not in err
 
 
 @pytest.mark.parametrize("content, wanted", [

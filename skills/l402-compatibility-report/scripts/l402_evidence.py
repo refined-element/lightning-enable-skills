@@ -198,6 +198,33 @@ def _optional(container: dict, key: str, path: str, check, wanted: str) -> None:
         raise EvidenceError(f"{path}.{key} must be {wanted}")
 
 
+def _require_mode_a_shapes(mode_a: dict) -> None:
+    """Refuse a read-only report whose fields this module or the renderer read with the wrong type."""
+    path = "evidence.mode_a_report"
+    for key in ("target", "transport", "challenge", "marketplace", "evidence"):
+        if not isinstance(mode_a[key], dict):
+            raise EvidenceError(f"{path}.{key} must be an object")
+    for key in ("invoice", "binding"):
+        if mode_a[key] is not None and not isinstance(mode_a[key], dict):
+            raise EvidenceError(f"{path}.{key} must be an object or null")
+    for key in ("findings", "security", "required_fixes", "rerun"):
+        if key in mode_a and not isinstance(mode_a[key], list):
+            raise EvidenceError(f"{path}.{key} must be a list")
+    if not all(isinstance(f, dict) for f in mode_a["findings"]) or not all(
+            isinstance(f, dict) for f in mode_a.get("security", [])):
+        raise EvidenceError(f"{path}.findings and security must hold finding objects")
+    if not all(isinstance(mode_a["target"].get(k), str) for k in ("url", "method")):
+        raise EvidenceError(f"{path}.target.url and target.method must be strings")
+    marketplace = mode_a["marketplace"]
+    if not isinstance(marketplace.get("checks", []), list) or not all(
+            isinstance(c, dict) for c in marketplace.get("checks", [])):
+        raise EvidenceError(f"{path}.marketplace.checks must be a list of check objects")
+    if not isinstance(marketplace.get("not_checked_by_script", []), list):
+        raise EvidenceError(f"{path}.marketplace.not_checked_by_script must be a list")
+    if not isinstance(mode_a["evidence"].get("statuses", []), list):
+        raise EvidenceError(f"{path}.evidence.statuses must be a list")
+
+
 def _require(evidence: dict) -> tuple[dict, int, dict, list, dict]:
     if not isinstance(evidence, dict):
         raise EvidenceError("the evidence must be a JSON object")
@@ -208,6 +235,7 @@ def _require(evidence: dict) -> tuple[dict, int, dict, list, dict]:
             or mode_a.get("classification") not in CLASSIFICATIONS
             or any(key not in mode_a for key in MODE_A_KEYS)):
         raise EvidenceError("evidence.mode_a_report must be the read-only report produced with --json")
+    _require_mode_a_shapes(mode_a)
     cap = evidence.get("cap_sats")
     if not _is_int(cap) or cap <= 0:
         raise EvidenceError("evidence.cap_sats must be the approved max_sats, a positive integer")

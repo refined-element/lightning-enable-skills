@@ -79,11 +79,14 @@ In one message, get:
    can answer: `Accept`, a content type, or a harmless custom header. `--header`
    takes non-secret headers only. The script refuses credential-bearing header
    names with an error: `Authorization`, `Cookie`, `Proxy-Authorization`, and
-   any name containing `key`, `token`, `secret`, `password`, or `session`, in
-   any case. There is no other way to pass them. An endpoint that needs its own
-   credential before it will issue a 402 is out of scope for this check: report
-   it as "401 before challenge", with the fix from the table under What can go
-   wrong.
+   any name containing `key`, `token`, `secret`, `password`, `session`, `auth`,
+   `macaroon`, `credential`, or `preimage`, in any case. It also refuses
+   `Host`, `Content-Length`, `Transfer-Encoding`, and `Connection`, a name that
+   is not a plain HTTP header name, and a value with a CR, LF, NUL, or
+   non-Latin-1 character. There is no other way to pass them. An endpoint that
+   needs its own credential before it will issue a 402 is out of scope for this
+   check: report it as "401 before challenge", with the fix from the table under
+   What can go wrong.
 3. **Whether a paid check is wanted,** and if so the most it may cost, in sats.
 
 ### 1. Run the read-only check
@@ -240,7 +243,9 @@ printf '%s' '<token>' | python scripts/l402_check.py --evidence evidence.json --
 a script argument. The token is still visible in the command text to anyone who
 sees the tool call, and it stays reusable until its expiry. That is why the
 paid check runs against the cheapest route. Never repeat the token in chat, and
-never write it to a file.
+never write it to a file. `--evidence` and `--mode-a` take file paths, never
+`-`: stdin carries the token only, and the script refuses to read the token
+from a terminal.
 
 Pipe the whole token, `<macaroon>:<preimage>`; the script refuses a bare
 preimage. It checks that SHA-256 of the preimage equals the payment hash inside
