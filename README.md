@@ -49,6 +49,7 @@ default `standard` profile advertises.
 |---|---|
 | 🧩 **[l402-client-integration](skills/l402-client-integration/)** | Add auto-paying L402 to your own code with `l402-requests` (Python), `L402Requests` (.NET), or `l402-requests` (npm). |
 | 🧱 **[l402-server-integration](skills/l402-server-integration/)** | Charge for your own API in-process with `L402Server.AspNetCore` or `l402-express`, no proxy. |
+| 🩺 **[l402-compatibility-report](skills/l402-compatibility-report/)** | Check how far an endpoint gets through L402 without paying, then prove paid delivery with one approved, capped payment. |
 
 Each skill folder has a human-facing `README.md` (what it is) and an agent-facing
 `SKILL.md` (the instructions Claude loads).
@@ -61,7 +62,11 @@ something worth buying, and `cited-answer` is a task-specific buyer. On the sell
 behind a paywall on an existing account, and `sell-this` charges for a single
 resource. `negotiate-and-buy` and `offer-agent-service` are the two halves of
 agents transacting with each other on the Nostr relay. The `l402-*-integration`
-skills move the same protocol into your own code. Lightning Enable does not hold
+skills move the same protocol into your own code, and `l402-compatibility-report`
+checks the result: the unpaid challenge first, then, with your yes, one paid
+call. Shared rules for those checks live in
+[`references/l402-verification-levels.md`](references/l402-verification-levels.md).
+Lightning Enable does not hold
 funds; the wallet or the payment provider facilitates custody and settlement.
 
 ## What works where
