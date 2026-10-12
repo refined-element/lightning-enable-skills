@@ -39,8 +39,9 @@ def test_preflight_verdict_appears_under_paid_fulfillment():
     assert "capped at 2 sats: not allowed: the invoice asks 3 sats, over the 2-sat cap" in section
 
 
-def test_json_is_valid_and_round_trips():
-    report, secrets = support.run_fixture(support.load_fixture("amazap-basics-feed"))
+@pytest.mark.parametrize("name", support.fixture_names())
+def test_json_is_valid_and_round_trips(name):
+    report, secrets = support.run_fixture(support.load_fixture(name))
     assert json.loads(l402_report.to_json(report, secrets)) == json.loads(json.dumps(report))
 
 
@@ -182,6 +183,20 @@ def test_binding_categories_are_listed_with_their_caveat_keys():
     ("token=fixture-string-tok&x=1", "fixture-string-tok"),
     ("pay LNBC10N1P4V63G3PP5PUEQ802C5F4UNPX2VSYS now", "LNBC10N1P4V63G3PP5PUEQ802C5F4UNPX2VSYS"),
     ("pay_lntbs1fixturexqqqqqqqqqqqqqqqqqqqqqqqq_now", "lntbs1fixturexqqqqqqqqqqqqqqqqqqqqqqqq"),
+    # Fix round 1: preimage keys that only contain the word.
+    ("payment_preimage=" + "ef" * 32, "ef" * 32),
+    ('{"preimageHex": "' + "a1" * 32 + '"}', "a1" * 32),
+    ('"paymentPreimage": "' + "b2" * 32 + '"', "b2" * 32),
+    # Fix round 1: macaroon and token values under : as well as =, and under compound keys.
+    ('{"macaroon": "fixture-string-json-mac"}', "fixture-string-json-mac"),
+    ("access_token=fixture-string-access", "fixture-string-access"),
+    ("macaroon: fixture-string-colon-mac", "fixture-string-colon-mac"),
+    # Fix round 1: a short token still loses its preimage; simnet invoices; Payment
+    # credentials; percent-encoded NWC URIs.
+    ("L402 abc:" + "c3" * 32, "c3" * 32),
+    ("lnsb1fixturexqqqqqqqqqqqqqqqqqqqqqqqqqq", "lnsb1fixturexqqqqqqqqqqqqqqqqqqqqqqqqqq"),
+    ("Payment eyJmaXh0dXJlLXN0cmluZyI6MX0", "eyJmaXh0dXJlLXN0cmluZyI6MX0"),
+    ("u=nostr%2Bwalletconnect%3A%2F%2Ffixture-string-wallet", "fixture-string-wallet"),
 ])
 def test_scrub_catches_credentials_wherever_they_appear(text, leaked):
     scrubbed = l402_report.scrub(text)
@@ -201,6 +216,12 @@ def test_json_scrubs_a_secret_even_when_json_escapes_it():
     report["target"]["headers"] = {secret: "a"}
     text = l402_report.to_json(report, {secret})
     assert json.dumps(secret)[1:-1] not in text
+    assert not any(secret in s for s in _json_strings(text))
+    assert secret not in l402_report.to_markdown(report, {secret})
+
+
+def _json_strings(text: str) -> list[str]:
+    """Every key and string value in a JSON document (json.loads fails on invalid JSON)."""
     strings, stack = [], [json.loads(text)]
     while stack:
         node = stack.pop()
@@ -211,5 +232,41 @@ def test_json_scrubs_a_secret_even_when_json_escapes_it():
             stack.extend(node)
         elif isinstance(node, str):
             strings.append(node)
-    assert not any(secret in s for s in strings)
-    assert secret not in l402_report.to_markdown(report, {secret})
+    return strings
+
+
+# Fix round 1: the review's adversarial probes. A caveat key ending in
+# "Authorization:" at a line end, a quoted param inside an Authorization value,
+# and an Authorization value JSON has to escape.
+def test_adversarial_authorization_strings_never_leak_or_break_either_output():
+    report, secrets = support.run_fixture(support.load_fixture("le-proxy-weather"))
+    report["binding"]["unrecognized_caveats"] = ["X-Authorization:"]
+    report["summary"] = 'Authorization: L402 macaroon="fixture-string-adv-mac"'
+    report["binding"]["note"] = 'Authorization: "fixture-string-adv-quoted"'
+    leaked = ("fixture-string-adv-mac", "fixture-string-adv-quoted")
+    markdown = l402_report.to_markdown(report, secrets)
+    assert headings(markdown) == headings(TEMPLATE.read_text(encoding="utf-8"))
+    assert "- Unrecognized caveats: X-Authorization:" in markdown
+    strings = _json_strings(l402_report.to_json(report, secrets))
+    for value in leaked:
+        assert value not in markdown
+        assert not any(value in s for s in strings)
+
+
+def test_redacted_keys_get_distinct_suffixes_and_keep_their_values():
+    report, _ = support.run_fixture(support.load_fixture("le-test-ping"))
+    report["target"]["headers"] = {"fixture-string-key-one": "1", "fixture-string-key-two": "2"}
+    data = json.loads(l402_report.to_json(report, {"fixture-string-key-one", "fixture-string-key-two"}))
+    assert data["target"]["headers"] == {"[REDACTED]#1": "1", "[REDACTED]#2": "2"}
+
+
+def test_placeholder_values_in_fix_text_survive():
+    report, secrets = support.run_fixture(support.load_fixture("synthetic-missing-header"))
+    assert 'WWW-Authenticate: L402 macaroon="...", invoice="..."' in l402_report.to_markdown(report, secrets)
+
+
+def test_no_rendered_row_reads_as_a_token_value():
+    report, secrets = support.run_fixture(support.load_fixture("le-proxy-weather"))
+    section = _section(l402_report.to_markdown(report, secrets), "Authorization and binding")
+    assert "Token payment hash: not externally verifiable" in section
+    assert l402_report.REDACTED not in section

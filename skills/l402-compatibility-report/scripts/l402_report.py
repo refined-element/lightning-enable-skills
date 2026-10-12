@@ -2,11 +2,11 @@
 
 The Markdown follows templates/report.md heading for heading. ``scrub``
 replaces every known secret, and anything that looks like a credential (a
-BOLT11 invoice, an L402 or LSAT authorization value, a macaroon or token
-auth-param value, an Authorization header value, a preimage field, or an NWC
-URI), with [REDACTED]; payment hashes and amounts survive. Both renderers
-call it last, and ``to_json`` also scrubs every string in the report before
-serializing it, so a secret that JSON would escape is still caught.
+BOLT11 invoice, an L402, LSAT, or Payment credential, a macaroon or token
+value, an Authorization header value, a preimage field, or an NWC URI), with
+[REDACTED]; payment hashes and amounts survive. ``to_markdown`` scrubs its
+finished text; ``to_json`` scrubs every string (keys included) in the report
+and then serializes, so no redaction can split a JSON escape.
 """
 from __future__ import annotations
 
@@ -28,24 +28,41 @@ SECTIONS = (
     "Evidence retained",
 )
 REDACTED = "[REDACTED]"
-# Values the analysis already redacted in place (safe_url writes REDACTED).
-_ALREADY_REDACTED = frozenset({"REDACTED", REDACTED})
+# Values left as they are: already redacted (safe_url writes REDACTED), or the
+# "..." placeholder in fix text such as macaroon="...".
+_KEEP_VALUES = frozenset({"REDACTED", REDACTED, "..."})
+
+# Every pattern stays on one line ([ \t], never \s), so a match can't reach
+# into the next line of the Markdown and swallow a heading.
 
 # No word boundaries: an invoice glued to a word character is still an invoice.
-BOLT11_PATTERN = re.compile(r"ln(?:bcrt|bc|tbs|tb)[0-9a-z]{20,}", re.IGNORECASE)
-AUTH_VALUE_PATTERN = re.compile(r"\b(L402|LSAT)\s+[A-Za-z0-9+/=_\-]{16,}:[0-9a-fA-F]{64}\b")
-NWC_PATTERN = re.compile(r"nostr\+walletconnect://[^\s\"'<>]*", re.IGNORECASE)
-# "Authorization: value", "Proxy-Authorization: value", or a JSON member of either.
-AUTHORIZATION_PATTERN = re.compile(r"(\bauthorization[\"']?\s*:\s*[\"']?)([^\"'\r\n]+)", re.IGNORECASE)
-# A macaroon or token auth-param or query value: name=value or name="value".
-TOKEN_PARAM_PATTERN = re.compile(r"(\b(?:macaroon|token)\s*=\s*)(\"(?:[^\"\\]|\\.)*\"|[^\s,;&\"']+)", re.IGNORECASE)
-# 64 hex characters in a field named preimage, as JSON or name=value.
-PREIMAGE_PATTERN = re.compile(r"(\bpreimage[\"']?\s*[=:]\s*[\"']?)[0-9a-fA-F]{64}(?![0-9a-fA-F])", re.IGNORECASE)
+BOLT11_PATTERN = re.compile(r"ln(?:bcrt|bc|tbs|tb|sb)[0-9a-z]{20,}", re.IGNORECASE)
+# L402 or LSAT <token>:<preimage>, whatever the token's length.
+AUTH_VALUE_PATTERN = re.compile(r"\b(L402|LSAT)[ \t]+[A-Za-z0-9+/=_\-]+:[0-9a-fA-F]{64}\b")
+# A draft-00 Payment credential: Payment <base64url JSON>.
+PAYMENT_CREDENTIAL_PATTERN = re.compile(r"\bPayment[ \t]+[A-Za-z0-9_\-]{16,}={0,2}")
+# An NWC URI, plain or percent-encoded.
+NWC_PATTERN = re.compile(
+    r"nostr(?:\+|%2B)walletconnect(?::|%3A)(?://|%2F%2F)[^\s\"'<>]*", re.IGNORECASE)
+# "Authorization: value", "Proxy-Authorization: value", or a JSON member of
+# either: everything after the colon to the end of the line goes, so a quoted
+# param inside the value can't survive.
+AUTHORIZATION_PATTERN = re.compile(r"(authorization[\"']?[ \t]*:[ \t]*)([^\r\n]+)", re.IGNORECASE)
+# A value under any key naming a macaroon or token (macaroon, access_token,
+# csrfToken, ...): name=value, name: value, "name": "value", quoted or bare.
+TOKEN_PARAM_PATTERN = re.compile(
+    r"([A-Za-z0-9_\-]*(?:macaroon|token)\w*[\"']?[ \t]*[:=][ \t]*)"
+    r"(\"(?:[^\"\\\r\n]|\\.)*\"|'[^'\r\n]*'|[^\s,;&\"'}\]]+)",
+    re.IGNORECASE,
+)
+# 64 hex characters under any key containing preimage (payment_preimage,
+# preimageHex, paymentPreimage), as JSON or name=value.
+PREIMAGE_PATTERN = re.compile(
+    r"(preimage\w*[\"']?[ \t]*[=:][ \t]*[\"']?)[0-9a-fA-F]{64}(?![0-9a-fA-F])", re.IGNORECASE)
 
 
 def _redact_value(match: re.Match) -> str:
-    value = match.group(2)
-    if value.strip("\"' ") in _ALREADY_REDACTED:
+    if match.group(2).strip("\"' ,") in _KEEP_VALUES:
         return match.group(0)
     return match.group(1) + REDACTED
 
@@ -57,26 +74,38 @@ def scrub(text: str, secrets: set[str] | frozenset[str] = frozenset()) -> str:
     text = NWC_PATTERN.sub(REDACTED, text)
     text = BOLT11_PATTERN.sub(REDACTED, text)
     text = AUTH_VALUE_PATTERN.sub(lambda m: f"{m.group(1)} {REDACTED}", text)
-    text = AUTHORIZATION_PATTERN.sub(_redact_value, text)
+    text = PAYMENT_CREDENTIAL_PATTERN.sub(f"Payment {REDACTED}", text)
+    text = PREIMAGE_PATTERN.sub(lambda m: m.group(1) + REDACTED, text)
     text = TOKEN_PARAM_PATTERN.sub(_redact_value, text)
-    return PREIMAGE_PATTERN.sub(lambda m: m.group(1) + REDACTED, text)
+    return AUTHORIZATION_PATTERN.sub(_redact_value, text)
 
 
 def _scrub_tree(node, secrets):
     if isinstance(node, str):
         return scrub(node, secrets)
     if isinstance(node, dict):
-        return {(scrub(k, secrets) if isinstance(k, str) else k): _scrub_tree(v, secrets) for k, v in node.items()}
+        # Insertion order is kept, so the JSON key order is the order the
+        # analysis built the report in, which is stable from run to run.
+        out: dict = {}
+        for key, value in node.items():
+            new_key = key
+            if isinstance(key, str) and scrub(key, secrets) != key:
+                # A redacted key gets a #n suffix, so two never merge and drop a value.
+                scrubbed, n = scrub(key, secrets), 1
+                while f"{scrubbed}#{n}" in node or f"{scrubbed}#{n}" in out:
+                    n += 1
+                new_key = f"{scrubbed}#{n}"
+            out[new_key] = _scrub_tree(value, secrets)
+        return out
     if isinstance(node, (list, tuple)):
         return [_scrub_tree(v, secrets) for v in node]
     return node
 
 
 def to_json(report: dict, secrets: set[str] | frozenset[str] = frozenset()) -> str:
-    # Escaped forms catch a secret holding a quote, backslash, or control character.
-    escaped = {json.dumps(s, ensure_ascii=False)[1:-1] for s in secrets if s}
-    text = json.dumps(_scrub_tree(report, secrets), indent=2, ensure_ascii=False)
-    return scrub(text, set(secrets) | escaped)
+    # Each string is scrubbed before serializing, and the serialized text is
+    # never rewritten, so a redaction can't break a JSON escape.
+    return json.dumps(_scrub_tree(report, secrets), indent=2, ensure_ascii=False)
 
 
 def _yes(value) -> str:
@@ -203,7 +232,8 @@ def _binding(report: dict) -> list[str]:
         bound_row = "; ".join(f"{k} ({', '.join(v)})" for k, v in bound_to.items()) or "none found in caveats"
     rows = [
         f"Token format: {token_format}",
-        f"Payment hash in the token: {hash_row}",
+        # Worded so no row reads "token: value", which the scrubber would redact.
+        f"Token payment hash: {hash_row}",
         f"Bound to: {bound_row}",
         b["note"],
     ]
