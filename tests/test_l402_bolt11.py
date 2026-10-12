@@ -87,6 +87,19 @@ def test_bad_checksum_is_rejected_without_echoing_the_invoice():
     assert raw[:20] not in str(caught.value)
 
 
+def test_mixed_case_is_rejected():
+    raw = captured_invoice("le-test-ping")
+    with pytest.raises(l402_bolt11.Bolt11Error) as caught:
+        l402_bolt11.decode(raw[:10].upper() + raw[10:])
+    assert "mixed case" in str(caught.value)
+
+
+def test_non_ascii_is_rejected_before_any_other_check():
+    with pytest.raises(l402_bolt11.Bolt11Error) as caught:
+        l402_bolt11.decode("lnbc²n1fixture")
+    assert "non-ASCII" in str(caught.value)
+
+
 def test_not_an_invoice():
     with pytest.raises(l402_bolt11.Bolt11Error):
         l402_bolt11.decode("fixture-string-not-an-invoice")

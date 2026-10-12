@@ -65,6 +65,10 @@ def _hrp_expand(hrp: str) -> list[int]:
 
 
 def _bech32_decode(text: str) -> tuple[str, list[int]]:
+    # str.isdigit() accepts non-ASCII digits that int() can reject with a
+    # ValueError echoing the input, so refuse non-ASCII before anything else.
+    if not text.isascii():
+        raise Bolt11Error("non-ASCII character")
     if text.lower() != text and text.upper() != text:
         raise Bolt11Error("mixed case")
     text = text.lower()
@@ -142,6 +146,7 @@ def decode(invoice: str) -> Invoice:
     )
     tagged = data[TIMESTAMP_WORDS:-SIGNATURE_WORDS]
     i = 0
+    expiry_seen = False
     while i < len(tagged):
         if i + 3 > len(tagged):
             raise Bolt11Error("truncated tagged field")
@@ -153,7 +158,10 @@ def decode(invoice: str) -> Invoice:
         i += 3 + length
         if tag == "p" and length == 52 and result.payment_hash is None:
             result.payment_hash = _words_to_bytes(words)[:32].hex()
-        elif tag == "x":
+        elif tag == "x" and not expiry_seen:
+            # First wins, the same as p: a later repeated x field is ignored.
+            # No captured fixture repeats x, so this rule has no fixture test.
+            expiry_seen = True
             result.expiry_seconds = _words_to_int(words)
         elif tag == "d":
             result.has_description = True
