@@ -59,6 +59,10 @@ PAID_RERUN_NOTES = {
         "Add the receipt's paymentHash from receipts(source=\"durable\") to evidence.json and validate "
         "again. That reuses the one payment; it does not pay again."
     ),
+    "receipt_mismatch": (
+        "Check that the receipt in evidence.json is the one written for this call, correct it from "
+        "receipts(source=\"durable\"), and validate again. That reuses the one payment; it does not pay again."
+    ),
     "awaiting_confirmation": (
         "Nothing was paid yet. Ask the human for the confirmation code and repeat the same "
         "access_l402_resource call once with confirmation_nonce set to it."
@@ -112,7 +116,11 @@ def check_preimage(credential: str | None, payments: list[dict]) -> tuple[str, l
 
     A source is a payment hash the preimage can be compared with: the one in a
     Lightning Labs macaroon identifier, and the receipt's when exactly one
-    receipt was recorded. ``sources`` holds hashes only, never the credential.
+    receipt was recorded. The macaroon hash, when there is one, governs the
+    result (it is the server's own challenge); the receipt decides only when
+    there is no macaroon hash. ``sources`` holds hashes only, never the
+    credential, and records every comparison so a receipt that disagrees with
+    a matching macaroon still shows.
     """
     macaroon, preimage = split_credential(credential)
     if preimage is None:
@@ -129,7 +137,7 @@ def check_preimage(credential: str | None, payments: list[dict]) -> tuple[str, l
         sources.append({"source": "wallet receipt", "payment_hash": recorded, "match": recorded == digest})
     if not sources:
         return "no_hash_source", []
-    return ("matched" if all(s["match"] for s in sources) else "mismatch"), sources
+    return ("matched" if sources[0]["match"] else "mismatch"), sources
 
 
 def _is_int(value) -> bool:
@@ -221,7 +229,7 @@ def evaluate(evidence: dict, credential: str | None = None) -> dict:
         item for item in marketplace.get("not_checked_by_script", []) if item != NOT_CHECKED_BY_PAID_CHECK]
 
     classification = _classify(mode_a, cap, tool, payments, paid_sats, total_paid, status, preimage_result,
-                               expectations, marketplace["checks"], findings)
+                               sources, expectations, marketplace["checks"], findings)
     report["paid_fulfillment"] = {
         "tested": True,
         "tool": "access_l402_resource",
@@ -360,7 +368,7 @@ def _payment_blockers(cap, tool, payments, paid_sats, total_paid, findings) -> b
     return blocked
 
 
-def _classify(mode_a, cap, tool, payments, paid_sats, total_paid, status, preimage_result, expectations,
+def _classify(mode_a, cap, tool, payments, paid_sats, total_paid, status, preimage_result, sources, expectations,
               marketplace_checks, findings) -> str:
     if mode_a.get("classification") != CHALLENGE_COMPATIBLE:
         findings.append(Finding("paid_check_without_challenge", "error", "paid",
@@ -380,9 +388,25 @@ def _classify(mode_a, cap, tool, payments, paid_sats, total_paid, status, preima
         return INCONCLUSIVE
     retry = f"status {status}" if status is not None else "no status"
     # The payment is confirmed only when SHA-256 of the piped preimage equals a comparable hash.
-    if preimage_result == "mismatch":
-        findings.append(Finding("preimage_mismatch", "error", "paid", "SHA-256 of the preimage does not equal the payment hash."))
+    # The macaroon hash governs when there is one; the receipt decides only without it.
+    from_macaroon = bool(sources) and sources[0]["source"] == "macaroon identifier"
+    receipt_disagrees = any(s["source"] == "wallet receipt" and not s["match"] for s in sources)
+    if preimage_result == "mismatch" and from_macaroon:
+        findings.append(Finding("preimage_mismatch", "error", "paid",
+                                "SHA-256 of the preimage does not equal the payment hash in the macaroon identifier. "
+                                "The server's own challenge disagrees with the paid preimage. Do not pay again."))
         return INCOMPATIBLE
+    if preimage_result == "mismatch":
+        findings.append(Finding("receipt_mismatch", "warning", "paid",
+                                "SHA-256 of the preimage does not equal the receipt's paymentHash, and the macaroon "
+                                "carries no payment hash to compare. The receipt is likely paired with a different "
+                                f"payment, so the payment is not confirmed. The authorized retry got {retry}. "
+                                "Do not pay again."))
+        return INCONCLUSIVE
+    if from_macaroon and receipt_disagrees:
+        findings.append(Finding("receipt_mismatch", "info", "paid",
+                                "The macaroon's payment hash matches the preimage, but the receipt's paymentHash does "
+                                "not, so the receipt is likely from a different payment. The macaroon match governs."))
     if preimage_result == "no_hash_source":
         findings.append(Finding("no_hash_to_compare", "warning", "paid",
                                 f"The credential was piped, but there is no payment hash to compare it with: the macaroon "

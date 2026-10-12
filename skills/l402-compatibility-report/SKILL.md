@@ -265,6 +265,29 @@ The report also compares the Mode A invoice's payment hash with the paid
 payment hash, as information only. A mismatch is normal, because a server may
 mint a fresh invoice for each 402, and it is never a finding.
 
+Paid-check finding codes and marketplace checks, as the report prints them:
+
+- `preimage_unchecked`: no credential was piped, or its preimage isn't 64 hex
+  characters. `INCONCLUSIVE`; a receipt never upgrades it.
+- `no_hash_to_compare`: a credential was piped, but the macaroon isn't in
+  Lightning Labs format and the evidence has no receipt `paymentHash`.
+  `INCONCLUSIVE`.
+- `preimage_mismatch`: SHA-256 of the preimage differs from the hash in the
+  macaroon identifier, so the server's own challenge disagrees with the paid
+  preimage. `INCOMPATIBLE`.
+- `receipt_mismatch`: SHA-256 of the preimage differs from the receipt's
+  `paymentHash`. With no macaroon hash it is `INCONCLUSIVE` (likely the wrong
+  receipt); when the macaroon hash matches, the macaroon governs and this is
+  information only.
+- `multiple_payments`: more than one payment recorded for one check. The result
+  is `INCONCLUSIVE` at best; reconcile from the receipts.
+- `paid_retry_failed`: the payment is confirmed and the authorized retry got a
+  5xx or another non-2xx, non-4xx answer. `PAYMENT_COMPATIBLE`.
+- `stable_price`: marketplace check; the paid amount equals the read-only
+  quote.
+- `synchronous_response`: marketplace check; the authorized retry returned a
+  2xx other than `202 Accepted`.
+
 ### 8. Hand off
 
 - **Fix the endpoint:** the producer skills own the server side:

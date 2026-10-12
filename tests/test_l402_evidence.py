@@ -4,7 +4,9 @@ Each fixture in tests/fixtures/l402-evidence records what access_l402_resource
 returned and what the wallet receipt shows. ``test_preimage_seed`` stands in
 for the credential the agent pipes on stdin: the test derives a 64-hex
 preimage from it at runtime and removes the key before evaluation, so no
-preimage is stored in the repo.
+preimage is stored in the repo. ``test_macaroon_hash``, when set, makes the
+credential an ``L402 <macaroon>:<preimage>`` token whose Lightning Labs
+macaroon identifier carries that hash, built in code at runtime.
 """
 import json
 import re
@@ -31,8 +33,12 @@ def mode_a(root_metadata_ok: bool = False) -> dict:
 def evidence_for(name: str, *, root_metadata_ok: bool = False):
     evidence = support.load_evidence(name)
     seed = evidence.pop("test_preimage_seed")
+    macaroon_hash = evidence.pop("test_macaroon_hash", None)
     evidence["mode_a_report"] = mode_a(root_metadata_ok)
-    return evidence, (support.preimage_from_seed(seed) if seed else None)
+    preimage = support.preimage_from_seed(seed) if seed else None
+    if preimage and macaroon_hash:
+        return evidence, f"L402 {build_v2(lightning_labs_identifier(macaroon_hash), [])}:{preimage}"
+    return evidence, preimage
 
 
 def paid_codes(report: dict) -> set[str]:
@@ -43,7 +49,13 @@ def paid_codes(report: dict) -> set[str]:
     "name, classification, code",
     [
         ("fulfilled-2xx", "FULFILLMENT_VERIFIED", "marketplace_gaps"),
-        ("preimage-mismatch", "INCOMPATIBLE", "preimage_mismatch"),
+        # Receipt-only mismatch: likely the wrong receipt, so the payment is unconfirmed.
+        ("preimage-mismatch", "INCONCLUSIVE", "receipt_mismatch"),
+        ("receipt-mismatch", "INCONCLUSIVE", "receipt_mismatch"),
+        # The server's own macaroon disagrees with the paid preimage.
+        ("macaroon-mismatch", "INCOMPATIBLE", "preimage_mismatch"),
+        # The macaroon match governs; the receipt disagreement is information.
+        ("macaroon-match-receipt-mismatch", "FULFILLMENT_VERIFIED", "receipt_mismatch"),
         # A confirmed payment and a definitive non-2xx answer: PAYMENT_COMPATIBLE.
         ("paid-retry-402", "PAYMENT_COMPATIBLE", "paid_retry_402"),
         ("second-payment", "INCONCLUSIVE", "multiple_payments"),
@@ -108,6 +120,53 @@ def test_macaroon_bound_to_another_hash_is_a_mismatch():
     assert report["paid_fulfillment"]["preimage_check"] == "mismatch"
     assert report["classification"] == "INCOMPATIBLE"
     assert "preimage_mismatch" in paid_codes(report)
+
+
+def test_receipt_only_mismatch_is_inconclusive_and_asks_for_the_right_receipt():
+    evidence, credential = evidence_for("receipt-mismatch")
+    report = l402_evidence.evaluate(evidence, credential)
+    finding = next(f for f in report["findings"] if f["code"] == "receipt_mismatch")
+    assert finding["severity"] == "warning"
+    assert "preimage_mismatch" not in paid_codes(report)
+    assert report["paid_fulfillment"]["preimage_check"] == "mismatch"
+    assert report["paid_fulfillment"]["hash_sources"] == [
+        {"source": "wallet receipt", "payment_hash": SEED_2_HASH, "match": False}]
+    assert not any("SHA-256" in fix for fix in report["required_fixes"])
+    assert any("receipt" in note and "does not pay again" in note for note in report["rerun"])
+
+
+def test_macaroon_mismatch_is_incompatible_with_a_server_fix():
+    evidence, credential = evidence_for("macaroon-mismatch")
+    report = l402_evidence.evaluate(evidence, credential)
+    assert report["classification"] == "INCOMPATIBLE"
+    assert report["paid_fulfillment"]["hash_sources"][0] == {
+        "source": "macaroon identifier", "payment_hash": SEED_2_HASH, "match": False}
+    assert "receipt_mismatch" not in paid_codes(report)
+    assert any("SHA-256" in fix for fix in report["required_fixes"])
+
+
+def test_macaroon_and_receipt_both_disagreeing_is_incompatible():
+    evidence, credential = evidence_for("macaroon-mismatch")
+    evidence["payments"][0]["payment_hash"] = SEED_2_HASH
+    report = l402_evidence.evaluate(evidence, credential)
+    assert report["classification"] == "INCOMPATIBLE"
+    assert "preimage_mismatch" in paid_codes(report)
+
+
+def test_macaroon_match_governs_when_only_the_receipt_disagrees():
+    evidence, credential = evidence_for("macaroon-match-receipt-mismatch", root_metadata_ok=True)
+    report = l402_evidence.evaluate(evidence, credential)
+    assert report["classification"] == "MARKETPLACE_READY"
+    paid = report["paid_fulfillment"]
+    assert paid["preimage_check"] == "matched"
+    assert paid["hash_sources"] == [
+        {"source": "macaroon identifier", "payment_hash": SEED_1_HASH, "match": True},
+        {"source": "wallet receipt", "payment_hash": SEED_2_HASH, "match": False},
+    ]
+    finding = next(f for f in report["findings"] if f["code"] == "receipt_mismatch")
+    assert finding["severity"] == "info"
+    assert "preimage_mismatch" not in paid_codes(report)
+    assert report["evidence"]["payment_hash"] == SEED_1_HASH
 
 
 def test_credential_without_any_comparable_hash_is_inconclusive():
