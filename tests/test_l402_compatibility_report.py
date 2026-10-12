@@ -286,7 +286,7 @@ def test_a_refused_first_target_is_inconclusive_and_its_userinfo_is_never_report
     assert "refused_target" in {f["code"] for f in report["findings"]}
     assert report["target"]["url"] == "https://api.example.com/paid?api_key=REDACTED&url=https%3A%2F%2Fe.com"
     assert "fixture-string-pass" not in json.dumps(report)
-    assert {"fixture-string-pass", "abc"} <= secrets
+    assert "fixture-string-pass" in secrets
     assert "pass a header" not in report["findings"][0]["message"]
 
 
@@ -308,7 +308,24 @@ def test_query_credentials_are_redacted_in_the_target_every_hop_and_the_final_ur
     text = json.dumps(report)
     for value in ("fixture-string-k1", "fixture-string%2Bk2", "fixture-string+k2", "sig=ab"):
         assert value not in text
-    assert {"fixture-string-k1", "fixture-string%2Bk2", "fixture-string+k2", "ab"} <= secrets
+    assert {"fixture-string-k1", "fixture-string%2Bk2", "fixture-string+k2"} <= secrets
+
+
+def _query_secrets(value):
+    ping = support.load_fixture("le-test-ping")["responses"][0]
+    url = f"https://api.example.com/paid?token={value}"
+    send = support.fake_transport([{"url": url, "status": 402, "headers": ping["headers"], "body": ping["body"]}])
+    report, secrets = _run_with_transport(url, send)
+    assert report["target"]["url"] == "https://api.example.com/paid?token=REDACTED"
+    return secrets
+
+
+def test_a_query_credential_of_eight_or_more_characters_joins_the_scrub_set():
+    assert "abcd1234" in _query_secrets("abcd1234")
+
+
+def test_a_query_credential_under_eight_characters_is_redacted_but_not_scrubbed_globally():
+    assert "abcd123" not in _query_secrets("abcd123")
 
 
 def test_safe_url_redacts_by_raw_key_and_keeps_the_rest_as_given():
@@ -338,7 +355,8 @@ def test_a_redirect_downgrade_is_incompatible():
         "https://api.example.com/paid", 302, headers=[("Location", "http://api.example.com/paid")])
     report, _ = support.run_fixture(fixture)
     assert report["classification"] == "INCOMPATIBLE"
-    assert "redirect_downgrade" in {f["code"] for f in report["findings"]}
+    finding = next(f for f in report["findings"] if f["code"] == "redirect_downgrade")
+    assert finding["fix"] == "Never redirect from https to http; keep the paid resource on https."
     assert report["evidence"]["statuses"] == [302]
 
 
@@ -369,6 +387,7 @@ def test_a_redirect_from_local_http_to_public_http_gets_its_own_message():
     assert report["classification"] == "INCOMPATIBLE"
     assert "from https" not in finding["message"]
     assert "plain http" in finding["message"] and "public" in finding["message"]
+    assert finding["fix"] == "Serve the resource over https; public endpoints must use https."
     assert len(log) == 1
 
 
@@ -378,13 +397,21 @@ def test_other_statuses_before_the_challenge(status, classification):
     assert report["classification"] == classification
 
 
-def test_a_405_suggests_rerunning_with_the_accepted_method():
+def test_a_405_is_inconclusive_with_a_rerun_note_not_a_server_fix():
     report, _ = support.run_fixture(_single_response_fixture(
         "https://api.example.com/paid", 405, headers=[("Allow", "POST")]))
     finding = next(f for f in report["findings"] if f["code"] == "method_not_allowed")
-    assert finding["fix"] == "Rerun the check with the method the endpoint accepts."
+    assert report["classification"] == "INCONCLUSIVE"
+    assert finding["fix"] is None
+    assert report["required_fixes"] == []
+    assert report["rerun"] == ["Rerun the check with the method the endpoint accepts."]
     assert "POST" in finding["message"]
     assert "unexpected_status" not in {f["code"] for f in report["findings"]}
+
+
+def test_no_rerun_note_without_a_caller_side_cause():
+    report, _ = report_for("le-test-ping")
+    assert report["rerun"] == []
 
 
 def _with_challenge_headers(name, transform):

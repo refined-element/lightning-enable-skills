@@ -95,9 +95,8 @@ FIXES = {
     "body_price_mismatch": "Make the invoice authoritative and correct the price the body declares.",
     "payment_hash_unbound": "Bind the macaroon to the invoice: its identifier must carry the invoice payment hash.",
     "redirect_into_blocked_range": "Serve the paid resource from a public address; never redirect into a private range.",
-    "redirect_downgrade": "Serve the paid resource over https; never redirect from https to http.",
-    "redirect_not_https": "Serve public endpoints over https, and redirect only to https URLs.",
-    "method_not_allowed": "Rerun the check with the method the endpoint accepts.",
+    "redirect_downgrade": "Never redirect from https to http; keep the paid resource on https.",
+    "redirect_not_https": "Serve the resource over https; public endpoints must use https.",
     "multiple_l402_challenges": "Send one L402 challenge per response.",
     "redirect_refused": "Redirect only to a public https URL without credentials, or serve the 402 from the listed URL.",
     "redirect_body_not_resent": "Serve the 402 at the listed URL rather than redirecting a request with a body to another origin.",
@@ -115,6 +114,14 @@ FIXES = {
     "ambiguous_fulfillment": (
         "Preserve the payment hash and add deterministic claim or status recovery; never blindly repay."
     ),
+}
+
+
+# Guidance for the person running the check, by finding code. These are not
+# server fixes, so they never enter required_fixes; the report lists them
+# under "rerun".
+RERUN_NOTES = {
+    "method_not_allowed": "Rerun the check with the method the endpoint accepts.",
 }
 
 
@@ -206,9 +213,11 @@ def _userinfo(url: str) -> list[str]:
 def collect_secrets(request: ProbeRequest, probe_result: ProbeResult) -> set[str]:
     """Every string that must never appear in output.
 
-    Credential query values are kept at any length, raw and percent-decoded,
-    from the requested URL, every hop, and the final target, so a scrub of the
-    rendered output catches every form a value could take.
+    Credential query values are collected raw and percent-decoded from the
+    requested URL, every hop, and the final target, so a scrub of the rendered
+    output catches every form a value could take. Like every other secret, a
+    value joins the set only at 8 or more characters; shorter ones are still
+    redacted in place by ``safe_url``.
     """
     secrets = {str(v) for k, v in request.headers.items() if _is_credential_header(k) and v}
     query_values: set[str] = set()
@@ -233,7 +242,10 @@ def collect_secrets(request: ProbeRequest, probe_result: ProbeResult) -> set[str
         for text in values:
             secrets.update(BOLT11_TEXT.findall(text))
         secrets.update(BOLT11_TEXT.findall(response.body.decode("utf-8", errors="replace")))
-    return {s for s in secrets if len(s) >= 8} | {s for s in query_values if s}
+    # safe_url redacts query credentials of any length in place; only values of
+    # 8 or more characters join the scrub set, so a short value such as
+    # sig=ab can't redact unrelated text elsewhere in the output.
+    return {s for s in secrets | query_values if len(s) >= 8}
 
 
 def _declared_price(body: bytes) -> int | None:
@@ -277,7 +289,7 @@ def _status_finding(status: int, method: str, sent_body: bool, allow: str | None
         # Only method tokens are echoed from Allow, never free text.
         methods = [m.strip() for m in (allow or "").split(",") if re.fullmatch(r"[A-Za-z]{1,16}", m.strip())]
         allowed = f" The endpoint allows: {', '.join(methods)}." if methods else ""
-        return Finding("method_not_allowed", "error", "transport", f"An unpaid {method} got 405 Method Not Allowed.{allowed}")
+        return Finding("method_not_allowed", "warning", "transport", f"An unpaid {method} got 405 Method Not Allowed.{allowed}")
     if 200 <= status < 300:
         return Finding("unpaid_2xx", "error", "transport", f"An unpaid request got {status}: the resource is served without payment.")
     if status == 401:
@@ -338,6 +350,7 @@ def analyze(
     report["classification"] = classification
     report["findings"] = [asdict(f) | {"fix": f.fix} for f in findings]
     report["required_fixes"] = list(dict.fromkeys(f.fix for f in findings if f.fix and f.severity == "error"))
+    report["rerun"] = list(dict.fromkeys(RERUN_NOTES[f.code] for f in findings if f.code in RERUN_NOTES))
     report["security"] = [asdict(f) for f in findings if f.section == "security"]
     report["preflight"] = _preflight(classification, request, invoice, max_sats) if max_sats is not None else None
     report["summary"] = _summary(classification, report)
@@ -406,9 +419,11 @@ def _transport(probe_result: ProbeResult, request: ProbeRequest, findings: list[
     if status in TRANSIENT_STATUSES:
         findings.append(Finding("transient_status", "warning", "transport", f"An unpaid request got {status}; retry later."))
         return INCONCLUSIVE
-    findings.append(_status_finding(status, request.method.upper(), bool(request.body),
-                                    probe_result.response.header("Allow")))
-    return INCOMPATIBLE
+    finding = _status_finding(status, request.method.upper(), bool(request.body), probe_result.response.header("Allow"))
+    findings.append(finding)
+    # A 405 most likely means the check used a method the endpoint never serves:
+    # the caller can rerun, so it says nothing certain about the server.
+    return INCONCLUSIVE if finding.code == "method_not_allowed" else INCOMPATIBLE
 
 
 def _challenge_and_invoice(report: dict, response, now: datetime, findings: list[Finding]):
