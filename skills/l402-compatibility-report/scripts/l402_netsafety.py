@@ -146,7 +146,10 @@ def resolve_target(url: str, *, allow_private: bool = False, resolver: Resolver 
     if scheme not in ("http", "https"):
         raise UnsafeTargetError("scheme", "only http and https URLs can be checked")
     if parts.username is not None or parts.password is not None:
-        raise UnsafeTargetError("credentials_in_url", "the URL carries credentials; remove them and pass a header instead")
+        raise UnsafeTargetError("credentials_in_url", (
+            "the URL carries credentials; remove them: this check accepts no credentials anywhere, "
+            "not in the URL and not in a header"
+        ))
     host = (parts.hostname or "").lower().rstrip(".")
     if not host:
         raise UnsafeTargetError("no_host", "the URL has no host")

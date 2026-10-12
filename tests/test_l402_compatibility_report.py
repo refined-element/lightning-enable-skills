@@ -248,13 +248,13 @@ def _single_response_fixture(url, status, headers=(), body="", method="GET", dns
     }
 
 
-def _run_with_transport(url, send, *, method="GET", headers=None, body=None):
+def _run_with_transport(url, send, *, method="GET", headers=None, body=None, allow_private=False):
     import l402_analyze
     import l402_check
 
     request = l402_analyze.ProbeRequest(url=url, method=method, headers=dict(headers or {}), body=body)
     return l402_check.run_mode_a(
-        request, timeout=5.0, allow_private=False, max_sats=None,
+        request, timeout=5.0, allow_private=allow_private, max_sats=None,
         now=support.observed({"observed_at": "2026-10-12T20:37:45Z"}),
         resolver=support.fake_resolver({}), transport=send,
     )
@@ -284,9 +284,38 @@ def test_a_refused_first_target_is_inconclusive_and_its_userinfo_is_never_report
     assert log == []
     assert report["classification"] == "INCONCLUSIVE"
     assert "refused_target" in {f["code"] for f in report["findings"]}
-    assert report["target"]["url"] == "https://api.example.com/paid?api_key=abc&url=https%3A%2F%2Fe.com"
+    assert report["target"]["url"] == "https://api.example.com/paid?api_key=REDACTED&url=https%3A%2F%2Fe.com"
     assert "fixture-string-pass" not in json.dumps(report)
-    assert "fixture-string-pass" in secrets
+    assert {"fixture-string-pass", "abc"} <= secrets
+    assert "pass a header" not in report["findings"][0]["message"]
+
+
+def test_query_credentials_are_redacted_in_the_target_every_hop_and_the_final_url():
+    ping = support.load_fixture("le-test-ping")["responses"][0]
+    first = "https://api.example.com/paid?api_key=fixture-string-k1&q=1"
+    final = "https://api.example.com/next?access%5Ftoken=fixture-string%2Bk2&sig=ab&q=2"
+    log = []
+    send = support.fake_transport([
+        {"url": first, "status": 302, "headers": [["Location", final]]},
+        {"url": final, "status": 402, "headers": ping["headers"], "body": ping["body"]},
+    ], log)
+    report, secrets = _run_with_transport(first, send)
+    assert report["classification"] == "CHALLENGE_COMPATIBLE"
+    assert report["target"]["url"] == "https://api.example.com/paid?api_key=REDACTED&q=1"
+    assert report["transport"]["redirects"] == [
+        {"url": "https://api.example.com/paid?api_key=REDACTED&q=1", "status": 302}]
+    assert report["transport"]["final_url"] == "https://api.example.com/next?access%5Ftoken=REDACTED&sig=REDACTED&q=2"
+    text = json.dumps(report)
+    for value in ("fixture-string-k1", "fixture-string%2Bk2", "fixture-string+k2", "sig=ab"):
+        assert value not in text
+    assert {"fixture-string-k1", "fixture-string%2Bk2", "fixture-string+k2", "ab"} <= secrets
+
+
+def test_safe_url_redacts_by_raw_key_and_keeps_the_rest_as_given():
+    from l402_analyze import safe_url
+
+    url = "https://u:p@h.example/x?Token=a%2Fb&page=2&passwd=&flag&credential=c#frag"
+    assert safe_url(url) == "https://h.example/x?Token=REDACTED&page=2&passwd=&flag&credential=REDACTED"
 
 
 def test_a_query_string_is_kept_as_given():
@@ -330,10 +359,79 @@ def test_a_redirect_into_a_blocked_range_records_one_status_per_response():
     assert report["evidence"]["statuses"] == [302]
 
 
+def test_a_redirect_from_local_http_to_public_http_gets_its_own_message():
+    log = []
+    send = support.fake_transport([
+        {"url": "http://localhost:8080/paid", "status": 302, "headers": [["Location", "http://api.example.com/paid"]]},
+    ], log)
+    report, _ = _run_with_transport("http://localhost:8080/paid", send, allow_private=True)
+    finding = next(f for f in report["findings"] if f["code"] == "redirect_not_https")
+    assert report["classification"] == "INCOMPATIBLE"
+    assert "from https" not in finding["message"]
+    assert "plain http" in finding["message"] and "public" in finding["message"]
+    assert len(log) == 1
+
+
 @pytest.mark.parametrize("status, classification", [(429, "INCONCLUSIVE"), (503, "INCONCLUSIVE"), (404, "INCOMPATIBLE")])
 def test_other_statuses_before_the_challenge(status, classification):
     report, _ = support.run_fixture(_single_response_fixture("https://api.example.com/paid", status))
     assert report["classification"] == classification
+
+
+def test_a_405_suggests_rerunning_with_the_accepted_method():
+    report, _ = support.run_fixture(_single_response_fixture(
+        "https://api.example.com/paid", 405, headers=[("Allow", "POST")]))
+    finding = next(f for f in report["findings"] if f["code"] == "method_not_allowed")
+    assert finding["fix"] == "Rerun the check with the method the endpoint accepts."
+    assert "POST" in finding["message"]
+    assert "unexpected_status" not in {f["code"] for f in report["findings"]}
+
+
+def _with_challenge_headers(name, transform):
+    fixture = support.load_fixture(name)
+    headers = fixture["responses"][0]["headers"]
+    fixture["responses"][0]["headers"] = transform(headers)
+    return fixture
+
+
+def test_a_missing_token_is_absent_not_opaque():
+    fixture = _with_challenge_headers("le-proxy-weather", lambda headers: [
+        [k, v.replace('macaroon="fixture-string-macaroon", ', "")] for k, v in headers])
+    report, _ = support.run_fixture(fixture)
+    assert report["classification"] == "INCOMPATIBLE"
+    assert "missing_token" in {f["code"] for f in report["findings"]}
+    assert report["binding"]["token_format"] == "absent"
+    assert "not the same as absent" not in report["binding"]["note"]
+
+
+def test_a_duplicate_param_outside_the_l402_challenge_is_info_only():
+    fixture = _with_challenge_headers("le-proxy-weather", lambda headers: [
+        [k, v + ', realm="fixture-string-realm"' if v.startswith("Payment ") else v] for k, v in headers])
+    report, _ = support.run_fixture(fixture)
+    findings = {f["code"]: f for f in report["findings"]}
+    assert report["classification"] == "CHALLENGE_COMPATIBLE"
+    assert "duplicate_params" not in findings
+    assert findings["duplicate_params_other_scheme"]["severity"] == "info"
+    assert "Payment" in findings["duplicate_params_other_scheme"]["message"]
+
+
+def test_a_duplicate_param_in_the_l402_challenge_is_incompatible():
+    fixture = _with_challenge_headers("le-proxy-weather", lambda headers: [
+        [k, v + ', macaroon="fixture-string-second"' if v.startswith("L402 ") else v] for k, v in headers])
+    report, _ = support.run_fixture(fixture)
+    assert report["classification"] == "INCOMPATIBLE"
+    assert "duplicate_params" in {f["code"] for f in report["findings"]}
+
+
+def test_two_l402_challenges_use_the_first_and_warn():
+    fixture = _with_challenge_headers("le-proxy-weather", lambda headers: [
+        h for h in headers if h[0] == "WWW-Authenticate" and h[1].startswith("L402 ")] * 2 + [
+        h for h in headers if not (h[0] == "WWW-Authenticate" and h[1].startswith("L402 "))])
+    report, _ = support.run_fixture(fixture)
+    finding = next(f for f in report["findings"] if f["code"] == "multiple_l402_challenges")
+    assert finding["severity"] == "warning"
+    assert report["classification"] == "CHALLENGE_COMPATIBLE"
+    assert report["invoice"]["amount_sats"] == 3
 
 
 def test_a_malformed_challenge_is_rejected_before_its_invoice_is_decoded():

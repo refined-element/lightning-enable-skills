@@ -16,7 +16,7 @@ import json
 import re
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
-from urllib.parse import parse_qsl, urlsplit, urlunsplit
+from urllib.parse import unquote, unquote_plus, urlsplit
 
 import l402_bolt11
 import l402_challenge
@@ -48,7 +48,14 @@ TRANSIENT_STATUSES = (408, 425, 429)
 BLOCKED_RANGE_REASONS = frozenset({"private_address", "cloud_metadata"})
 SECRET_PARAM_NAMES = frozenset({"macaroon", "token", "invoice", "request", "opaque", "credential", "preimage"})
 CREDENTIAL_HEADER = re.compile(r"authorization|cookie|token|secret|key|session|signature|password", re.IGNORECASE)
-SENSITIVE_QUERY = re.compile(r"token|key|secret|sig|auth|password|session|macaroon|preimage", re.IGNORECASE)
+# Query keys whose values are redacted. Matched as substrings, so api_key,
+# apikey, access_token, and signature are covered by key, token, and sig.
+SENSITIVE_QUERY = re.compile(
+    r"key|api_key|apikey|token|access_token|secret|password|passwd|auth|signature|sig|session|"
+    r"macaroon|preimage|credential",
+    re.IGNORECASE,
+)
+URL_USERINFO = re.compile(r"^([A-Za-z][A-Za-z0-9+.\-]*://)[^/?#]*@")
 BOLT11_TEXT = re.compile(r"\bln(?:bcrt|bc|tbs|tb)[0-9a-z]{50,}\b", re.IGNORECASE)
 DECLARED_PRICE_KEYS = ("amountsats", "pricesats", "sats")
 X402_OUTSIDE_HEADER = re.compile(r"x402", re.IGNORECASE)
@@ -89,6 +96,9 @@ FIXES = {
     "payment_hash_unbound": "Bind the macaroon to the invoice: its identifier must carry the invoice payment hash.",
     "redirect_into_blocked_range": "Serve the paid resource from a public address; never redirect into a private range.",
     "redirect_downgrade": "Serve the paid resource over https; never redirect from https to http.",
+    "redirect_not_https": "Serve public endpoints over https, and redirect only to https URLs.",
+    "method_not_allowed": "Rerun the check with the method the endpoint accepts.",
+    "multiple_l402_challenges": "Send one L402 challenge per response.",
     "redirect_refused": "Redirect only to a public https URL without credentials, or serve the 402 from the listed URL.",
     "redirect_body_not_resent": "Serve the 402 at the listed URL rather than redirecting a request with a body to another origin.",
     "redirect_limit": "Remove the redirect loop and serve the 402 from a stable URL.",
@@ -141,14 +151,40 @@ def iso(moment: datetime | int) -> str:
     return moment.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _sensitive_query_key(raw_key: str) -> bool:
+    """True when the key, as sent or percent-decoded, names a credential."""
+    return bool(SENSITIVE_QUERY.search(raw_key) or SENSITIVE_QUERY.search(unquote_plus(raw_key)))
+
+
+def _query_pairs(url: str) -> list[tuple[str, str]]:
+    """(raw key, raw value) for every ``key=value`` piece of the query, never decoded."""
+    query = url.split("#", 1)[0].partition("?")[2]
+    pairs = []
+    for piece in query.split("&"):
+        key, sep, value = piece.partition("=")
+        if sep:
+            pairs.append((key, value))
+    return pairs
+
+
 def safe_url(url: str) -> str:
-    """``url`` without userinfo or fragment. The path and query string stay exactly as given."""
-    try:
-        parts = urlsplit(url)
-    except ValueError:
-        return re.sub(r"^([A-Za-z][A-Za-z0-9+.\-]*://)[^/?#]*@", r"\1", url).split("#", 1)[0]
-    netloc = parts.netloc.rpartition("@")[2]
-    return urlunsplit((parts.scheme, netloc, parts.path, parts.query, ""))
+    """``url`` without userinfo or fragment, and with every credential query value replaced by REDACTED.
+
+    Works on the raw text: nothing is decoded or re-encoded, so the path and the
+    rest of the query stay exactly as given, and a percent-encoded value is
+    replaced whole.
+    """
+    text = URL_USERINFO.sub(r"\1", url.split("#", 1)[0])
+    base, sep, query = text.partition("?")
+    if not sep:
+        return base
+    pieces = []
+    for piece in query.split("&"):
+        key, eq, value = piece.partition("=")
+        if eq and value and _sensitive_query_key(key):
+            piece = f"{key}=REDACTED"
+        pieces.append(piece)
+    return f"{base}?{'&'.join(pieces)}"
 
 
 def _is_credential_header(name: str) -> bool:
@@ -168,18 +204,22 @@ def _userinfo(url: str) -> list[str]:
 
 
 def collect_secrets(request: ProbeRequest, probe_result: ProbeResult) -> set[str]:
-    """Every string that must never appear in output."""
+    """Every string that must never appear in output.
+
+    Credential query values are kept at any length, raw and percent-decoded,
+    from the requested URL, every hop, and the final target, so a scrub of the
+    rendered output catches every form a value could take.
+    """
     secrets = {str(v) for k, v in request.headers.items() if _is_credential_header(k) and v}
+    query_values: set[str] = set()
     urls = [request.url] + [hop.url for hop in probe_result.hops]
+    if probe_result.final_target is not None:
+        urls.append(probe_result.final_target.url)
     for url in urls:
         secrets.update(_userinfo(url))
-        try:
-            query = urlsplit(url).query
-        except ValueError:
-            continue
-        for k, v in parse_qsl(query):
-            if SENSITIVE_QUERY.search(k) and v:
-                secrets.add(v)
+        for key, value in _query_pairs(url):
+            if value and _sensitive_query_key(key):
+                query_values.update({value, unquote(value), unquote_plus(value)})
     response = probe_result.response
     if response is not None:
         values = response.header_values("WWW-Authenticate")
@@ -193,7 +233,7 @@ def collect_secrets(request: ProbeRequest, probe_result: ProbeResult) -> set[str
         for text in values:
             secrets.update(BOLT11_TEXT.findall(text))
         secrets.update(BOLT11_TEXT.findall(response.body.decode("utf-8", errors="replace")))
-    return {s for s in secrets if len(s) >= 8}
+    return {s for s in secrets if len(s) >= 8} | {s for s in query_values if s}
 
 
 def _declared_price(body: bytes) -> int | None:
@@ -232,7 +272,12 @@ def _challenge_entry(challenge: l402_challenge.Challenge) -> dict:
     return entry
 
 
-def _status_finding(status: int, method: str, sent_body: bool) -> Finding:
+def _status_finding(status: int, method: str, sent_body: bool, allow: str | None = None) -> Finding:
+    if status == 405:
+        # Only method tokens are echoed from Allow, never free text.
+        methods = [m.strip() for m in (allow or "").split(",") if re.fullmatch(r"[A-Za-z]{1,16}", m.strip())]
+        allowed = f" The endpoint allows: {', '.join(methods)}." if methods else ""
+        return Finding("method_not_allowed", "error", "transport", f"An unpaid {method} got 405 Method Not Allowed.{allowed}")
     if 200 <= status < 300:
         return Finding("unpaid_2xx", "error", "transport", f"An unpaid request got {status}: the resource is served without payment.")
     if status == 401:
@@ -318,9 +363,14 @@ def _redirect_refused(probe_result: ProbeResult) -> tuple[Finding, str]:
     if reason in BLOCKED_RANGE_REASONS:
         return Finding("redirect_into_blocked_range", "error", "security",
                        "A redirect leads to a blocked address range; it was not followed."), INCOMPATIBLE
-    if reason in ("downgrade", "not_https"):
+    if reason == "downgrade":
         return Finding("redirect_downgrade", "error", "security",
                        "A redirect leads from https to plain http; it was not followed."), INCOMPATIBLE
+    if reason == "not_https":
+        # The probe refuses https-to-http first, so here the origin was already http (a local test).
+        return Finding("redirect_not_https", "error", "security",
+                       "A redirect from a local plain http address leads to a public plain http URL; "
+                       "public endpoints must use https, so it was not followed."), INCOMPATIBLE
     if reason == "redirect_cross_origin_with_body":
         # The check's own safety rule, not a protocol defect: HTTP allows the redirect.
         return Finding("redirect_body_not_resent", "warning", "transport",
@@ -356,7 +406,8 @@ def _transport(probe_result: ProbeResult, request: ProbeRequest, findings: list[
     if status in TRANSIENT_STATUSES:
         findings.append(Finding("transient_status", "warning", "transport", f"An unpaid request got {status}; retry later."))
         return INCONCLUSIVE
-    findings.append(_status_finding(status, request.method.upper(), bool(request.body)))
+    findings.append(_status_finding(status, request.method.upper(), bool(request.body),
+                                    probe_result.response.header("Allow")))
     return INCOMPATIBLE
 
 
@@ -385,9 +436,20 @@ def _challenge_and_invoice(report: dict, response, now: datetime, findings: list
         findings.append(Finding("no_l402_challenge", "error", "challenge", "No L402 or LSAT challenge; schemes present: " + (", ".join(section["schemes"]) or "none") + "."))
     if parsed.errors or primary is None:
         return INCOMPATIBLE, None
-    duplicates = sorted({d for c in parsed.challenges for d in c.duplicate_params})
-    if duplicates:
-        findings.append(Finding("duplicate_params", "error", "challenge", "Repeated auth-params: " + ", ".join(duplicates) + "."))
+    same_kind = [c for c in parsed.challenges if c.kind == primary.kind]
+    if len(same_kind) > 1:
+        findings.append(Finding("multiple_l402_challenges", "warning", "challenge",
+                                f"The 402 carries {len(same_kind)} {primary.kind} challenges; the first one was checked."))
+    if primary.duplicate_params:
+        findings.append(Finding("duplicate_params", "error", "challenge",
+                                f"Repeated auth-params in the {primary.kind} challenge: "
+                                + ", ".join(sorted(set(primary.duplicate_params))) + "."))
+    for challenge in parsed.challenges:
+        if challenge is not primary and challenge.duplicate_params:
+            name = challenge.kind if challenge.kind != "other" else challenge.scheme
+            findings.append(Finding("duplicate_params_other_scheme", "info", "challenge",
+                                    f"Repeated auth-params in a {name} challenge: "
+                                    + ", ".join(sorted(set(challenge.duplicate_params))) + "."))
     others = [s for c, s in zip(parsed.challenges, section["schemes"]) if c.kind not in ("L402", "LSAT")]
     if others:
         findings.append(Finding("other_schemes", "info", "challenge", "Also offered, reported separately: " + ", ".join(dict.fromkeys(others)) + "."))
@@ -470,6 +532,15 @@ def _caveat_payment_hashes(info: l402_macaroon.MacaroonInfo, keys: list[str]) ->
 
 
 def _binding(token: str | None, invoice, findings: list[Finding]) -> dict:
+    if not token:
+        return {
+            "token_format": "absent",
+            "externally_verifiable": False,
+            "payment_hash_bound": None,
+            "bound_to": None,
+            "unrecognized_caveats": [],
+            "note": "The challenge carries no macaroon or token, so there is nothing to bind.",
+        }
     info = l402_macaroon.inspect(token)
     bindings = info.bindings()
     if bindings is None:
