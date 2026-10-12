@@ -114,7 +114,7 @@ def without_string_literals(args: str) -> str:
 
 
 def skill_docs() -> list[Path]:
-    files = [README]
+    files = [README, *sorted((REPO_ROOT / "references").glob("*.md"))]
     for skill in sorted(p for p in SKILLS_DIR.iterdir() if p.is_dir()):
         files.extend(p for p in (skill / "SKILL.md", skill / "README.md") if p.is_file())
         files.extend(sorted((skill / "references").glob("*.md")))
