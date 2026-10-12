@@ -6,7 +6,9 @@ description: >-
   citations and a satoshi receipt. Use when the user wants a factual, sourced
   answer that benefits from real paid data (market figures, economic series,
   weather, etc.) and is willing to spend a small amount of sats. Do NOT use for
-  questions answerable from general knowledge or free sources.
+  questions answerable from general knowledge or free sources, to browse paid
+  APIs without a research question (use discover-paid-apis), or to pay a URL
+  the user already has (use pay-l402-anywhere).
 ---
 
 # Cited answer
@@ -19,27 +21,45 @@ the inputs it needs, account-lessly.
 ## What you need
 
 - **Lightning Enable MCP** with a funded wallet (`discover_api`,
-  `access_l402_resource`, `get_budget_status`, `get_payment_history`).
+  `access_l402_resource`, `budget`, `receipts`). The general paying procedure,
+  including the confirmation gate, lives in
+  [`pay-l402-anywhere`](../pay-l402-anywhere/); this skill adds the research
+  and citation layer on top.
 - A small sats budget the user is comfortable spending.
+
+Argument names below are the Python server's `snake_case`. The .NET server takes
+the same arguments in `camelCase` (`max_sats` → `maxSats`).
 
 ## Flow
 
 1. **Clarify the question** enough to know what data would actually support it.
    Decide which figures need *real, current* data vs. general knowledge.
 
-2. **Set a budget ceiling** with the user up front (e.g. "up to 25 sats"). Check
-   `get_budget_status` so you know your headroom before spending anything.
+2. **Set a budget ceiling** with the user up front (for example, "up to 25
+   sats"). Check `budget(action="status")` so you know your headroom, then
+   enforce the ceiling before the first paid call:
+   ```
+   budget(action="tighten", per_request=<ceiling>, per_session=<spent + ceiling>)
+   ```
+   Pass both: `per_request` defaults to 1000 and may not exceed `per_session`.
+   `spent` is this session's spend from `budget(action="status")`. The budget
+   gate denies a payment when spent plus `max_sats` exceeds the runtime session
+   cap, so the cap has to include what the session already spent.
 
-3. **Discover sources** with `discover_api` (search the L402 registry, e.g.
-   `discover_api(query="...")`). With `budget_aware` on, it annotates how many
-   calls you can afford. Prefer the cheapest source that has the data.
+3. **Discover sources** with `discover_api` (search the L402 registry, for
+   example `discover_api(query="...")`). With `budget_aware` on, it annotates how
+   many calls you can afford. Prefer the cheapest source that has the data.
 
-4. **Buy only what you need, one call at a time.** Use `access_l402_resource`
-   on each endpoint — it runs the full `402 → pay → retry` cycle and returns the
-   data. Track what you spent on each call (source + sats + what it bought).
+4. **Buy only what you need, one call at a time.** Use
+   `access_l402_resource(url="...", max_sats=<per-call cap>)` on each endpoint —
+   it runs the full `402 → pay → retry` cycle and returns the data. Lightning
+   Enable does not hold funds; the wallet facilitates custody and settlement. Track what
+   you spent on each call (source + sats + what it bought). If a call needs a
+   confirmation code, ask the human for it and re-call with
+   `confirmation_nonce="<code>"`; never guess one.
 
-5. **Stay under budget.** Re-check `get_budget_status` as you go; stop before
-   exceeding the ceiling and tell the user if you need more.
+5. **Stay under budget.** Re-check `budget(action="status")` as you go; stop
+   before exceeding the ceiling and tell the user if you need more.
 
 6. **Write the answer** grounded in the purchased data. Every figure must trace
    to a specific paid call. If the real data contradicts the obvious narrative,
@@ -50,7 +70,9 @@ the inputs it needs, account-lessly.
    echo '[{"source":"FRED USD/JPY","sats":5,"what":"DEXJPUS series"}, ...]' \
      | python scripts/receipt.py
    ```
-   Present the cited answer, then the receipt (total sats, calls, 0 accounts).
+   Cross-check your list against `receipts(source="session")` so the receipt
+   matches what the wallet paid. Present the cited answer, then the receipt
+   (total sats, calls, 0 accounts).
 
 ## Safety / honesty rules
 
@@ -64,7 +86,8 @@ the inputs it needs, account-lessly.
 
 > User: "Write me a sourced take on the 2024 yen carry-trade unwind. Up to 25 sats."
 >
-> → `get_budget_status` → ok. `discover_api(query="finance")` → finds FRED on
+> → `budget(action="status")` → nothing spent yet →
+> `budget(action="tighten", per_request=25, per_session=25)`. `discover_api(query="finance")` → finds FRED on
 > agent-commerce.store. → `access_l402_resource` for USD/JPY, Nikkei, VIX,
 > 10-yr (5 sats each). → write the analysis, every number traced to a call,
 > noting the data distinguishes the Aug-2024 unwind from the bigger Apr-2025

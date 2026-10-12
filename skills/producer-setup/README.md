@@ -99,5 +99,5 @@ charging. Share this OpenAPI URL. Spent 110 sats. Trial ends in 30 days; without
 billing it drops to the Free Producer Sandbox."
 
 Pairs with [`sell-this`](../sell-this/) once the account exists (one-off paywalls
-without a proxy), and with [`l402-meter`](../l402-meter/) to keep the setup spend
-visible.
+without a proxy). To keep the setup spend visible, ask the agent for
+`budget(action="status")` and `receipts(source="durable")`.

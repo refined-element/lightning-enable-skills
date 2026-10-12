@@ -18,6 +18,11 @@ Three things are pinned here:
    banned across the repo's prose. The payment provider and the wallet ARE
    custodians -- saying otherwise is a compliance claim this project does not
    make. See the custody-language convention in the Lightning Enable docs.
+   "No KYB" / "no KYC" copy is banned for the same reason: it is a compliance
+   claim, not a feature.
+4. **Links between skills resolve.** A ``../<skill>/`` link in any skill file
+   must point at a skill folder that exists. Skills get merged and retired, and
+   a link to a deleted sibling sends the agent to a file that is not there.
 
 The frontmatter parser below is deliberately small and stdlib-only (CI installs
 nothing but pytest). It handles the two forms these files use: ``key: value``
@@ -39,6 +44,19 @@ NAME_PATTERN = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 
 # Words that would misdescribe who holds the funds.
 BANNED_CUSTODY_TERMS = ("non-custodial", "noncustodial", "self-custody", "trustless")
+
+# Compliance claims this project does not make. Any "no KYC" / "no-KYB" or
+# "without KYC" is a claim, wherever it sits in the sentence ("no-KYC payments",
+# "no KYB for sellers", "no KYC or card needed" are all claims). The only allowed
+# form is the meta statement in COMPLIANCE_EXCEPTIONS, which says the opposite.
+COMPLIANCE_CLAIM = re.compile(
+    r"\bno[- ]ky[bc]\b|\bwithout\s+(?:any\s+|a\s+)?ky[bc]\b",
+    re.IGNORECASE,
+)
+COMPLIANCE_EXCEPTIONS = re.compile(r"\bno[- ]ky[bc]\s+claims?\b", re.IGNORECASE)
+
+# `](../<name>/...)` or `](../<name>)`: a relative link from one skill to another.
+SIBLING_LINK = re.compile(r"\]\(\.\./([a-z0-9-]+)(?:[/)#])")
 
 
 def skill_dirs():
@@ -139,11 +157,17 @@ def test_skill_is_listed_in_the_readme_table(skill_dir: Path, readme_text: str):
     )
 
 
-@pytest.mark.parametrize(
-    "markdown_file",
-    sorted([README, *SKILLS_DIR.rglob("*.md"), *(REPO_ROOT / "docs").rglob("*.md")]),
-    ids=lambda p: str(p.relative_to(REPO_ROOT)).replace("\\", "/"),
-)
+def markdown_files() -> list[Path]:
+    docs_dir = REPO_ROOT / "docs"
+    docs = list(docs_dir.rglob("*.md")) if docs_dir.is_dir() else []
+    return sorted([README, *SKILLS_DIR.rglob("*.md"), *docs])
+
+
+def rel(path: Path) -> str:
+    return str(path.relative_to(REPO_ROOT)).replace("\\", "/")
+
+
+@pytest.mark.parametrize("markdown_file", markdown_files(), ids=rel)
 def test_prose_avoids_banned_custody_terms(markdown_file: Path):
     text = markdown_file.read_text(encoding="utf-8").lower()
     hits = [term for term in BANNED_CUSTODY_TERMS if term in text]
@@ -151,4 +175,31 @@ def test_prose_avoids_banned_custody_terms(markdown_file: Path):
         f"{markdown_file.name} uses {hits} -- the wallet and the payment provider are "
         "custodians. Say 'Lightning Enable does not hold funds; the wallet facilitates "
         "custody and settlement' instead."
+    )
+
+
+@pytest.mark.parametrize("markdown_file", markdown_files(), ids=rel)
+def test_prose_makes_no_kyb_or_kyc_claims(markdown_file: Path):
+    text = markdown_file.read_text(encoding="utf-8")
+    allowed = {m.start() for m in COMPLIANCE_EXCEPTIONS.finditer(text)}
+    hits = sorted({m.group(0) for m in COMPLIANCE_CLAIM.finditer(text) if m.start() not in allowed})
+    assert not hits, (
+        f"{rel(markdown_file)} uses {hits}. KYB and KYC belong to the payment "
+        "provider; this repo makes no claim about them."
+    )
+
+
+# Only files at the top of a skill folder: from there `../<name>/` is a sibling
+# skill. From `skills/<name>/references/`, `../scripts/` is the skill's own folder.
+@pytest.mark.parametrize(
+    "markdown_file", sorted(SKILLS_DIR.glob("*/*.md")), ids=rel
+)
+def test_links_between_skills_resolve(markdown_file: Path):
+    text = markdown_file.read_text(encoding="utf-8")
+    missing = sorted(
+        {name for name in SIBLING_LINK.findall(text) if not (SKILLS_DIR / name).is_dir()}
+    )
+    assert not missing, (
+        f"{rel(markdown_file)} links to skills that do not exist: {missing}. "
+        "Point the link at the skill that replaced it, or remove it."
     )

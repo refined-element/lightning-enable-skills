@@ -26,17 +26,20 @@ account-lessly.
 ## How it works
 
 1. Sets a sats budget ceiling with you and checks wallet headroom
-   (`get_budget_status`).
+   (`budget(action="status")`).
 2. Finds sources with `discover_api` (the L402 API registry / agent-commerce.store).
 3. Buys each needed dataset with `access_l402_resource` (which runs the
    `402 → pay → retry` cycle automatically).
 4. Writes the answer grounded in what it bought, citing each figure.
-5. Renders a receipt with `scripts/receipt.py`.
+5. Renders a receipt with `scripts/receipt.py`, cross-checked against
+   `receipts(source="session")`.
 
 ## Requirements
 
 - [Lightning Enable MCP](https://github.com/refined-element/lightning-enable-mcp)
-  with a funded wallet.
+  2.x with a funded wallet. The paying procedure itself is the
+  [`pay-l402-anywhere`](../pay-l402-anywhere/) skill; this one adds discovery,
+  citations, and the receipt.
 - A small sats budget you're comfortable spending.
 - Python 3 (stdlib only) for the receipt formatter.
 

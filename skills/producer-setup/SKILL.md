@@ -59,8 +59,9 @@ self-test purchase, and the hand-off summary.
     for your action.
   - `access_l402_resource` / `pay_l402_challenge` — the self-test purchase.
   - `receipts` — the durable payment log, for the hand-off.
-  - `renew_lightning_enable_subscription` — renews the plan in sats after the
-    trial (MCP 2.1.0 or later), for the hand-off.
+  - Renewing the plan in sats after the trial is the
+    [`lightning-enable-account`](../lightning-enable-account/) skill's job; this
+    skill only points at it in the hand-off.
 
 Argument names below are the Python server's `snake_case`. The .NET server takes
 the same arguments in `camelCase` — `target_base_url` → `targetBaseUrl`,
@@ -276,10 +277,12 @@ That flow is the [`sell-this`](../sell-this/) skill.
 Read the OpenAPI document first, unpaid:
 
 ```
-access_l402_resource(url="<OpenAPI URL>")
+access_l402_resource(url="<OpenAPI URL>", max_sats=1)
 ```
 
-It should return 200 with no payment, and price the route under `x-payment`. The
+Pass `max_sats=1` even though the read is free: the budget gate checks
+`max_sats` before it fetches anything, and the default is 1000. It should return
+200 with no payment, and price the route under `x-payment`. The
 document is public — check that nothing sensitive leaked into the path, the
 summary, or the service description.
 
@@ -334,35 +337,28 @@ Tell the human, in this order:
   `discover_api`.
 - **What to watch:** `l402_producer(action="list_challenges", challenge_status="paid")`
   for sales, `l402_producer(action="status")` for the account, and
-  `receipts(action="durable")` for the wallet's own payment log.
+  `receipts(source="durable")` for the wallet's own payment log.
 - **How to add an endpoint:** one `l402_producer(action="add_endpoint", …)` call
-  per route on the same proxy, each with its own `endpoint_id`.
-- **How to change a price:** re-run `add_endpoint` for that `endpoint_id` with
-  the new `price_sats`. Challenges already minted keep the price they carry.
+  per route on the same proxy, each with its own `endpoint_id` and a
+  `price_sats` equal to the proxy's `default_price_sats`.
+- **How to change a price:** in the dashboard's proxy pricing, not the MCP. See
+  the [proxy setup walkthrough](https://docs.lightningenable.com/products/agentic-commerce/proxy-setup-walkthrough).
+  Re-running `add_endpoint` with the same `endpoint_id` is refused as a
+  duplicate, and a route's `price_sats` only changes the advertised price: the
+  charged price comes from `default_price_sats` or a pricing rule. Keep each
+  route's `price_sats` equal to `default_price_sats` so the advertised and
+  charged prices match. Challenges already minted keep the price they carry.
 - **What the trial means:** the Fast Lane account runs a **30-day trial with no
   card**. Reminder emails arrive 7 days and 1 day before it ends. Add billing and
   the account stays on the paid plan; do nothing and it drops to the **Free
   Producer Sandbox** — a smaller free tier, not a shutdown, with a cap on
   endpoints, monthly challenges, and price per challenge. Endpoints already
   published keep serving within those caps.
-- **How to renew in sats:** during or after the trial (a payment during the
-  trial starts its 30 days when the trial ends), the agent can keep the account
-  on the paid plan without a card, with the human's yes:
-  `renew_lightning_enable_subscription(max_sats=<cap>)` pays the renewal's L402
-  challenge and credits 30 days to the account behind the configured key. Not
-  for an account with an active card subscription (cancel it first) or a
-  Business plan. It needs the merchant API key (stored in step 2, or
-  `LIGHTNING_ENABLE_API_KEY`), a wallet that returns preimages, and Lightning
-  Enable MCP 2.1.0 or later; the server sets the price, `max_sats` (default
-  50,000) only caps what the tool pays, and a success returns
-  `currentPeriodEnd` (the new paid-through date), `paidSats`, and `paymentHash`
-  — never the preimage. Above the auto-approve threshold the MCP prints a
-  confirmation code to its console, bound to the cap: ask the human for it and
-  re-call with the same `max_sats` and `confirmation_nonce="<code>"`. If a
-  result reports `activation.paid` with a warning, do not re-run the tool — a
-  payment was taken, so send the payment hash to support@lightningenable.com.
-  The account is never deactivated, so it can always renew; a lapsed account
-  moves to the Free Producer Sandbox within a day.
+- **How to renew in sats:** renew in sats with the
+  [`lightning-enable-account`](../lightning-enable-account/) skill, which quotes
+  first and sets `max_sats` to the quoted price. The account is never
+  deactivated, so it can always renew; a lapsed account moves to the Free
+  Producer Sandbox within a day.
 
 State this as fact, not as a sales pitch, and do not quote plan prices from
 memory — point at [lightningenable.com](https://www.lightningenable.com) instead.

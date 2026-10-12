@@ -6,12 +6,12 @@ moment: mid-flow, after the agent has already spent ~100 sats creating an
 account. The MCP rejects the call, the agent improvises, and the human is left
 with a half-configured merchant.
 
-So the argument names are pinned to the tool's own input schema (see
-``l402_producer`` in the Lightning Enable MCP,
-``tools/consolidated.py`` for Python and ``Tools/L402ProducerTool.cs`` for
-.NET). The Python server takes snake_case and the .NET server takes the
-camelCase equivalent of the same name; both spellings are accepted here, since
-the skill has to be readable by an agent talking to either.
+So the argument names are pinned to the tool's own input schema. The
+action-by-action argument check runs over every skill in
+``test_tool_arguments_surface.py``, which owns the schema table; this module
+holds the assertions that are specific to ``producer-setup``: it names all eight
+actions, avoids the REST layer's field names, and spells the shared arguments
+the way its own note says.
 
 Two traps this catches:
 
@@ -20,89 +20,26 @@ Two traps this catches:
 * ``add_endpoint`` takes ``path`` + ``endpoint_id``, not the API's underlying
   ``pathPattern``. The REST body and the tool argument are not the same shape.
 """
-import re
 from pathlib import Path
 
 import pytest
 
+# The action table lives with the all-skills argument check.
+from test_tool_arguments_surface import ARGS_BY_TOOL
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SKILL = REPO_ROOT / "skills" / "producer-setup" / "SKILL.md"
 
-# The l402_producer input schema, per action. Snake_case is the Python spelling;
-# the .NET tool takes the camelCase equivalent, which the test derives.
-ARGS_BY_ACTION = {
-    "create": {"resource", "price_sats", "description"},
-    "verify": {"macaroon", "preimage"},
-    "configure_receive": {"nwc_connection_string"},
-    "status": {"limit"},
-    "create_proxy": {"name", "target_base_url", "description", "default_price_sats"},
-    "add_endpoint": {"proxy_id", "endpoint_id", "path", "http_method", "summary", "price_sats"},
-    "publish": {"proxy_id", "service_name", "service_description", "categories"},
-    "list_challenges": {"challenge_status", "limit", "offset"},
-}
+ARGS_BY_ACTION = ARGS_BY_TOOL["l402_producer"]
 
 # Names that read plausibly but are not on the tool: the REST layer's own field
 # names, and the status/challenge_status collision.
 NEVER_ON_THE_TOOL = ("path_pattern", "pathPattern", "priority", "targetUrl")
 
-CALL = re.compile(r"l402_producer\(", re.MULTILINE)
-ACTION = re.compile(r"""action\s*=\s*["'](\w+)["']""")
-KEYWORD = re.compile(r"(\w+)\s*=")
-
-
-def camel(name: str) -> str:
-    head, *rest = name.split("_")
-    return head + "".join(word.capitalize() for word in rest)
-
-
-def accepted(action: str) -> set[str]:
-    names = ARGS_BY_ACTION[action]
-    return {"action", *names, *(camel(n) for n in names)}
-
-
-def producer_calls(text: str) -> list[str]:
-    """Every ``l402_producer(...)`` call in the file, argument text only."""
-    calls = []
-    for match in CALL.finditer(text):
-        depth = 0
-        for i in range(match.end() - 1, len(text)):
-            if text[i] == "(":
-                depth += 1
-            elif text[i] == ")":
-                depth -= 1
-                if depth == 0:
-                    calls.append(text[match.end():i])
-                    break
-    return calls
-
 
 @pytest.fixture(scope="module")
 def skill_text() -> str:
     return SKILL.read_text(encoding="utf-8")
-
-
-def test_every_documented_call_names_a_real_action(skill_text: str):
-    calls = producer_calls(skill_text)
-    assert calls, "the skill documents no l402_producer calls -- did the file move?"
-    for call in calls:
-        action = ACTION.search(call)
-        assert action, f"l402_producer call with no action=: {call!r}"
-        assert action.group(1) in ARGS_BY_ACTION, (
-            f"{action.group(1)!r} is not an l402_producer action. Valid: "
-            f"{sorted(ARGS_BY_ACTION)}"
-        )
-
-
-def test_every_documented_argument_is_on_the_tool(skill_text: str):
-    for call in producer_calls(skill_text):
-        action = ACTION.search(call).group(1)
-        allowed = accepted(action)
-        used = set(KEYWORD.findall(call))
-        unknown = sorted(used - allowed)
-        assert not unknown, (
-            f"l402_producer action={action} does not take {unknown}. "
-            f"It takes: {sorted(allowed - {'action'})}"
-        )
 
 
 def test_the_skill_documents_all_eight_actions(skill_text: str):
