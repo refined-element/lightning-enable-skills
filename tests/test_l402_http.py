@@ -64,6 +64,20 @@ def test_https_to_http_downgrade_is_refused():
     assert result.error_reason == "downgrade"
 
 
+@pytest.mark.parametrize("location", ["https://[::1/fixture-string-loc", "https://[fixture-string-host]/x",
+                                      "//[::1/fixture-string-loc"])
+def test_a_malformed_redirect_location_stops_the_probe_without_raising(location):
+    log = []
+    responses = [{"url": "https://api.example.com/a", "status": 302, "headers": [["Location", location]], "body": ""}]
+    result = l402_http.probe("https://api.example.com/a", resolver=resolver({}),
+                             transport=support.fake_transport(responses, log))
+    assert result.error_kind == "redirect_refused"
+    assert result.error_reason == "malformed_location"
+    assert "fixture-string" not in result.error_message
+    assert [(h.url, h.status) for h in result.hops] == [("https://api.example.com/a", 302)]
+    assert len(log) == 1
+
+
 def test_caller_headers_are_dropped_when_a_redirect_leaves_the_origin():
     # The brief used X-Api-Key here; credential-bearing names are refused
     # outright, so a harmless custom header stands in for it.

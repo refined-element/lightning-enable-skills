@@ -118,6 +118,18 @@ def test_a_malformed_bracketed_host_is_a_no_host_refusal(url):
     assert "- Error: refused" in markdown
 
 
+def test_a_malformed_redirect_location_is_reported_like_any_refused_redirect():
+    url = "https://api.example.com/paid"
+    responses = [{"url": url, "status": 302, "headers": [["Location", "https://[::1/fixture-string-loc"]], "body": ""}]
+    for extra in ([], ["--json"]):
+        code, text = run([url, *extra], resolver=support.fake_resolver({}),
+                         transport=support.fake_transport(responses))
+        assert code == 0
+        assert "INCOMPATIBLE" in text
+        assert "redirect_refused" in text
+        assert "fixture-string-loc" not in text
+
+
 def test_sensitive_query_values_are_redacted():
     fixture = support.load_fixture("le-test-ping")
     url = fixture["request"]["url"] + "?api_key=fixture-string-query-key&city=paris"

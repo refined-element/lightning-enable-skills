@@ -4,7 +4,8 @@
 only to an address that check returned (the first one, recorded on the hop),
 so a DNS answer cannot change between the check and the connection. Redirects
 are followed up to ``max_redirects``; a redirect into a blocked range stops the
-probe and is reported, an https-to-http downgrade is refused, caller headers
+probe and is reported, an https-to-http downgrade is refused, a Location that
+is not a valid URL stops the probe (reason malformed_location), caller headers
 are dropped when a redirect leaves the origin, and a 307/308 that would resend
 a body to a different origin is not followed. ``timeout`` is one deadline for
 the whole probe, every hop and every read included. Credential-bearing header
@@ -479,8 +480,15 @@ def probe(
         if deadline.expired():
             result.error_kind, result.error_message = "timeout", timeout_message
             return result
-        next_url = urljoin(current_url, location.strip())
-        if target.scheme == "https" and urlsplit(next_url).scheme.lower() == "http":
+        try:
+            next_url = urljoin(current_url, location.strip())
+            next_scheme = urlsplit(next_url).scheme.lower()
+        except ValueError:
+            # A malformed bracketed host, say. The Location value is never echoed.
+            result.error_kind, result.error_reason = "redirect_refused", "malformed_location"
+            result.error_message = "the redirect Location is not a valid URL; not followed"
+            return result
+        if target.scheme == "https" and next_scheme == "http":
             result.error_kind, result.error_reason = "redirect_refused", "downgrade"
             result.error_message = "the redirect downgrades https to http"
             return result
