@@ -219,8 +219,11 @@ proxy's name.
 Read the OpenAPI document first. It is public and costs nothing:
 
 ```
-access_l402_resource(url="<openapiUrl>")
+access_l402_resource(url="<openapiUrl>", max_sats=1)
 ```
+
+Pass `max_sats=1` even though the read is free: the budget gate checks
+`max_sats` before it fetches anything, and the default is 1000.
 
 Expect 200 with no payment and an `x-payment` price on each operation. Read it
 the way a stranger would: nothing private belongs in a path, a summary, or the
@@ -230,9 +233,15 @@ Then set the leash and buy one call. Get the human's explicit yes first, naming
 the price:
 
 ```
-budget(action="tighten", per_request=<price + a few>, per_session=<price + a few>)
+budget(action="tighten", per_request=<price + a few>, per_session=<spent + price + a few>)
 access_l402_resource(url="<endpoint url>", max_sats=<price + a few>)
 ```
+
+`spent` is this session's spend so far, from `budget(action="status")`.
+The session cap counts what this session already spent: the budget gate
+denies a payment when spent plus `max_sats` exceeds the runtime session cap,
+so a session cap equal to the ceiling alone would shrink the ceiling by
+whatever was spent before.
 
 - **Success:** 402, the MCP pays the invoice, gets the preimage, retries with
   `Authorization: L402 <macaroon>:<preimage>`, and returns 200 with the
@@ -373,7 +382,8 @@ retry a call that failed on a cap.
 > 5. `l402_producer(action="publish", proxy_id="weather-api",
 >    service_description="Hourly weather forecasts", categories=["weather"])`
 >    returns the OpenAPI and manifest URLs.
-> 6. `access_l402_resource` on the OpenAPI URL: 200, free. With the human's yes,
+> 6. `access_l402_resource` on the OpenAPI URL with `max_sats=1`: 200, free.
+>    With the human's yes, and nothing spent yet this session,
 >    `budget(action="tighten", per_request=20, per_session=20)`, then
 >    `access_l402_resource(url="<endpoint url>", max_sats=20)`: 402, paid 10
 >    sats, 200 forecast.

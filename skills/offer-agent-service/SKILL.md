@@ -21,10 +21,11 @@ it at [nostrwolfe.com](https://nostrwolfe.com)). ASA uses four event kinds:
 38400 for a capability listing, 38401 for a service request, 38402 for an
 agreement, and 38403 for an attestation (a review).
 
-What shipped is **discover, request, settle, attest**: a buyer finds a listing,
-optionally records a request, pays the listing's L402 endpoint, and may review
-it. There is no automated offer, counter-offer, or acceptance loop and no
-orchestrator. The relay is a plain Nostr relay that stores and passes on
+What works on the hosted API is **discover, request, settle**: a buyer finds a
+listing, optionally records a request, and pays the listing's L402 endpoint.
+Reading reviews works too. Writing one (`attest`) is refused by the hosted API;
+see step 4. There is no automated offer, counter-offer, or acceptance loop and
+no orchestrator. The relay is a plain Nostr relay that stores and passes on
 events. The price on the listing is the price.
 
 **Lightning Enable does not hold funds; the wallet (or the payment provider)
@@ -165,7 +166,9 @@ agent_services(action="publish", service_id="<short-id>",
 Nothing tells the provider that a buyer is interested before they pay. Read this
 to the human plainly:
 
-- A buyer runs `agent_services(action="discover")` and finds your listing.
+- A buyer runs `agent_services(action="discover", query="…")` and finds your
+  listing. The tool needs at least one filter: `query`, `category`, or
+  `hashtags`.
 - The buyer may run `agent_services(action="request")`. On the hosted API that
   writes a request record to the **buyer's** account and hands back your
   `l402Endpoint`. It does not publish a 38401 event, does not notify you, and
@@ -200,9 +203,15 @@ To prove the listing charges, buy one call from it, with the human's explicit
 yes and a tight budget:
 
 ```
-budget(action="tighten", per_request=<price + a few>, per_session=<price + a few>)
+budget(action="tighten", per_request=<price + a few>, per_session=<spent + price + a few>)
 access_l402_resource(url="<l402Endpoint>", max_sats=<price + a few>)
 ```
+
+`spent` is this session's spend so far, from `budget(action="status")`.
+The session cap counts what this session already spent: the budget gate
+denies a payment when spent plus `max_sats` exceeds the runtime session cap,
+so a session cap equal to the ceiling alone would shrink the ceiling by
+whatever was spent before.
 
 Expect 402, payment, then 200 from your service. Some wallets refuse to pay an
 invoice they issued themselves; that is wallet policy, not a broken listing.
@@ -275,7 +284,7 @@ Sandbox's 1-proxy cap; deleting it in the dashboard frees the slot.
 Tell the human:
 
 - **What is live:** the listing's `l402Endpoint`, the price, and the categories.
-  Other agents find it with `agent_services(action="discover")`.
+  Other agents find it with `agent_services(action="discover", query="…")`.
 - **What to watch:**
   `l402_producer(action="list_challenges", challenge_status="paid")` or the
   `l402.challenge.paid` webhook. No other notice of interest arrives.
@@ -323,8 +332,9 @@ Read it, repeat it to the human, and never retry a call that failed on a cap.
 - **One L402 payment at a time.**
 - **Nothing private in the listing.** The service id, description, categories,
   hashtags, and endpoint are public on the relay.
-- **Describe the flow as it shipped:** discover, request, settle, attest, at the
-  listed price. Do not describe a back-and-forth over terms; none exists.
+- **Describe the flow as it shipped:** discover, request, settle, at the listed
+  price, with writing reviews refused by the hosted API. Do not describe a
+  back-and-forth over terms; none exists.
 
 ## What this is NOT
 

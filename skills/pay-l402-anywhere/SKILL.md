@@ -63,7 +63,12 @@ Before the first payment in a session, check both the soft and hard limits:
   says.
 
 If the user names a ceiling lower than the configured caps, lower them to match:
-`budget(action="tighten", per_request=<ceiling>, per_session=<ceiling>)`.
+`budget(action="tighten", per_request=<ceiling>, per_session=<spent + ceiling>)`,
+where `spent` is this session's spend from `budget(action="status")`.
+The session cap counts what this session already spent: the budget gate
+denies a payment when spent plus `max_sats` exceeds the runtime session cap,
+so a session cap equal to the ceiling alone would shrink the ceiling by
+whatever was spent before.
 Tightening is one-way; an agent can never raise the operator's limits.
 
 State the ceiling back to the user in plain terms ("you've got ~4,800 sats,
@@ -128,7 +133,8 @@ over Telegram or Signal, see
 > User: "Use my Lightning wallet to pull the premium forecast from that weather
 > API — but don't blow past 200 sats."
 >
-> → `budget(action="status")` + `get_balance()` (4,800 sats, cap 500/call) →
+> → `budget(action="status")` + `get_balance()` (4,800 sats, cap 500/call,
+> nothing spent yet this session) →
 > `budget(action="tighten", per_request=200, per_session=200)` → "you're good,
 > capped at 200" → `access_l402_resource(url=…, max_sats=200)` → 402 → pays
 > 150 sats → preimage → 200 OK → "Got the forecast, spent 150 sats, 4,650 left."

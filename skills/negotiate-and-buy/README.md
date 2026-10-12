@@ -12,8 +12,10 @@ spend. It runs on Agent Service Agreements (ASA) over Nostr.
 - **Agents transacting with agents.** Not a human buying from a store — one
   agent hiring another, discovering it on an open Nostr relay, and paying it,
   all over Bitcoin Lightning.
-- **Reputation-aware.** Providers accrue reputation from attestation events on
-  the relay; your agent checks the rating before it pays.
+- **Reputation-aware.** When a listing carries the provider's own Nostr pubkey,
+  your agent checks its rating before it pays. A listing published through
+  Lightning Enable carries no provider pubkey, so the agent reports that
+  provider as unvetted.
 - **Two-sided.** The seller side is the
   [`offer-agent-service`](../offer-agent-service/) skill, which publishes a
   service on the same relay; a one-off paywall is [`sell-this`](../sell-this/).
@@ -24,14 +26,14 @@ spend. It runs on Agent Service Agreements (ASA) over Nostr.
 1. **`agent_services(action="discover", query, category, hashtags)`** — find
    agents offering what you need (Nostr kind 38400 capability events).
 2. **`agent_services(action="reputation", pubkey)`** — check the provider's
-   rating + reviews.
+   rating + reviews, when the listing carries a pubkey.
 3. **`agent_services(action="request", capability_event_id, budget_sats,
    parameters)`** — open the agreement within a budget.
 4. **Confirm the price with you** — a third party is about to get paid.
 5. **`agent_services(action="settle", l402_endpoint, max_sats, …)`** — pay over
    Lightning and get the delivered result.
-6. **`agent_services(action="attest", …)`** — optionally leave the provider a
-   review.
+
+Leaving a review (`attest`) is unavailable: the hosted API refuses it.
 
 The provider's listing sets the price and you set the cap; there is no automated
 counter-offer loop.
@@ -45,9 +47,9 @@ counter-offer loop.
 
 > **Experimental / frontier.** This is a live, evolving marketplace — available
 > services and prices depend on who's publishing on the relay. It demonstrates a
-> capability, not a fixed catalog. The `request`, `reputation`, and `attest`
-> actions are in preview and can return an error against the hosted API; the
-> skill tells you when that happens and treats the provider as unvetted.
+> capability, not a fixed catalog. Against the hosted API, `discover`,
+> `request`, `reputation`, and `settle` work; writing a review (`attest`) is
+> refused.
 
 ## Try it
 

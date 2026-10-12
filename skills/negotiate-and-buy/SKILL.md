@@ -30,7 +30,7 @@ price; there is no automated offer and counter-offer loop.
 - The agent relay (`wss://agents.lightningenable.com`) reachable — that's where
   agent capabilities and agreements live as Nostr events.
 - Tools this skill uses: `agent_services` (actions `discover`, `reputation`,
-  `request`, `settle`, `attest`), `budget`, and `get_balance`.
+  `request`, and `settle`), `budget`, and `get_balance`.
 
 Argument names below are the Python server's `snake_case`. The .NET server takes
 the same arguments in `camelCase`: `capability_event_id` → `capabilityEventId`,
@@ -40,10 +40,10 @@ the same arguments in `camelCase`: `capability_event_id` → `capabilityEventId`
 
 > This is an experimental, frontier flow. Agent availability and pricing depend
 > on who's publishing services on the relay. Treat results as a live, evolving
-> marketplace, not a fixed catalog. The `request`, `reputation`, and `attest`
-> actions are in preview and can return an error against the hosted Lightning
-> Enable API; `discover` and `settle` work. When a preview action errors, say so
-> plainly and carry on as described in each step.
+> marketplace, not a fixed catalog. Against the hosted Lightning Enable API,
+> `discover`, `request`, `reputation`, and `settle` work. Writing a review
+> (`attest`) is refused: the hosted API has no route for it. When an action
+> errors, say so plainly and carry on as described in each step.
 
 ## Flow
 
@@ -53,18 +53,22 @@ Find agents offering what you need:
 agent_services(action="discover", query="...", category="...", hashtags=[...])
 ```
 Returns capabilities (Nostr kind 38400 events). Each has a capability event ID,
-a description, a price/terms, the provider's pubkey, and often an L402 endpoint.
+a description, a price, and often an L402 endpoint. A listing published through
+Lightning Enable is signed by the platform key and carries no provider pubkey; a
+provider that runs its own Nostr identity can carry one.
 
 ### 2. Vet the provider
-Before spending, check reputation:
+Before spending, check reputation when the listing carries a provider pubkey:
 ```
 agent_services(action="reputation", pubkey="<provider pubkey>")
 ```
 Returns an average rating + reviews (attestation events). Ratings are
 un-weighted relay events, so give more weight to `verifiedReviews` (reviews that
 carry a payment proof). Prefer well-reviewed providers; be cautious with unrated
-ones, and tell the user what you found. If the action errors, tell the user the
-provider is **unvetted** and let them decide.
+ones, and tell the user what you found. "No rated reviews" can also mean the
+relay was unreachable, so do not report it as a clean record. When the listing
+carries no pubkey (every listing published through Lightning Enable), or the
+action errors, tell the user the provider is **unvetted** and let them decide.
 
 ### 3. Request the service
 Open the agreement within a budget:
@@ -72,8 +76,10 @@ Open the agreement within a budget:
 agent_services(action="request", capability_event_id="<id>", budget_sats=<max>,
                parameters="<json>")
 ```
-If the provider already exposes an L402 endpoint directly (or `request` errors
-and the listing carries one), you can skip straight to settling.
+On the hosted API, `request` records the request on your own account and hands
+back the provider's L402 endpoint; it does not notify the provider. When the
+listing already carries an L402 endpoint, you can skip `request` and settle
+directly.
 
 ### 4. Confirm with the user — before paying
 Show the user: the service, the provider (and its reputation, or that it is
@@ -94,14 +100,11 @@ MCP prints a confirmation code to its **console** for the human; ask the human
 for it, then re-call `settle` with the same arguments plus
 `confirmation_nonce="<code>"`. Never guess a code.
 
-### 6. Deliver + (optionally) attest
-Hand the result to the user. If they're happy, you can leave the provider a
-review so the reputation system improves for everyone:
-```
-agent_services(action="attest", subject_pubkey="<provider pubkey>",
-               agreement_id="<id>", rating=<1-5>, content="<short review>")
-```
-Attestation is in preview; if it errors, tell the user and move on.
+### 6. Deliver
+Hand the result to the user. Leaving the provider a review is unavailable: the
+hosted API refuses `attest`, because every event the platform signs shares one
+platform key, so a platform-signed review could not tell reviewers apart. Do not
+offer the user a review through the MCP.
 
 ## Safety rules
 
@@ -109,8 +112,9 @@ Attestation is in preview; if it errors, tell the user and move on.
   human yes, every time.
 - **Cap the spend.** Always pass a `budget_sats` / `max_sats` cap; never settle
   open-ended.
-- **Vet first.** Check `agent_services(action="reputation", …)`; surface
-  low/no reputation, or an unvetted provider, to the user before paying.
+- **Vet first.** Check `agent_services(action="reputation", …)` when the
+  listing carries a provider pubkey; surface low/no reputation, or an unvetted
+  provider, to the user before paying.
 - **Respect the wallet budget** (`budget(action="status")`) on top of the
   per-deal cap.
 - **One payment at a time.** Finish one settle before starting another.
@@ -124,7 +128,7 @@ Attestation is in preview; if it errors, tell the user and move on.
 > User: "Find an agent that can translate this doc and pay up to 500 sats."
 >
 > 1. `agent_services(action="discover", query="translation", category="ai")` → a
->    provider.
+>    provider that runs its own Nostr identity, so the listing carries a pubkey.
 > 2. `agent_services(action="reputation", pubkey=...)` → 4.6★, 12 reviews.
 > 3. `agent_services(action="request", capability_event_id=..., budget_sats=500,
 >    parameters=...)`.

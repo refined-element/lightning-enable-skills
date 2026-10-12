@@ -276,10 +276,12 @@ That flow is the [`sell-this`](../sell-this/) skill.
 Read the OpenAPI document first, unpaid:
 
 ```
-access_l402_resource(url="<OpenAPI URL>")
+access_l402_resource(url="<OpenAPI URL>", max_sats=1)
 ```
 
-It should return 200 with no payment, and price the route under `x-payment`. The
+Pass `max_sats=1` even though the read is free: the budget gate checks
+`max_sats` before it fetches anything, and the default is 1000. It should return
+200 with no payment, and price the route under `x-payment`. The
 document is public — check that nothing sensitive leaked into the path, the
 summary, or the service description.
 
@@ -351,24 +353,11 @@ Tell the human, in this order:
   Producer Sandbox** — a smaller free tier, not a shutdown, with a cap on
   endpoints, monthly challenges, and price per challenge. Endpoints already
   published keep serving within those caps.
-- **How to renew in sats:** during or after the trial (a payment during the
-  trial starts its 30 days when the trial ends), the agent can keep the account
-  on the paid plan without a card, with the human's yes:
-  `renew_lightning_enable_subscription(max_sats=<cap>)` pays the renewal's L402
-  challenge and credits 30 days to the account behind the configured key. Not
-  for an account with an active card subscription (cancel it first) or a
-  Business plan. It needs the merchant API key (stored in step 2, or
-  `LIGHTNING_ENABLE_API_KEY`), a wallet that returns preimages, and Lightning
-  Enable MCP 2.1.0 or later; the server sets the price, `max_sats` (default
-  50,000) only caps what the tool pays, and a success returns
-  `currentPeriodEnd` (the new paid-through date), `paidSats`, and `paymentHash`
-  — never the preimage. Above the auto-approve threshold the MCP prints a
-  confirmation code to its console, bound to the cap: ask the human for it and
-  re-call with the same `max_sats` and `confirmation_nonce="<code>"`. If a
-  result reports `activation.paid` with a warning, do not re-run the tool — a
-  payment was taken, so send the payment hash to support@lightningenable.com.
-  The account is never deactivated, so it can always renew; a lapsed account
-  moves to the Free Producer Sandbox within a day.
+- **How to renew in sats:** renew in sats with the
+  [`lightning-enable-account`](../lightning-enable-account/) skill, which quotes
+  first and sets `max_sats` to the quoted price. The account is never
+  deactivated, so it can always renew; a lapsed account moves to the Free
+  Producer Sandbox within a day.
 
 State this as fact, not as a sales pitch, and do not quote plan prices from
 memory — point at [lightningenable.com](https://www.lightningenable.com) instead.

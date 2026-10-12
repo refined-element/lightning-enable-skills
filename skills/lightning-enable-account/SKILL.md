@@ -343,7 +343,7 @@ was charged; `true` means sats left the wallet, so never re-run the tool.
 | `401 invalid_l402_token`, after paying | The token was refused, for example because it was minted below a price that rose before it was redeemed. This refusal is permanent for that token. | Through the tool: do not re-run; send the payment hash to support (a payment at the old price is never credited). A raw L402 client holding an **unpaid** old-price challenge mints a fresh one instead. |
 | A `409`, `403`, or `503` after paying with a raw L402 client | The cause is fixable and nothing was credited | Keep the token. It stays redeemable for 7 days after its challenge was issued; redeem it once the cause is fixed. It is credited at most once. |
 | "Invoice amount ... exceeds maximum" | The price is above `max_sats` | Re-read the quote and ask the human again. Nothing was paid. |
-| "denied by budget policy" | The budget caps do not allow `max_sats` | Show `budget(action="status")`. Only the operator can raise the caps. |
+| "denied by budget policy" | The budget caps do not allow `max_sats` | Show `budget(action="status")`. Only the operator can raise the caps: runtime caps set with `budget(action="tighten")` reset when the MCP restarts; the config-file limits are the operator's. |
 | "No wallet configured" | The MCP has no wallet | Connect one with [`agent-wallet-setup`](../agent-wallet-setup/). |
 | The API key was rejected (`statusCode: 401`, unpaid) | Wrong or revoked key, or the environment variable points at another account | Check which key is loaded; never print it. |
 | The wallet paid but no preimage came back | OpenNode or Primal NWC | Use a wallet that returns preimages; send the payment hash to support for the payment already made. |

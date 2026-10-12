@@ -36,8 +36,15 @@ the same arguments in `camelCase` (`max_sats` → `maxSats`).
    Decide which figures need *real, current* data vs. general knowledge.
 
 2. **Set a budget ceiling** with the user up front (for example, "up to 25
-   sats"). Check `budget(action="status")` so you know your headroom before
-   spending anything.
+   sats"). Check `budget(action="status")` so you know your headroom, then
+   enforce the ceiling before the first paid call:
+   ```
+   budget(action="tighten", per_request=<ceiling>, per_session=<spent + ceiling>)
+   ```
+   Pass both: `per_request` defaults to 1000 and may not exceed `per_session`.
+   `spent` is this session's spend from `budget(action="status")`. The budget
+   gate denies a payment when spent plus `max_sats` exceeds the runtime session
+   cap, so the cap has to include what the session already spent.
 
 3. **Discover sources** with `discover_api` (search the L402 registry, for
    example `discover_api(query="...")`). With `budget_aware` on, it annotates how
@@ -45,7 +52,8 @@ the same arguments in `camelCase` (`max_sats` → `maxSats`).
 
 4. **Buy only what you need, one call at a time.** Use
    `access_l402_resource(url="...", max_sats=<per-call cap>)` on each endpoint —
-   it runs the full `402 → pay → retry` cycle and returns the data. Track what
+   it runs the full `402 → pay → retry` cycle and returns the data. Lightning
+   Enable does not hold funds; the wallet facilitates custody and settlement. Track what
    you spent on each call (source + sats + what it bought). If a call needs a
    confirmation code, ask the human for it and re-call with
    `confirmation_nonce="<code>"`; never guess one.
@@ -78,7 +86,8 @@ the same arguments in `camelCase` (`max_sats` → `maxSats`).
 
 > User: "Write me a sourced take on the 2024 yen carry-trade unwind. Up to 25 sats."
 >
-> → `budget(action="status")` → ok. `discover_api(query="finance")` → finds FRED on
+> → `budget(action="status")` → nothing spent yet →
+> `budget(action="tighten", per_request=25, per_session=25)`. `discover_api(query="finance")` → finds FRED on
 > agent-commerce.store. → `access_l402_resource` for USD/JPY, Nikkei, VIX,
 > 10-yr (5 sats each). → write the analysis, every number traced to a call,
 > noting the data distinguishes the Aug-2024 unwind from the bigger Apr-2025

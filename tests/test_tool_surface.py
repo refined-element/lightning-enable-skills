@@ -20,8 +20,9 @@ never from memory.
 
 Four things are pinned, per skill file:
 
-1. **No banned names.** An old alias anywhere in a ``SKILL.md`` or skill
-   ``README.md`` fails, with the 2.x replacement in the message.
+1. **No banned names.** An old alias anywhere in a ``SKILL.md``, a skill
+   ``README.md``, a skill's ``references/*.md``, or the docstrings of a skill's
+   ``scripts/*.py`` fails, with the 2.x replacement in the message.
 2. **Every skill drives something.** Each ``SKILL.md`` names at least one
    current tool, so a skill that calls nothing cannot ship. Prose is full of
    identifiers, so the test does not try to validate every backticked token.
@@ -35,6 +36,7 @@ Four things are pinned, per skill file:
 
 Stdlib + pytest only; CI installs nothing else.
 """
+import ast
 import re
 from pathlib import Path
 
@@ -72,9 +74,11 @@ BANNED_TOOL_NAMES = {
 }
 
 # `send_onchain` survives as an ACTION of wallet_ops, so it is only banned when
-# it is not the value of an `action`.
+# it is not used as an action: either the value of `action=` / `action: `, or
+# prose that names it as one ("the `send_onchain` action").
 ALLOWED_AS_ACTION_VALUE = {"send_onchain"}
 ACTION_VALUE_PREFIX = re.compile(r"""action[\s=:"'`]*$""")
+ACTION_VALUE_SUFFIX = re.compile(r"""^[`'"]?\s+actions?\b""")
 
 # The `standard` profile (the default) as of MCP 2.1.0.
 ALLOWED_TOOLS = (
@@ -143,6 +147,32 @@ def skill_docs() -> list[Path]:
     return files
 
 
+def scanned_files() -> list[Path]:
+    """Everything an agent may read: the docs, reference notes, and scripts."""
+    files = skill_docs()
+    for skill in skill_dirs():
+        files.extend(sorted((skill / "references").glob("*.md")))
+        files.extend(sorted((skill / "scripts").glob("*.py")))
+    return files
+
+
+def scanned_segments(path: Path) -> list[tuple[int, str]]:
+    """(first line, text) pairs to scan. A script contributes its docstrings
+    only: an agent reads a script's usage text, and code identifiers are not
+    tool calls."""
+    text = path.read_text(encoding="utf-8")
+    if path.suffix != ".py":
+        return [(1, text)]
+    segments = []
+    for node in ast.walk(ast.parse(text)):
+        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+            doc = ast.get_docstring(node, clean=False)
+            if doc:
+                first = node.body[0].lineno if node.body else 1
+                segments.append((first, doc))
+    return segments
+
+
 def rel(path: Path) -> str:
     return str(path.relative_to(REPO_ROOT)).replace("\\", "/")
 
@@ -169,18 +199,19 @@ def without_string_literals(args: str) -> str:
     return re.sub(r""""[^"]*"|'[^']*'""", '""', args)
 
 
-@pytest.mark.parametrize("doc", skill_docs(), ids=rel)
+@pytest.mark.parametrize("doc", scanned_files(), ids=rel)
 def test_no_deprecated_tool_names(doc: Path):
-    text = doc.read_text(encoding="utf-8")
     hits = []
-    for old, replacement in BANNED_TOOL_NAMES.items():
-        for match in whole_word(old).finditer(text):
-            if old in ALLOWED_AS_ACTION_VALUE and ACTION_VALUE_PREFIX.search(
-                text[max(0, match.start() - 40):match.start()]
-            ):
-                continue
-            line = text.count("\n", 0, match.start()) + 1
-            hits.append(f"line {line}: {old} -> use {replacement}")
+    for first_line, text in scanned_segments(doc):
+        for old, replacement in BANNED_TOOL_NAMES.items():
+            for match in whole_word(old).finditer(text):
+                if old in ALLOWED_AS_ACTION_VALUE and (
+                    ACTION_VALUE_PREFIX.search(text[max(0, match.start() - 40):match.start()])
+                    or ACTION_VALUE_SUFFIX.search(text[match.end():match.end() + 20])
+                ):
+                    continue
+                line = first_line + text.count("\n", 0, match.start())
+                hits.append(f"line {line}: {old} -> use {replacement}")
     assert not hits, (
         f"{rel(doc)} uses MCP tool names that only the deprecated `full` profile "
         "advertises (removed in MCP 3.0.0):\n  " + "\n  ".join(hits)

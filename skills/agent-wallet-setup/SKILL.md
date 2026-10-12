@@ -196,10 +196,13 @@ so you can run them yourself:
 ```bash
 dotnet tool install -g LightningEnable.Mcp               # .NET 8, 9, or 10
 pip install lightning-enable-mcp                         # Python 3.10 or later
-uvx lightning-enable-mcp                                 # Python, no install
 docker pull refinedelement/lightning-enable-mcp:latest   # Docker
 ```
 
+- **`uvx` (Python):** needs no install step. Do not run
+  `uvx lightning-enable-mcp` yourself: it starts the server, which waits for a
+  host on standard input and never returns. Put it in the host config from
+  step 1 and let the host launch it.
 - **.NET missing:** the SDK is at https://dot.net/download.
 - **`uvx` missing:** `pip install uv`, or
   `curl -LsSf https://astral.sh/uv/install.sh | sh`.
@@ -214,9 +217,11 @@ To upgrade later:
 ```bash
 dotnet tool update -g LightningEnable.Mcp
 pip install --upgrade lightning-enable-mcp
-uvx --refresh lightning-enable-mcp
 docker pull refinedelement/lightning-enable-mcp:latest
 ```
+
+For `uvx`, add `--refresh` before `lightning-enable-mcp` in the host config's
+`args`, restart the host once, then take it out again.
 
 At startup the server checks for a later release and prints the upgrade command
 to its console (stderr) when one exists.

@@ -15,7 +15,7 @@ receive wallet.
 
 ## What it is, honestly
 
-What shipped is **discover, request, settle, attest**. A buyer finds your
+What works is **discover, request, settle**. A buyer finds your
 listing, may record a request, and pays your endpoint, which serves the call.
 There is no offer and counter-offer loop: the price on the listing is the
 price. Two more things to know before you start:
