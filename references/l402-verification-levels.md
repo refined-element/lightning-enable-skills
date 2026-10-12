@@ -13,11 +13,11 @@ Use these names exactly, in capitals, as written.
 | Classification | Means | Needs |
 |---|---|---|
 | `CHALLENGE_COMPATIBLE` | A valid unpaid L402 challenge and a priced invoice were observed. Paid fulfillment was not tested. | One unpaid request. |
-| `PAYMENT_COMPATIBLE` | The invoice was paid and the preimage matched the payment hash, but delivery of the resource was not proven. | One paid call. |
+| `PAYMENT_COMPATIBLE` | The payment is confirmed: the wallet reports terminal success and the SHA-256 hash of the preimage equals the invoice payment hash. The authorized retry then returned a definitive non-2xx answer, such as a `500`, a `403`, or another `402`, so delivery of the resource was not proven. | One paid call with a confirmed payment and a definitive non-2xx retry answer. |
 | `FULFILLMENT_VERIFIED` | The whole flow worked: request, 402, payment, authorized retry, expected 2xx result. | One paid call with a matching preimage and a 2xx result that meets the stated expectations. |
 | `MARKETPLACE_READY` | `FULFILLMENT_VERIFIED`, plus public https, a priced mainnet invoice, a 402 for a bodyless request within 8 seconds, a stable URL, `openapi.json` or `llms.txt` at the host root, and a paid amount equal to the quote. | Everything above. |
 | `INCOMPATIBLE` | A deterministic protocol or transport defect prevents the flow. | Any check. |
-| `INCONCLUSIVE` | The check couldn't decide: a timeout, an opaque behavior, a wallet that doesn't surface the preimage, an ambiguous payment state, or a refused target. | Any check. |
+| `INCONCLUSIVE` | The check couldn't decide: the payment is pending or unknown (no terminal wallet result, or no preimage obtained), the authorized retry was ambiguous (a timeout, a dropped connection, or no answer), an opaque behavior, or a refused target. | Any check. |
 
 A read-only check stops at `CHALLENGE_COMPATIBLE`. Never call an endpoint
 "L402 verified", or "verified" in any form, when only the unpaid challenge was
@@ -31,7 +31,9 @@ checked. A `402` is a quote, not proof that anything gets delivered.
 - **`Payment`** (the MPP and `draft-httpauth-payment` scheme) is its own
   scheme. Report it separately and never normalize it to L402, even when it
   carries the same invoice.
-- **`x402`** and any other scheme are reported by name.
+- **`x402`** and any other scheme are reported by name. Detect `x402`
+  wherever it appears, in the `402` response body or in `X-PAYMENT` headers,
+  not only as a `WWW-Authenticate` scheme.
 - **Several schemes in one response are normal.** Lightning Enable and Amazap
   Basics both send `L402` and `Payment`; some servers send `LSAT` and `L402`,
   or `L402`, `Payment`, and `x402`. Classify the endpoint by its `L402`
@@ -61,12 +63,24 @@ credential as set or not set, never its value.
 ## The ambiguous-payment rule
 
 Never start a replacement payment while a payment is pending or its outcome
-is unknown. When money moved and the resource didn't arrive:
+is unknown. When a paid call didn't deliver the resource, classify it by
+what you know:
+
+- **Payment confirmed, definitive answer.** The wallet reports terminal
+  success, the SHA-256 hash of the preimage equals the invoice payment hash,
+  and the authorized retry returned a definitive non-2xx answer, such as a
+  `500`, a `403`, or another `402`. Classify the check `PAYMENT_COMPATIBLE`.
+- **Payment or retry ambiguous.** The payment is pending or unknown (no
+  terminal wallet result, or no preimage obtained), or the retry outcome is
+  ambiguous (a timeout, a dropped connection, or no answer). Classify the
+  check `INCONCLUSIVE`.
+
+In both cases:
 
 1. Keep the correlators: the payment hash, the amount, and the time.
-2. Classify the check `INCONCLUSIVE`.
-3. Don't pay again. Recovery goes through the seller's claim or status path,
-   or through the person who owns the wallet.
+2. Don't pay again, and never originate a replacement payment. Recovery goes
+   through the seller's claim or status path, or through the person who owns
+   the wallet.
 
 A second recorded payment for one check is a finding in its own right. Stop
 and reconcile from the wallet receipts.
