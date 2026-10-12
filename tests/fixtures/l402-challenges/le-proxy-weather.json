@@ -1,0 +1,54 @@
+{
+  "name": "le-proxy-weather",
+  "origin": "captured 2026-10-12T20:37:35.622052Z; macaroon and token values replaced with fixture-string placeholders",
+  "observed_at": "2026-10-12T20:37:45Z",
+  "dns": {},
+  "request": {
+    "method": "GET",
+    "url": "https://api.lightningenable.com/l402/proxy/weather-intel-e0cf/forecast"
+  },
+  "responses": [
+    {
+      "url": "https://api.lightningenable.com/l402/proxy/weather-intel-e0cf/forecast",
+      "status": 402,
+      "headers": [
+        [
+          "WWW-Authenticate",
+          "L402 macaroon=\"fixture-string-macaroon\", invoice=\"lnbc30n1p4v63gspp57sfyjq3ng8lnz738z2rkgwhrgm7zzzmzp0sh2gx8jleredxntycsdp6g9gyjgrpvd3k2umn8gs9wetpw35x2u3qf9h8getvyqkjqen0wfjkxctnwscqzzsxqyz5tlsp50vrm4q5j74pth5qhez45d62vxe9xgz2g3jpn6zv3lkxfrspgct6s9qxpqysgqrc28degnx65myxjkvwlz3l05u0zcknlz7k3ee4fag97qgegkupyy69zmrud6ncdyd0gm7x49jr0zqch5wvpjgze6a2k30hs0dpmpklcq4hwj5y\""
+        ],
+        [
+          "WWW-Authenticate",
+          "Payment id=\"M67v-off974aGzWDrKI1uDlNTUahfGbHL8CqBIdghR4\", realm=\"lightning-enable\", method=\"lightning\", intent=\"charge\", request=\"eyJhbW91bnQiOiIzIiwiY3VycmVuY3kiOiJzYXQiLCJtZXRob2REZXRhaWxzIjp7Imludm9pY2UiOiJsbmJjMzBuMXA0djYzZ3NwcDU3c2Z5anEzbmc4bG56NzM4ejJya2d3aHJnbTd6enptenAwc2gyZ3g4amxlcmVkeG50eWNzZHA2ZzlneWpncnB2ZDNrMnVtbjhnczl3ZXRwdzM1eDJ1M3FmOWg4Z2V0dnlxa2pxZW4wd2Zqa3hjdG53c2NxenpzeHF5ejV0bHNwNTB2cm00cTVqNzRwdGg1cWhlejQ1ZDYydnhlOXhnejJnM2pwbjZ6djNsa3hmcnNwZ2N0NnM5cXhwcXlzZ3FyYzI4ZGVnbng2NW15eGprdndsejNsMDV1MHpja25sejdrM2VlNGZhZzk3cWdlZ2t1cHl5Njl6bXJ1ZDZuY2R5ZDBnbTd4NDlqcjB6cWNoNXd2cGpnemU2YTJrMzBoczBkcG1wa2xjcTRod2o1eSIsIm5ldHdvcmsiOiJtYWlubmV0IiwicGF5bWVudEhhc2giOiJmNDEyNDkwMjMzNDFmZjMxN2EyNzEyODc2NDNhZTM0NmZjMjEwYjYyMGJlMTc1MjBjNzk3ZjIzY2I0ZDM1OTMxIn19\", expires=\"2026-10-12T20:47:36Z\", invoice=\"lnbc30n1p4v63gspp57sfyjq3ng8lnz738z2rkgwhrgm7zzzmzp0sh2gx8jleredxntycsdp6g9gyjgrpvd3k2umn8gs9wetpw35x2u3qf9h8getvyqkjqen0wfjkxctnwscqzzsxqyz5tlsp50vrm4q5j74pth5qhez45d62vxe9xgz2g3jpn6zv3lkxfrspgct6s9qxpqysgqrc28degnx65myxjkvwlz3l05u0zcknlz7k3ee4fag97qgegkupyy69zmrud6ncdyd0gm7x49jr0zqch5wvpjgze6a2k30hs0dpmpklcq4hwj5y\", amount=\"3\", currency=\"sat\""
+        ],
+        [
+          "Link",
+          "</l402/proxy/weather-intel-e0cf/.well-known/l402-manifest.json>; rel=\"l402-manifest\""
+        ],
+        [
+          "Content-Type",
+          "application/json; charset=utf-8"
+        ],
+        [
+          "Cache-Control",
+          "no-store"
+        ]
+      ],
+      "body": "{\"error\":\"Payment Required\",\"message\":\"No Authorization header provided\",\"proxy\":{\"id\":\"weather-intel-e0cf\",\"name\":\"Weather Intel\",\"description\":\"NWS weather data with single-call interface, activity recommendations, and severity scoring.\"},\"l402\":{\"macaroon\":\"fixture-string-macaroon\",\"invoice\":\"lnbc30n1p4v63gspp57sfyjq3ng8lnz738z2rkgwhrgm7zzzmzp0sh2gx8jleredxntycsdp6g9gyjgrpvd3k2umn8gs9wetpw35x2u3qf9h8getvyqkjqen0wfjkxctnwscqzzsxqyz5tlsp50vrm4q5j74pth5qhez45d62vxe9xgz2g3jpn6zv3lkxfrspgct6s9qxpqysgqrc28degnx65myxjkvwlz3l05u0zcknlz7k3ee4fag97qgegkupyy69zmrud6ncdyd0gm7x49jr0zqch5wvpjgze6a2k30hs0dpmpklcq4hwj5y\",\"amount_sats\":3,\"payment_hash\":\"f41249023341ff317a271287643ae346fc210b620be17520c797f23cb4d35931\",\"expires_at\":\"2026-10-12T20:47:36.8192813Z\"},\"instructions\":{\"step1\":\"Pay the Lightning invoice using any Lightning wallet\",\"step2\":\"Copy the preimage (proof of payment) from your wallet\",\"step3\":\"Include in request: Authorization: L402 \\u003Cmacaroon\\u003E:\\u003Cpreimage\\u003E (or Authorization: Payment method=\\u0022lightning\\u0022, preimage=\\u0022\\u003Cpreimage\\u003E\\u0022)\"}}",
+      "latency_ms": 150
+    }
+  ],
+  "expected": {
+    "classification": "CHALLENGE_COMPATIBLE",
+    "schemes": [
+      "L402",
+      "Payment"
+    ],
+    "classified_by": "L402",
+    "amount_sats": 3,
+    "payment_hash": "f41249023341ff317a271287643ae346fc210b620be17520c797f23cb4d35931",
+    "finding_codes": [
+      "other_schemes",
+      "proxy_manifest_link"
+    ]
+  }
+}

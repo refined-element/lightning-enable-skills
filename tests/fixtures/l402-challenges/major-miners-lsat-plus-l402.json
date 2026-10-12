@@ -1,0 +1,47 @@
+{
+  "name": "major-miners-lsat-plus-l402",
+  "origin": "captured 2026-10-12T20:37:35.622052Z; macaroon and token values replaced with fixture-string placeholders",
+  "observed_at": "2026-10-12T20:37:45Z",
+  "dns": {},
+  "request": {
+    "method": "GET",
+    "url": "https://api.major-miners.com/api/transform"
+  },
+  "responses": [
+    {
+      "url": "https://api.major-miners.com/api/transform",
+      "status": 402,
+      "headers": [
+        [
+          "WWW-Authenticate",
+          "LSAT macaroon=\"fixture-string-macaroon\", invoice=\"lnbc50n1p4v63g4pp5wqha8cqt5au3pvmnejz94xfqshlggrc790mr67alqlav8ean6ueqdq8fs6rqvscqzzsxqyz5vqsp5c7qr7r60am2pr9yqv9pddw3ssyrt2wxdcd4pcwwrsltfrrlfwyhq9qxpqysgqxq6pkyjyep5u4gyqywp4474s0v0fj2ma355lugsvq0wvyklzexv4vaaw8vgyz834f5pyreh9wfq30sr65tgrv60n0e8h4lcm7xdxfxqqlp8q0w\""
+        ],
+        [
+          "WWW-Authenticate",
+          "L402 macaroon=\"fixture-string-macaroon\", invoice=\"lnbc50n1p4v63g4pp5wqha8cqt5au3pvmnejz94xfqshlggrc790mr67alqlav8ean6ueqdq8fs6rqvscqzzsxqyz5vqsp5c7qr7r60am2pr9yqv9pddw3ssyrt2wxdcd4pcwwrsltfrrlfwyhq9qxpqysgqxq6pkyjyep5u4gyqywp4474s0v0fj2ma355lugsvq0wvyklzexv4vaaw8vgyz834f5pyreh9wfq30sr65tgrv60n0e8h4lcm7xdxfxqqlp8q0w\""
+        ],
+        [
+          "Content-Type",
+          "text/plain; charset=utf-8"
+        ],
+        [
+          "Cache-Control",
+          "no-store"
+        ]
+      ],
+      "body": "payment required\n",
+      "latency_ms": 150
+    }
+  ],
+  "expected": {
+    "classification": "CHALLENGE_COMPATIBLE",
+    "schemes": [
+      "LSAT",
+      "L402"
+    ],
+    "classified_by": "L402",
+    "amount_sats": 5,
+    "payment_hash": "702fd3e00ba77910b373cc845a992085fe840f1e2bf63d7bbf07fac3e7b3d732",
+    "finding_codes": []
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "name": "taskhawk-l402-payment-x402",
+  "origin": "captured 2026-10-12T20:37:35.622052Z; macaroon and token values replaced with fixture-string placeholders",
+  "observed_at": "2026-10-12T20:37:45Z",
+  "dns": {},
+  "request": {
+    "method": "GET",
+    "url": "https://governance.taskhawktech.com/governance/verify"
+  },
+  "responses": [
+    {
+      "url": "https://governance.taskhawktech.com/governance/verify",
+      "status": 402,
+      "headers": [
+        [
+          "WWW-Authenticate",
+          "L402 macaroon=\"fixture-string-macaroon\", token=\"fixture-string-token\", invoice=\"lnbc150n1p4v63gkpp5y0sr4qtw6dl4cpvkhtqyl9h8uy2lzz4urezxd7c64yj5gm0maj0qdpufdjhvun0wvsxwmmkv4exuctwvdjn5gp0vahhvetjdeskucm99amx2unfveuscqzzsxqzrhsp5z607049c2ssrj3npm2fa2m8ag0gmd7a5yva728j7qg93xuw9x3gs9qxpqysgqpy3h0uug0t2qgweumcxejkqs2hj3z8272g267akfn6scd46r7n39nx3sxj86a2sj05yt8292egcee5aqhs4ltynzsk4akgty4w4a75gqf7mprt\""
+        ],
+        [
+          "WWW-Authenticate",
+          "Payment id=\"JrLyNAuyouYxmx2vOVlFRN4bXYRY-dbo7WKbRob72mI\", realm=\"governance.taskhawktech.com\", method=\"stripe\", intent=\"charge\", request=\"eyJhbW91bnQiOiI1MCIsImN1cnJlbmN5IjoidXNkIiwiZGVzY3JpcHRpb24iOiJBY3Rpb24gdmVyaWZpY2F0aW9uICAtICBzaWduZWQgQUxMT1cvQ09OU1RSQUlOL0RFTlkiLCJtZXRob2REZXRhaWxzIjp7Im5ldHdvcmtJZCI6InByb2ZpbGVfNjFVTXZ4bUQ4VFAxTjJkMDlBNlVNdnhsRW5TUUFCbTZHVjY2VmMzYnNBbkkiLCJwYXltZW50TWV0aG9kVHlwZXMiOlsiY2FyZCIsImxpbmsiXX19\", expires=\"2026-10-12T20:47:42Z\""
+        ],
+        [
+          "WWW-Authenticate",
+          "x402 scheme=\"exact\", network=\"eip155:8453\", asset=\"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913\", payTo=\"0x3190EC7811f9C0Ba8DD454E437C608FE60CDdEB7\", amount=\"10000\", resource=\"https://governance.taskhawktech.com/governance/verify\", facilitator=\"https://facilitator.payai.network\""
+        ],
+        [
+          "Content-Type",
+          "application/problem+json"
+        ],
+        [
+          "Cache-Control",
+          "no-store"
+        ]
+      ],
+      "body": "{\"type\":\"https://paymentauth.org/problems/payment-required\",\"title\":\"Payment Required\",\"status\":402,\"detail\":\"Payment is required.\",\"challengeId\":\"JrLyNAuyouYxmx2vOVlFRN4bXYRY-dbo7WKbRob72mI\",\"x402Version\":2,\"error\":\"Payment required. Get a free API key (1,000 calls/month) at POST https://governance.taskhawktech.com/signup, use an enabled per-call rail from https://governance.taskhawktech.com/payment/discovery, or use the procurement path at https://governance.taskhawktech.com/pricing\",\"health_url\":\"https://governance.taskhawktech.com/payment/health\",\"discovery_url\":\"https://governance.taskhawktech.com/payment/discovery\",\"pricing_fingerprint\":\"eb775dbc8d119623\",\"docs_url\":\"https://governance.taskhawktech.com/api\",\"free_tier\":{\"signup\":\"https://governance.taskhawktech.com/signup\",\"method\":\"POST\",\"body\":{\"agent_id\":\"your-agent-id\"},\"included_calls\":1000},\"mpp\":{\"protocol\":\"mpp\",\"version\":\"1.0\",\"scheme\":\"Payment\",\"spec\":\"https://paymentauth.org\",\"primary_method\":\"stripe\",\"payment_methods\":[\"stripe\"],\"legacy_payment_methods\":[\"mpp-fiat\"],\"discovery\":\"https://governance.taskhawktech.com/.well-known/mpp\",\"openapi\":\"https://governance.taskhawktech.com/openapi.json\",\"challenge_url\":\"https://governance.taskhawktech.com/stripe/mpp-challenge\",\"challenge_method\":\"POST\",\"challenge_body\":{\"endpoint\":\"/governance/verify\"},\"auth_header\":\"Authorization: Payment <credential>\",\"receipt_header\":\"Payment-Receipt\",\"description\":\"Stripe-backed payment sessions via the Payment authorization header. Use x402 for on-chain USDC and L402 for Lightning invoices.\",\"pricing_url\":\"https://governance.taskhawktech.com/pricing\"},\"facilitator\":\"https://facilitator.payai.network\",\"accepts\":[{\"scheme\":\"exact\",\"network\":\"eip155:8453\",\"asset\":\"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913\",\"amount\":\"10000\",\"payTo\":\"0x3190EC7811f9C0Ba8DD454E437C608FE60CDdEB7\",\"maxTimeoutSeconds\":60,\"facilitator\":\"https://facilitator.payai.network\",\"extra\":{\"name\":\"USD Coin\",\"version\":\"2\"},\"resource\":\"https://governance.taskhawktech.com/governance/verify\"},{\"scheme\":\"exact\",\"network\":\"eip155:8453\",\"asset\":\"0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2\",\"amount\":\"10000\",\"payTo\":\"0x3190EC7811f9C0Ba8DD454E437C608FE60CDdEB7\",\"maxTimeoutSeconds\":60,\"facilitator\":\"https://facilitator.payai.network\",\"extra\":{\"name\":\"Tether USD\",\"version\":\"2\",\"chain\":\"base_usdt\"},\"resource\":\"https://governance.taskhawktech.com/governance/verify\"}],\"resource\":{\"url\":\"https://governance.taskhawktech.com/governance/verify\",\"description\":\"Prove authorization  -  signed ALLOW/CONSTRAIN/DENY with release token\",\"mimeType\":\"application/json\"},\"extensions\":{\"bazaar\":{\"info\":{\"input\":{\"type\":\"http\",\"method\":\"POST\",\"bodyType\":\"json\",\"body\":{\"action_type\":\"deploy\",\"action_payload\":{\"target\":\"prod\",\"service\":\"api\"},\"agent_id\":\"agent-123\"}},\"output\":{\"type\":\"json\",\"example\":{\"decision\":\"ALLOW\",\"release_token\":\"rt_abc123...\",\"verification_id\":\"v_001\",\"pqc_block_signed\":true}}},\"schema\":{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"type\":\"object\",\"properties\":{\"input\":{\"type\":\"object\",\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"http\"},\"method\":{\"type\":\"string\",\"enum\":[\"POST\"]},\"bodyType\":{\"type\":\"string\",\"enum\":[\"json\"]},\"body\":{\"type\":\"object\",\"properties\":{\"action_type\":{\"type\":\"string\",\"description\":\"Type of action to verify\"},\"action_payload\":{\"type\":\"object\",\"description\":\"Action parameters\"},\"agent_id\":{\"type\":\"string\",\"description\":\"Requesting agent identifier\"}},\"required\":[\"action_type\",\"action_payload\",\"agent_id\"]}},\"required\":[\"type\",\"method\",\"bodyType\",\"body\"]}},\"required\":[\"input\"]}}}}",
+      "latency_ms": 150
+    }
+  ],
+  "expected": {
+    "classification": "CHALLENGE_COMPATIBLE",
+    "schemes": [
+      "L402",
+      "Payment",
+      "x402"
+    ],
+    "classified_by": "L402",
+    "amount_sats": 15,
+    "payment_hash": "23e03a816ed37f5c0596bac04f96e7e115f10abc1e4466fb1aa925446dfbec9e",
+    "finding_codes": []
+  }
+}

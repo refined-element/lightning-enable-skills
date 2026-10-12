@@ -1,0 +1,34 @@
+{
+  "name": "synthetic-400-before-402",
+  "origin": "synthetic",
+  "observed_at": "2026-10-12T20:37:45Z",
+  "dns": {},
+  "request": {
+    "method": "GET",
+    "url": "https://api.example.com/search"
+  },
+  "responses": [
+    {
+      "url": "https://api.example.com/search",
+      "status": 400,
+      "headers": [
+        [
+          "Content-Type",
+          "application/json"
+        ]
+      ],
+      "body": "{\"error\":\"missing required parameter q\"}",
+      "latency_ms": 90
+    }
+  ],
+  "expected": {
+    "classification": "INCOMPATIBLE",
+    "schemes": [],
+    "classified_by": null,
+    "amount_sats": null,
+    "payment_hash": null,
+    "finding_codes": [
+      "validation_before_challenge"
+    ]
+  }
+}

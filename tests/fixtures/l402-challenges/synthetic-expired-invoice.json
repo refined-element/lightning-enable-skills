@@ -1,0 +1,49 @@
+{
+  "name": "synthetic-expired-invoice",
+  "origin": "synthetic: le-test-ping observed after its expiry",
+  "observed_at": "2026-10-13T21:00:00Z",
+  "dns": {},
+  "request": {
+    "method": "GET",
+    "url": "https://api.lightningenable.com/l402/test/ping"
+  },
+  "responses": [
+    {
+      "url": "https://api.lightningenable.com/l402/test/ping",
+      "status": 402,
+      "headers": [
+        [
+          "WWW-Authenticate",
+          "L402 macaroon=\"fixture-string-macaroon\", invoice=\"lnbc10n1p4v63g3pp5pueq802c5f4unpx2vsysgusnlyk6dt7d8cv789pc9375vhng6l0sdpyfs6rqv3qw3jhxapqwp5kueeq95srzgrnv96qcqzzsxqyz5tlsp5gafhf9mt3arv0lc2fy5lfl78vuakn5ngs4ku660gkv24v2rvth4q9qxpqysgqn00lvz290yfwmz0kawjhp33rkqv0vfc7a05fjr56ze6uc44ffzdr9xmyukeqscsalyl9qrcqeaus84nkd0s03x2l2zhu78rw7d5xtlqpumfaex\""
+        ],
+        [
+          "WWW-Authenticate",
+          "Payment id=\"bOwzsMdDRMl5TP_nb3JL2oc78PYdHE9u5Ioe0mHGQu4\", realm=\"lightning-enable\", method=\"lightning\", intent=\"charge\", request=\"eyJhbW91bnQiOiIxIiwiY3VycmVuY3kiOiJzYXQiLCJtZXRob2REZXRhaWxzIjp7Imludm9pY2UiOiJsbmJjMTBuMXA0djYzZzNwcDVwdWVxODAyYzVmNHVucHgydnN5c2d1c25seWs2ZHQ3ZDhjdjc4OXBjOTM3NXZobmc2bDBzZHB5ZnM2cnF2M3F3M2poeGFwcXdwNWt1ZWVxOTVzcnpncm52OTZxY3F6enN4cXl6NXRsc3A1Z2FmaGY5bXQzYXJ2MGxjMmZ5NWxmbDc4dnVha241bmdzNGt1NjYwZ2t2MjR2MnJ2dGg0cTlxeHBxeXNncW4wMGx2ejI5MHlmd216MGthd2pocDMzcmtxdjB2ZmM3YTA1ZmpyNTZ6ZTZ1YzQ0ZmZ6ZHI5eG15dWtlcXNjc2FseWw5cXJjcWVhdXM4NG5rZDBzMDN4Mmwyemh1NzhydzdkNXh0bHFwdW1mYWV4IiwibmV0d29yayI6Im1haW5uZXQiLCJwYXltZW50SGFzaCI6IjBmMzIwM2JkNThhMjZiYzk4NGNhNjQwOTA0NzIxM2Y5MmRhNmFmY2QzZTE5ZTM5NDM4MmM3ZDQ2NWU2OGQ3ZGYifX0\", expires=\"2026-10-12T20:47:37Z\", invoice=\"lnbc10n1p4v63g3pp5pueq802c5f4unpx2vsysgusnlyk6dt7d8cv789pc9375vhng6l0sdpyfs6rqv3qw3jhxapqwp5kueeq95srzgrnv96qcqzzsxqyz5tlsp5gafhf9mt3arv0lc2fy5lfl78vuakn5ngs4ku660gkv24v2rvth4q9qxpqysgqn00lvz290yfwmz0kawjhp33rkqv0vfc7a05fjr56ze6uc44ffzdr9xmyukeqscsalyl9qrcqeaus84nkd0s03x2l2zhu78rw7d5xtlqpumfaex\", amount=\"1\", currency=\"sat\""
+        ],
+        [
+          "Content-Type",
+          "application/json; charset=utf-8"
+        ],
+        [
+          "Cache-Control",
+          "no-store"
+        ]
+      ],
+      "body": "{\"error\":\"Payment Required\",\"message\":\"Pay 1 sat to test L402. This is a public test endpoint \\u2014 no API key needed.\",\"l402\":{\"macaroon\":\"fixture-string-macaroon\",\"invoice\":\"lnbc10n1p4v63g3pp5pueq802c5f4unpx2vsysgusnlyk6dt7d8cv789pc9375vhng6l0sdpyfs6rqv3qw3jhxapqwp5kueeq95srzgrnv96qcqzzsxqyz5tlsp5gafhf9mt3arv0lc2fy5lfl78vuakn5ngs4ku660gkv24v2rvth4q9qxpqysgqn00lvz290yfwmz0kawjhp33rkqv0vfc7a05fjr56ze6uc44ffzdr9xmyukeqscsalyl9qrcqeaus84nkd0s03x2l2zhu78rw7d5xtlqpumfaex\",\"amount_sats\":1,\"payment_hash\":\"0f3203bd58a26bc984ca6409047213f92da6afcd3e19e394382c7d465e68d7df\",\"expires_at\":\"2026-10-12T20:47:37.5825549Z\"},\"instructions\":{\"step1\":\"Pay the 1-sat Lightning invoice\",\"step2\":\"Get the preimage (proof of payment) from your wallet\",\"step3\":\"Retry with header: Authorization: L402 \\u003Cmacaroon\\u003E:\\u003Cpreimage\\u003E (or MPP: Authorization: Payment method=\\u0022lightning\\u0022, preimage=\\u0022\\u003Cpreimage\\u003E\\u0022)\"},\"docs\":\"https://docs.lightningenable.com/products/agentic-commerce/mcp-complete-guide\"}",
+      "latency_ms": 150
+    }
+  ],
+  "expected": {
+    "classification": "INCOMPATIBLE",
+    "schemes": [
+      "L402",
+      "Payment"
+    ],
+    "classified_by": "L402",
+    "amount_sats": 1,
+    "payment_hash": "0f3203bd58a26bc984ca6409047213f92da6afcd3e19e394382c7d465e68d7df",
+    "finding_codes": [
+      "expired_invoice"
+    ]
+  }
+}

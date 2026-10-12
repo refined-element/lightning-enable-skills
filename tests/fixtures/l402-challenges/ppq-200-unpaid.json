@@ -1,0 +1,34 @@
+{
+  "name": "ppq-200-unpaid",
+  "origin": "captured 2026-10-12T20:37:35.622052Z; macaroon and token values replaced with fixture-string placeholders",
+  "observed_at": "2026-10-12T20:37:45Z",
+  "dns": {},
+  "request": {
+    "method": "GET",
+    "url": "https://api.ppq.ai/v1/images/generations?model=gpt-image-1"
+  },
+  "responses": [
+    {
+      "url": "https://api.ppq.ai/v1/images/generations?model=gpt-image-1",
+      "status": 200,
+      "headers": [
+        [
+          "Content-Type",
+          "application/json; charset=utf-8"
+        ]
+      ],
+      "body": "{\"message\":\"OOPS! - 404 Not Found\"}",
+      "latency_ms": 150
+    }
+  ],
+  "expected": {
+    "classification": "INCOMPATIBLE",
+    "schemes": [],
+    "classified_by": null,
+    "amount_sats": null,
+    "payment_hash": null,
+    "finding_codes": [
+      "unpaid_2xx"
+    ]
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "name": "synthetic-401-unpaid",
+  "origin": "synthetic",
+  "observed_at": "2026-10-12T20:37:45Z",
+  "dns": {},
+  "request": {
+    "method": "GET",
+    "url": "https://api.example.com/paid"
+  },
+  "responses": [
+    {
+      "url": "https://api.example.com/paid",
+      "status": 401,
+      "headers": [
+        [
+          "WWW-Authenticate",
+          "Bearer realm=\"api\""
+        ],
+        [
+          "Content-Type",
+          "application/json"
+        ]
+      ],
+      "body": "{\"error\":\"unauthorized\"}",
+      "latency_ms": 90
+    }
+  ],
+  "expected": {
+    "classification": "INCOMPATIBLE",
+    "schemes": [],
+    "classified_by": null,
+    "amount_sats": null,
+    "payment_hash": null,
+    "finding_codes": [
+      "unpaid_401"
+    ]
+  }
+}

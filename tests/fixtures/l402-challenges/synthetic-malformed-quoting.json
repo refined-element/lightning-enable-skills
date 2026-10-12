@@ -1,0 +1,40 @@
+{
+  "name": "synthetic-malformed-quoting",
+  "origin": "synthetic",
+  "observed_at": "2026-10-12T20:37:45Z",
+  "dns": {},
+  "request": {
+    "method": "GET",
+    "url": "https://api.example.com/paid"
+  },
+  "responses": [
+    {
+      "url": "https://api.example.com/paid",
+      "status": 402,
+      "headers": [
+        [
+          "WWW-Authenticate",
+          "L402 macaroon=\"fixture-string-macaroon, invoice=\"lnbc10n1p4v63g3pp5pueq802c5f4unpx2vsysgusnlyk6dt7d8cv789pc9375vhng6l0sdpyfs6rqv3qw3jhxapqwp5kueeq95srzgrnv96qcqzzsxqyz5tlsp5gafhf9mt3arv0lc2fy5lfl78vuakn5ngs4ku660gkv24v2rvth4q9qxpqysgqn00lvz290yfwmz0kawjhp33rkqv0vfc7a05fjr56ze6uc44ffzdr9xmyukeqscsalyl9qrcqeaus84nkd0s03x2l2zhu78rw7d5xtlqpumfaex\""
+        ],
+        [
+          "Content-Type",
+          "application/json"
+        ]
+      ],
+      "body": "{\"error\":\"Payment Required\"}",
+      "latency_ms": 150
+    }
+  ],
+  "expected": {
+    "classification": "INCOMPATIBLE",
+    "schemes": [
+      "L402"
+    ],
+    "classified_by": "L402",
+    "amount_sats": null,
+    "payment_hash": null,
+    "finding_codes": [
+      "malformed_challenge"
+    ]
+  }
+}

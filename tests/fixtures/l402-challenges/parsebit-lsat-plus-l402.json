@@ -1,0 +1,47 @@
+{
+  "name": "parsebit-lsat-plus-l402",
+  "origin": "captured 2026-10-12T20:37:35.622052Z; macaroon and token values replaced with fixture-string placeholders",
+  "observed_at": "2026-10-12T20:37:45Z",
+  "dns": {},
+  "request": {
+    "method": "GET",
+    "url": "https://parsebit-lnd.fly.dev/translate"
+  },
+  "responses": [
+    {
+      "url": "https://parsebit-lnd.fly.dev/translate",
+      "status": 402,
+      "headers": [
+        [
+          "WWW-Authenticate",
+          "LSAT macaroon=\"fixture-string-macaroon\", invoice=\"lnbc1500n1p4v63g4pp5nf4zjqm07u2naknznzeydlp02ql2409t06pd0yhg6k6jmwrgj3mqdq8fs6rqvscqzzsxqyz5vqsp5luwh56jnsg0d6h8rsv808n6t5hxupw0y9kf4s68paaqwynxt6xrs9qxpqysgq6kpvgedma3gpvkpl87j59zzy93eft9rxg5q4tg75fpn2wug38m2pue86h228j87dxrcn9zsm92h4sdpedmge7wmvggrnvt3zq6p903gpytzd8k\""
+        ],
+        [
+          "WWW-Authenticate",
+          "L402 macaroon=\"fixture-string-macaroon\", invoice=\"lnbc1500n1p4v63g4pp5nf4zjqm07u2naknznzeydlp02ql2409t06pd0yhg6k6jmwrgj3mqdq8fs6rqvscqzzsxqyz5vqsp5luwh56jnsg0d6h8rsv808n6t5hxupw0y9kf4s68paaqwynxt6xrs9qxpqysgq6kpvgedma3gpvkpl87j59zzy93eft9rxg5q4tg75fpn2wug38m2pue86h228j87dxrcn9zsm92h4sdpedmge7wmvggrnvt3zq6p903gpytzd8k\""
+        ],
+        [
+          "Content-Type",
+          "text/plain; charset=utf-8"
+        ],
+        [
+          "Cache-Control",
+          "no-store"
+        ]
+      ],
+      "body": "payment required\n",
+      "latency_ms": 150
+    }
+  ],
+  "expected": {
+    "classification": "CHALLENGE_COMPATIBLE",
+    "schemes": [
+      "LSAT",
+      "L402"
+    ],
+    "classified_by": "L402",
+    "amount_sats": 150,
+    "payment_hash": "9a6a29036ff7153eda6298b246fc2f503eaabcab7e82d792e8d5b52db8689476",
+    "finding_codes": []
+  }
+}

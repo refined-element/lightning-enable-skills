@@ -1,0 +1,38 @@
+{
+  "name": "l402kit-worldstate-single-l402",
+  "origin": "captured 2026-10-12T20:37:35.622052Z; macaroon and token values replaced with fixture-string placeholders",
+  "observed_at": "2026-10-12T20:37:45Z",
+  "dns": {},
+  "request": {
+    "method": "GET",
+    "url": "https://l402kit.com/api/verity/worldstate"
+  },
+  "responses": [
+    {
+      "url": "https://l402kit.com/api/verity/worldstate",
+      "status": 402,
+      "headers": [
+        [
+          "WWW-Authenticate",
+          "L402 macaroon=\"fixture-string-macaroon\", invoice=\"lnbc3u1p4v63g5pp5xeq49pxz8uv00t2fr6fr7tfglxwmrqm89kkrcfsxywhxwhl5hcjshp54704eymr3xner2jsmt05yzsndvjr2wje6tsmu6t2ntkxclun2ufqcqzpuxqrwzqsp579z2nflngj53zvkc6luu3tguderr7apcvduw4txh4e75456ghttq9qxpqysgqcxw99ur6tmsds0d076u0yh5ffx2fkt7hrk3eal4ew5l8fw3wa3a87j0wr0qsf4lpgynacwwtjl08ppavt8mad5vc2ru00fgml7pu6wsplsyw2n\""
+        ],
+        [
+          "Content-Type",
+          "application/json"
+        ]
+      ],
+      "body": "{\"error\":\"Payment Required\",\"agent\":\"VERITY\",\"service\":\"worldstate\",\"priceSats\":300,\"invoice\":\"lnbc3u1p4v63g5pp5xeq49pxz8uv00t2fr6fr7tfglxwmrqm89kkrcfsxywhxwhl5hcjshp54704eymr3xner2jsmt05yzsndvjr2wje6tsmu6t2ntkxclun2ufqcqzpuxqrwzqsp579z2nflngj53zvkc6luu3tguderr7apcvduw4txh4e75456ghttq9qxpqysgqcxw99ur6tmsds0d076u0yh5ffx2fkt7hrk3eal4ew5l8fw3wa3a87j0wr0qsf4lpgynacwwtjl08ppavt8mad5vc2ru00fgml7pu6wsplsyw2n\",\"macaroon\":\"fixture-string-macaroon\"}",
+      "latency_ms": 150
+    }
+  ],
+  "expected": {
+    "classification": "CHALLENGE_COMPATIBLE",
+    "schemes": [
+      "L402"
+    ],
+    "classified_by": "L402",
+    "amount_sats": 300,
+    "payment_hash": "36415284c23f18f7ad491e923f2d28f99db183672dac3c260623ae675ff4be25",
+    "finding_codes": []
+  }
+}
