@@ -296,6 +296,16 @@ def test_a_report_with_no_secrets_renders_without_redaction(fixture):
         assert l402_report.REDACTED not in text
 
 
+def test_a_hex_secret_is_scrubbed_whatever_its_case():
+    preimage = support.preimage_from_seed("fixture-string-preimage-1")
+    mixed = preimage[:32].upper() + preimage[32:]
+    report, secrets = support.run_fixture(support.load_fixture("le-test-ping"))
+    report["summary"] = f"lower {preimage}; upper {preimage.upper()}; mixed {mixed}"
+    for text in both(report, secrets | {preimage}):
+        assert preimage not in text.lower()
+    assert l402_report.scrub(report["summary"], {preimage.upper()}).count(l402_report.REDACTED) == 3
+
+
 def test_finding_rows_render_code_in_brackets():
     report, secrets = support.run_fixture(_absent_token_fixture())
     section = _section(l402_report.to_markdown(report, secrets), "Challenge")

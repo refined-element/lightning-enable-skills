@@ -235,6 +235,12 @@ def test_short_bad_preimage_is_not_added_to_the_scrub_list():
     assert "fixture-string-macaroon:abc" in secrets
 
 
+@pytest.mark.parametrize("prefix", ["L402 ", "LSAT ", "Authorization: L402 "])
+def test_a_credential_with_no_colon_adds_the_bare_macaroon_as_a_secret(prefix):
+    secrets = l402_evidence.credential_secrets(f"{prefix}fixture-string-macaroon-only")
+    assert "fixture-string-macaroon-only" in secrets
+
+
 # Without the credential, a receipt is supporting evidence and never upgrades the class.
 def test_receipt_without_credential_is_recorded_but_never_upgrades():
     evidence, credential = evidence_for("credential-absent-with-receipt", root_metadata_ok=True)

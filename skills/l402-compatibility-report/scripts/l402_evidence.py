@@ -132,8 +132,10 @@ def credential_secrets(credential: str | None) -> set[str]:
 
     Split before any case change, so the original-case macaroon and preimage
     are included, plus both case forms of the preimage and the joined
-    macaroon:preimage. Preimage forms are added only for exactly 64 hex
-    characters, and no form shorter than MIN_SECRET_LENGTH is added.
+    macaroon:preimage. A credential with no colon adds its bare text after
+    any L402 or LSAT prefix, most likely a macaroon. Preimage forms are added
+    only for exactly 64 hex characters, and no form shorter than
+    MIN_SECRET_LENGTH is added.
     """
     if not credential:
         return set()
@@ -141,6 +143,8 @@ def credential_secrets(credential: str | None) -> set[str]:
     found = {credential, credential.strip(), macaroon}
     if macaroon and preimage:
         found.add(f"{macaroon}:{preimage}")
+    elif macaroon is None and preimage:
+        found.add(preimage)  # no colon: the bare text, whatever it is
     if preimage and HEX64.fullmatch(preimage.lower()):
         found.update({preimage, preimage.lower(), preimage.upper()})
     return {s for s in found if s and len(s) >= MIN_SECRET_LENGTH}

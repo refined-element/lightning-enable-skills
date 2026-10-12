@@ -1,7 +1,7 @@
 """Render a compatibility report as JSON or Markdown, and scrub it.
 
 The Markdown follows templates/report.md heading for heading. ``scrub``
-replaces every known secret, and anything that looks like a credential (a
+replaces every known secret (a 64-hex secret in any letter case), and anything that looks like a credential (a
 BOLT11 invoice, an L402, LSAT, or Payment credential, a macaroon or token
 value, an Authorization header value, a preimage field, or an NWC URI), with
 [REDACTED]; payment hashes and amounts survive. ``to_markdown`` scrubs its
@@ -67,9 +67,17 @@ def _redact_value(match: re.Match) -> str:
     return match.group(1) + REDACTED
 
 
+HEX64_SECRET = re.compile(r"[0-9a-fA-F]{64}")  # always used with fullmatch
+
+
 def scrub(text: str, secrets: set[str] | frozenset[str] = frozenset()) -> str:
     for secret in sorted(secrets, key=len, reverse=True):
-        if secret:
+        if not secret:
+            continue
+        if HEX64_SECRET.fullmatch(secret):
+            # Hex has no meaningful case: a preimage copy cased differently is the same secret.
+            text = re.sub(re.escape(secret), REDACTED, text, flags=re.IGNORECASE)
+        else:
             text = text.replace(secret, REDACTED)
     text = NWC_PATTERN.sub(REDACTED, text)
     text = BOLT11_PATTERN.sub(REDACTED, text)
