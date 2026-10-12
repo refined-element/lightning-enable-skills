@@ -15,36 +15,65 @@ unlocks.
 
 ## Skills
 
+The skills target Lightning Enable MCP 2.x and call only the tool names its
+default `standard` profile advertises.
+
+### Get started
+
 | Skill | What it does |
 |---|---|
-| 🫙 **[restock-from-photo](skills/restock-from-photo/)** | Photo of a product + "I'm running low" → identify → confirm → **reorder** over L402 → claim link. |
-| 📚 **[cited-answer](skills/cited-answer/)** | Answer a question by **buying** exactly the paid data it needs over L402, cite every figure, show the sats receipt. |
-| 🏷️ **[sell-this](skills/sell-this/)** | Turn a resource into a **paid endpoint** — mint an L402 paywall, verify payment, then deliver. (Producer side.) |
-| 📊 **[l402-meter](skills/l402-meter/)** | A running **satoshi meter + guardrail** for an agent's spend — warns at 80%, stops at 100%. |
-| 🔁 **[standing-order](skills/standing-order/)** | **Recurring restock** over Lightning — no card on file, a human yes every cycle. |
-| 🎁 **[gift-it](skills/gift-it/)** | Buy a product as a **gift** and ship it to someone else, paid over Lightning. |
-| 🤝 **[negotiate-and-buy](skills/negotiate-and-buy/)** | **Agent-to-agent commerce**: discover another agent's service over Nostr, vet it, agree terms, settle over Lightning. |
-| ⚡ **[pay-l402-anywhere](skills/pay-l402-anywhere/)** | Give an agent a **bounded Lightning wallet** and it pays for any L402-gated resource or API **anywhere** — discover, confirm, pay per-call. The general buyer wedge. |
-| 🏗️ **[producer-setup](skills/producer-setup/)** | From nothing to a **live paid API** on the agent's own wallet, no human in the payment plumbing — connect, self-signup over L402, publish, self-test. |
+| 🔌 **[agent-wallet-setup](skills/agent-wallet-setup/)** | From nothing to a verified paying wallet: install the MCP on your host, connect a wallet, set a spend ceiling, prove it with a 1-sat L402 payment. |
+| 🧾 **[lightning-enable-account](skills/lightning-enable-account/)** | Check your Lightning Enable plan and paid-through date, renew in sats with a human yes, understand what a lapse does. |
+
+### Buy
+
+| Skill | What it does |
+|---|---|
+| ⚡ **[pay-l402-anywhere](skills/pay-l402-anywhere/)** | Pay any L402-gated endpoint from a bounded wallet: discover, confirm, pay per call. The general buyer. |
+| 🔭 **[discover-paid-apis](skills/discover-paid-apis/)** | Find paid APIs in the L402 registry, see what you can afford, try one with a single paid call. |
+| 📚 **[cited-answer](skills/cited-answer/)** | Answer a question by buying exactly the paid data it needs over L402, cite every figure, show the sats receipt. |
+| 🛒 **[shop-l402-store](skills/shop-l402-store/)** | Buy a physical product from any Lightning Enable Shopify store, for yourself or as a gift, paid over Lightning. |
+
+### Sell
+
+| Skill | What it does |
+|---|---|
+| 🏗️ **[producer-setup](skills/producer-setup/)** | From nothing to a live paid API on your own wallet: connect, sign up over L402, publish, self-test. |
+| 🔁 **[create-l402-proxy](skills/create-l402-proxy/)** | Put an existing API behind a paid L402 proxy on an account you already have: receive wallet, proxy, priced routes, publish, self-test. |
+| 🏷️ **[sell-this](skills/sell-this/)** | Charge for one resource: mint an L402 challenge, verify payment, deliver. |
+| 🤝 **[negotiate-and-buy](skills/negotiate-and-buy/)** | Agent-to-agent commerce, buyer side: discover another agent's service over Nostr, vet it, settle over Lightning. |
+| 📣 **[offer-agent-service](skills/offer-agent-service/)** | Agent-to-agent commerce, seller side: publish a service on the agent relay, price it, settle and get attested. |
+
+### Build
+
+| Skill | What it does |
+|---|---|
+| 🧩 **[l402-client-integration](skills/l402-client-integration/)** | Add auto-paying L402 to your own code with `l402-requests` (Python), `L402Requests` (.NET), or `l402-requests` (npm). |
+| 🧱 **[l402-server-integration](skills/l402-server-integration/)** | Charge for your own API in-process with `L402Server.AspNetCore` or `l402-express`, no proxy. |
 
 Each skill folder has a human-facing `README.md` (what it is) and an agent-facing
 `SKILL.md` (the instructions Claude loads).
 
-**Buy + sell, end to end:** `pay-l402-anywhere` is the general buyer;
-`cited-answer` / `restock-from-photo` / `standing-order` are task-specific buyers;
-`sell-this` is the seller side, and `producer-setup` is how an agent *becomes* a
-seller from a standing start — wallet, account, published endpoint, proven with a
-self-test purchase; `negotiate-and-buy` is two agents transacting with each other;
-`l402-meter` keeps any of them honest about spend.
+**Buy + sell, end to end:** `agent-wallet-setup` gives an agent a bounded wallet,
+and `lightning-enable-account` keeps a seller's plan paid in sats. On the buy
+side, `pay-l402-anywhere` is the general buyer, `discover-paid-apis` finds
+something worth buying, and `cited-answer` and `shop-l402-store` are
+task-specific buyers. On the sell side, `producer-setup` is how an agent
+*becomes* a seller from a standing start, `create-l402-proxy` puts a whole API
+behind a paywall on an existing account, and `sell-this` charges for a single
+resource. `negotiate-and-buy` and `offer-agent-service` are the two halves of
+agents transacting with each other on the Nostr relay. The `l402-*-integration`
+skills move the same protocol into your own code. Lightning Enable does not hold
+funds; the wallet or the payment provider facilitates custody and settlement.
 
 ## What works where
 
 | Surface | Status | Why |
 |---|---|---|
-| **Claude Code / Desktop** | ✅ Works now | Has a shell (to run the helper script) + the local Lightning Enable MCP wallet. |
-| **Hermes** (Telegram/Signal/etc.) | ✅ Works now | Runs locally with a shell + the local MCP wallet **and** bridges to your phone over chat apps — the mobile path *without* a hosted MCP. See [Run L402 anywhere: Hermes + NWC](https://docs.lightningenable.com/products/l402-microtransactions/hermes-nwc-setup). |
+| **Claude Code / Desktop** | ✅ Works now | Runs the local Lightning Enable MCP and its wallet; the skills load from your skills folder. |
+| **Hermes** (Telegram/Signal/etc.) | ✅ Works now | Runs locally with the MCP wallet **and** bridges to your phone over chat apps — the mobile path *without* a hosted MCP. See [Run L402 anywhere: Hermes + NWC](https://docs.lightningenable.com/products/agentic-commerce/hermes-nwc-setup). |
 | **Cursor / Codex CLI** | ✅ Works now | `SKILL.md` follows the [agentskills.io](https://agentskills.io) standard — the same skill file loads unmodified. |
-| **Claude mobile app** | ⏳ Not yet | Claude's own mobile app only supports *remote* MCP connectors and can't run scripts. Use **Hermes** (above) for mobile today. See [`docs/mobile-readiness.md`](docs/mobile-readiness.md). |
+| **Claude mobile app** | ⏳ Not yet | Claude's own mobile app only supports *remote* MCP connectors, and the Lightning Enable MCP runs locally. For mobile, use **Hermes**: see [Run L402 anywhere: Hermes + NWC](https://docs.lightningenable.com/products/agentic-commerce/hermes-nwc-setup). |
 
 ## Install
 
@@ -53,11 +82,13 @@ Skills live in `~/.claude/skills/` (personal, all projects) or `.claude/skills/`
 
 ```bash
 git clone https://github.com/refined-element/lightning-enable-skills
-cp -r lightning-enable-skills/skills/restock-from-photo ~/.claude/skills/
+cp -r lightning-enable-skills/skills/agent-wallet-setup ~/.claude/skills/
 ```
 
-Then connect the [Lightning Enable MCP](https://github.com/refined-element/lightning-enable-mcp)
-with a funded wallet, share a product photo, and say you're running low.
+Then ask your agent to set you up to pay over Lightning. `agent-wallet-setup`
+installs the [Lightning Enable MCP](https://github.com/refined-element/lightning-enable-mcp),
+connects a wallet, sets a spend ceiling, and proves the loop with a 1-sat
+payment. Copy any other skill folder the same way.
 
 ## How a skill works (30 seconds)
 
@@ -71,22 +102,30 @@ stays in the model.
 
 Every skill here that spends money follows the same rules:
 
-- **Explicit confirmation before any payment.** No silent spending.
-- **Budget-aware.** Honors the MCP wallet's `get_budget_status`.
+- **Explicit confirmation before any payment.** No silent spending. When a
+  payment is over the MCP's auto-approve threshold, the confirmation code goes
+  to the human through the server's confirmation channel (its console by
+  default), never to the agent.
+- **Budget-aware.** Honors the MCP's spending caps (`budget(action="status")`);
+  an agent can tighten them, never raise them.
+- **One L402 payment at a time.** Each 402 mints a fresh invoice, so payments
+  never run concurrently.
 - **Intent-driven.** The agent never decides *for* you that you need to buy.
-- **No secrets in this repo.** Catalog/checkout endpoints are public; payment
-  authority lives only in your local MCP wallet.
+- **No secrets in this repo, and none in the conversation.** Catalog and
+  checkout endpoints are public; payment authority lives only in your local MCP
+  wallet. Skills report a wallet string or API key as set or not set, never its
+  value.
+- **Lightning Enable does not hold funds.** The wallet or the payment provider
+  facilitates custody and settlement.
 
 ## Ideas / roadmap
 
-This repo is meant to grow. Candidate next skills (PRs / suggestions welcome):
+This repo is meant to grow. Candidate next steps (PRs / suggestions welcome):
 
-- **`discover-and-try`** — "find me a weather/health/finance API I can use" →
-  discover on the L402 registry, show what you can afford, run a sample paid call.
-- **`pantry-from-receipt`** — photograph a grocery receipt or shelf → match items
-  to L402 stores → offer to reorder what you're low on.
-- **`api-arbitrage`** — compare multiple L402 providers for the same data, buy
+- **`api-arbitrage`**: compare several L402 providers for the same data, buy
   the cheapest, show the savings.
+- **A hosted MCP for the Claude mobile app**, so the skills run from Claude's
+  own app without a local server.
 
 ## Support
 
