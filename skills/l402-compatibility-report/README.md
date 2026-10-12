@@ -33,11 +33,14 @@ fails and how to fix it.
    `WWW-Authenticate` challenge, decodes the BOLT11 invoice, and reports.
 2. **Paid check, only with your yes:** the agent pays once with the Lightning
    Enable MCP's `access_l402_resource`, capped at the amount you approved.
-3. **Evidence check:** `l402_check.py --evidence` compares the wallet
-   receipt's payment hash (the MCP records SHA-256 of the preimage, never the
-   preimage) with the quoted invoice's payment hash, and checks that the paid
-   retry returned 2xx and that exactly one payment happened. The token never
-   has to leave the MCP's result; an optional stronger check takes it on stdin.
+3. **Evidence check:** the agent pipes the paid call's L402 token to
+   `l402_check.py --evidence ... --credential-stdin`, which checks that SHA-256
+   of the preimage equals the payment hash in the token's macaroon and in the
+   wallet receipt, that the paid retry returned the expected 2xx, and that
+   exactly one payment happened. `FULFILLMENT_VERIFIED` requires that token.
+   Without it (the Python MCP server returns none), the result is
+   `INCONCLUSIVE` with `preimage_unchecked`; the receipt is supporting
+   evidence and never upgrades it.
 4. **Report:** Markdown or JSON, from `templates/report.md`, with one precise
    fix per defect.
 
@@ -64,9 +67,10 @@ fails and how to fix it.
   replacement payment after a paid call that didn't deliver, whether the
   payment is confirmed, pending, or ambiguous.
 - No credential goes in a command-line argument or a file. The script refuses
-  credential-bearing request headers, the default paid check never moves the
-  token, and the optional stronger check takes it on stdin. None of them
-  appears in the output.
+  credential-bearing request headers and takes the L402 token only on stdin,
+  through one `printf` recipe. The token shows in that command text and stays
+  reusable until its expiry, so the paid check runs against the cheapest
+  route. No credential appears in the output.
 - An endpoint that needs its own credential before it will issue a 402 is out
   of scope; the report calls it "401 before challenge".
 - Lightning Enable does not hold funds; the payment provider facilitates custody

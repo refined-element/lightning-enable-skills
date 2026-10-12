@@ -138,6 +138,8 @@ Only when the human asked for it, and only when the preflight says `allowed`:
 - The invoice amount is at or below the human's cap.
 - The endpoint and parameters are final, and repeating the call has no harmful
   side effects.
+- It is the cheapest route that proves the flow. Step 7 needs the token, which
+  shows in the command text and stays reusable until its expiry.
 
 State the payment and **stop for a yes**: "I will call `GET <url>` once through
 your Lightning wallet. It costs `<amount>` sats; the cap is `<cap>`. Go ahead?"
@@ -185,11 +187,13 @@ receipts(source="durable")
 ```
 
 Pick the receipts written since step 5 for this URL and copy each one's
-`paymentHash` and `amountSats` into `evidence.json`. The MCP stores the payment
-hash as SHA-256 of the preimage, never the preimage itself, so a receipt holds
-no credential. The default paid check never moves the token: leave
-`payment.l402Token` where it is. Write `evidence.json` with no credential in it
-(the script refuses a file that holds one):
+`paymentHash`, `amountSats`, `status`, and `context` into `evidence.json`. The
+MCP stores the payment hash as SHA-256 of the preimage, never the preimage
+itself, so a receipt holds no credential. A receipt is supporting evidence: it
+records what the wallet paid, but it can't prove the preimage belongs to the
+endpoint's challenge. Keep `payment.l402Token` out of the file; step 7 pipes it.
+Write `evidence.json` with no credential in it (the script refuses a file that
+holds one):
 
 ```json
 {
@@ -203,7 +207,7 @@ no credential. The default paid check never moves the token: leave
     "already_paid": false,
     "requires_confirmation": false
   },
-  "payments": [{"amount_sats": 21, "status": "settled", "payment_hash": "<64 hex>"}],
+  "payments": [{"amount_sats": 21, "status": "settled", "payment_hash": "<64 hex>", "context": "<receipt context>"}],
   "expected": {"status": 200, "content_type": "application/json"}
 }
 ```
@@ -216,36 +220,50 @@ no credential. The default paid check never moves the token: leave
 | `paid_sats` | `paid_sats` | `payment.amountSats` |
 | `already_paid` | `alreadyPaid` | `alreadyPaid` |
 | `requires_confirmation` | `requiresConfirmation` | `requiresConfirmation` |
-| `payments[]` | receipts' `amountSats`, `status`, `paymentHash` | the same |
+| `payments[]` | receipts' `amountSats`, `status`, `paymentHash`, `context` | the same |
+| the credential | none returned | `payment.l402Token`, piped in step 7, never in this file |
 
 `expected` is optional: the status and content type the human expects.
 
 ### 7. Validate the evidence
 
-`--mode-a` adds the read-only report from step 1:
-
-```bash
-python scripts/l402_check.py --evidence evidence.json --mode-a mode-a.json
-```
-
-The script compares the receipt's payment hash with the invoice payment hash
-from Mode A, and with the macaroon identifier's payment hash when Mode A exposed
-one, and the report states whether they match. It also checks that the
-authorized retry returned 2xx and that exactly one payment was recorded at or
-under the cap. It prints the payment hash and the amount, never a credential. A
-run with no preimage and no receipt hash is `INCONCLUSIVE`.
-
-**Optional stronger check.** When the result carries `payment.l402Token` (the
-.NET server does), the script can also check the preimage itself. This is the
-only way to pass it:
+`FULFILLMENT_VERIFIED` requires the credential. When the result carries
+`payment.l402Token` (the .NET server does), pipe it to the script with this
+recipe, the only way to pass it; `--mode-a` adds the read-only report from
+step 1:
 
 ```bash
 printf '%s' '<token>' | python scripts/l402_check.py --evidence evidence.json --mode-a mode-a.json --credential-stdin
 ```
 
 `printf` is a shell builtin, so the token reaches the script on stdin, never as
-a script argument. The command text is still visible to anyone who sees the
-tool call. Never repeat the token in chat, and never write it to a file.
+a script argument. The token is still visible in the command text to anyone who
+sees the tool call, and it stays reusable until its expiry. That is why the
+paid check runs against the cheapest route. Never repeat the token in chat, and
+never write it to a file.
+
+The script checks that SHA-256 of the preimage equals the payment hash inside
+the token's macaroon identifier (Lightning Labs format) when it can read one,
+and equals the receipt's `paymentHash` when you supplied it. It also requires
+an authorized retry that returned a 2xx meeting the stated expectations, and
+exactly one payment recorded at or under the cap. It prints the payment hash
+and the amount, never a credential.
+
+Without the credential, because you chose not to pipe it or because the Python
+server returned none, run the same command without `printf` and without
+`--credential-stdin`:
+
+```bash
+python scripts/l402_check.py --evidence evidence.json --mode-a mode-a.json
+```
+
+The result is then `INCONCLUSIVE` with the finding `preimage_unchecked`. The
+receipt's hash, amount, and context are recorded as supporting evidence and
+never upgrade the classification.
+
+The report also compares the Mode A invoice's payment hash with the paid
+payment hash, as information only. A mismatch is normal, because a server may
+mint a fresh invoice for each 402, and it is never a finding.
 
 ### 8. Hand off
 
@@ -260,11 +278,11 @@ tool call. Never repeat the token in chat, and never write it to a file.
 | Classification | Means |
 |---|---|
 | `CHALLENGE_COMPATIBLE` | A valid unpaid L402 challenge and a priced invoice were observed. Paid fulfillment was not tested. |
-| `PAYMENT_COMPATIBLE` | The payment is confirmed: the wallet reports terminal success and SHA-256 of the preimage equals the invoice payment hash. The authorized retry then returned a definitive answer that is not a 2xx meeting the stated expectations, such as a `500`, a `403`, or another `402`. |
-| `FULFILLMENT_VERIFIED` | Request, 402, payment, authorized retry, expected 2xx result: all of it worked. |
+| `PAYMENT_COMPATIBLE` | The payment is confirmed: the wallet reports terminal success and SHA-256 of the preimage from the piped credential equals the invoice payment hash. The authorized retry then returned a definitive answer that is not a 2xx meeting the stated expectations, such as a `500`, a `403`, or another `402`. |
+| `FULFILLMENT_VERIFIED` | Request, 402, payment, authorized retry, expected 2xx result: all of it worked, and SHA-256 of the preimage from the piped credential matched the payment hash. Requires the credential. |
 | `MARKETPLACE_READY` | `FULFILLMENT_VERIFIED`, plus every listing check and a paid amount equal to the quote. |
 | `INCOMPATIBLE` | A deterministic protocol or transport defect prevents the flow. |
-| `INCONCLUSIVE` | The check couldn't decide: the payment is pending or unknown (no terminal wallet result, or no preimage obtained), the authorized retry was ambiguous (a timeout, a dropped connection, or no answer), the unpaid request timed out or hit a server error or a DNS failure, the target was refused, or the behavior was opaque. |
+| `INCONCLUSIVE` | The check couldn't decide: the payment is pending or unknown (no terminal wallet result, or no preimage obtained), no credential was piped so the preimage went unchecked (`preimage_unchecked`; a receipt never upgrades this), the authorized retry was ambiguous (a timeout, a dropped connection, or no answer), the unpaid request timed out or hit a server error or a DNS failure, the target was refused, or the behavior was opaque. |
 
 After a paid call that didn't deliver the resource, the classification is
 `PAYMENT_COMPATIBLE` or `INCONCLUSIVE`. In both cases keep the correlators (the
@@ -307,9 +325,12 @@ read-only check.
   authorization headers, NWC connection strings, and API keys stay out of your
   output. The script prints the payment hash and the amount only.
 - **Credentials never go in a command-line argument,** the evidence file, or
-  any other file. `--header` refuses credential-bearing headers. The default
-  paid check never moves the token; the optional stronger check pipes it on
-  stdin, and you never repeat it in chat.
+  any other file. `--header` refuses credential-bearing headers. The token
+  reaches the script only through the one `printf` recipe in step 7. It shows
+  in that command text and stays reusable until its expiry, so the paid check
+  runs against the cheapest route, and you never repeat the token in chat.
+- **A receipt never upgrades the classification.** Without the credential, the
+  paid check is `INCONCLUSIVE` with `preimage_unchecked`.
 - **Never claim verification you didn't do.** Report the exact classification.
 - **Never publish.** Listing on a marketplace is the human's decision.
 
@@ -341,12 +362,13 @@ On the .NET server:
 >    cover 3 sats.
 > 4. `access_l402_resource(url="https://api.example.com/forecast?city=paris", max_sats=10)`
 >    → paid 3 sats, 200, JSON body.
-> 5. `receipts(source="durable")` → one settled 3-sat receipt with its payment
->    hash. Copy the hash and the amount into `evidence.json`, then run
->    `python scripts/l402_check.py --evidence evidence.json --mode-a mode-a.json`
+> 5. `receipts(source="durable")` → one settled 3-sat receipt. Copy its hash,
+>    amount, status, and context into `evidence.json`, then pipe the token with
+>    `printf '%s' '<token>' | python scripts/l402_check.py --evidence evidence.json --mode-a mode-a.json --credential-stdin`
 >    → `FULFILLMENT_VERIFIED`, with one gap for listing: publish `llms.txt` or
->    `openapi.json` at the host root.
+>    `openapi.json` at the host root. The Mode A and paid payment hashes
+>    differ, which the report notes as information only.
 
-On the Python server, the same run ends `INCONCLUSIVE` when the receipt has no
-payment hash: the result carries no preimage, so neither a preimage nor a hash
-is available to check.
+On the Python server, which returns no token, the same run ends `INCONCLUSIVE`
+with `preimage_unchecked`. The receipt is recorded as supporting evidence and
+doesn't upgrade it.
