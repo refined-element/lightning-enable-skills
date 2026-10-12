@@ -262,6 +262,15 @@ def _paid(report: dict) -> list[str]:
         f"Tool: {p['tool']}, cap {p['cap_sats']} sats",
         f"Paid: {p['paid_sats']} sats in {p['payments_recorded']} recorded payment(s)",
         "Payment hashes: " + (", ".join(p["payment_hashes"]) or "none recorded"),
+    ]
+    rows += [f"Receipt (supporting evidence): {r['amount_sats']} sats, status {r['status']}, "
+             f"payment hash {r['payment_hash'] or 'none'}, context {r['context'] or 'none'}"
+             for r in p.get("receipts", [])]
+    if p.get("quote_payment_hash"):
+        rows.append(f"Read-only quote payment hash: {p['quote_payment_hash']}; same as the paid one: "
+                    f"{_yes(p.get('quote_hash_matches'))} (information only: a server may mint a fresh invoice "
+                    "for each 402)")
+    rows += [
         f"Preimage check: {p['preimage_check']}"
         + ("" if not p["hash_sources"]
            else " (" + "; ".join(f"[{s['source']}] {_yes(s['match'])}" for s in p["hash_sources"]) + ")"),

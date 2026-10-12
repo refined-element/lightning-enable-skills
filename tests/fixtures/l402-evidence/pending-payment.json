@@ -1,0 +1,16 @@
+{
+  "cap_sats": 10,
+  "tool_result": {
+    "success": false,
+    "paid_sats": 1,
+    "already_paid": true
+  },
+  "payments": [
+    {
+      "amount_sats": 1,
+      "status": "pending",
+      "payment_hash": "65e0276b37174dbbdfecc0de804298820c9bb69500d080314b7cc6609d82c88c"
+    }
+  ],
+  "test_preimage_seed": null
+}

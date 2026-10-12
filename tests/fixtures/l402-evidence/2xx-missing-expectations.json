@@ -1,0 +1,25 @@
+{
+  "cap_sats": 10,
+  "tool_result": {
+    "success": true,
+    "status_code": 200,
+    "content_type": "text/html; charset=utf-8",
+    "body_length": 42,
+    "paid_sats": 1,
+    "already_paid": false,
+    "requires_confirmation": false
+  },
+  "payments": [
+    {
+      "amount_sats": 1,
+      "status": "settled",
+      "payment_hash": "65e0276b37174dbbdfecc0de804298820c9bb69500d080314b7cc6609d82c88c",
+      "context": "fixture-string-receipt-context GET https://api.lightningenable.com/l402/test/ping"
+    }
+  ],
+  "expected": {
+    "status": 200,
+    "content_type": "application/json"
+  },
+  "test_preimage_seed": "fixture-string-preimage-1"
+}
