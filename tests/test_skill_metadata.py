@@ -45,17 +45,15 @@ NAME_PATTERN = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 # Words that would misdescribe who holds the funds.
 BANNED_CUSTODY_TERMS = ("non-custodial", "noncustodial", "self-custody", "trustless")
 
-# Compliance claims this project does not make: "no KYC" / "no-KYB" standing as
-# a claim (at the end of a clause, or followed by a word such as "required" or
-# "checks"), and "without KYC". A bare substring would also flag words that merely
-# contain the letters, so the pattern matches the claim, not the characters.
+# Compliance claims this project does not make. Any "no KYC" / "no-KYB" or
+# "without KYC" is a claim, wherever it sits in the sentence ("no-KYC payments",
+# "no KYB for sellers", "no KYC or card needed" are all claims). The only allowed
+# form is the meta statement in COMPLIANCE_EXCEPTIONS, which says the opposite.
 COMPLIANCE_CLAIM = re.compile(
-    r"\bno[- ]ky[bc]\b"
-    r"(?=\s*(?:[,.;:!?)\]*_`]|$|\s(?:is\s+|are\s+)?"
-    r"(?:required|needed|necessary|checks?|verification|step|steps|process|paperwork|hoops)\b))"
-    r"|\bwithout\s+(?:any\s+|a\s+)?ky[bc]\b",
-    re.IGNORECASE | re.MULTILINE,
+    r"\bno[- ]ky[bc]\b|\bwithout\s+(?:any\s+|a\s+)?ky[bc]\b",
+    re.IGNORECASE,
 )
+COMPLIANCE_EXCEPTIONS = re.compile(r"\bno[- ]ky[bc]\s+claims?\b", re.IGNORECASE)
 
 # `](../<name>/...)` or `](../<name>)`: a relative link from one skill to another.
 SIBLING_LINK = re.compile(r"\]\(\.\./([a-z0-9-]+)(?:[/)#])")
@@ -183,7 +181,8 @@ def test_prose_avoids_banned_custody_terms(markdown_file: Path):
 @pytest.mark.parametrize("markdown_file", markdown_files(), ids=rel)
 def test_prose_makes_no_kyb_or_kyc_claims(markdown_file: Path):
     text = markdown_file.read_text(encoding="utf-8")
-    hits = sorted({m.group(0) for m in COMPLIANCE_CLAIM.finditer(text)})
+    allowed = {m.start() for m in COMPLIANCE_EXCEPTIONS.finditer(text)}
+    hits = sorted({m.group(0) for m in COMPLIANCE_CLAIM.finditer(text) if m.start() not in allowed})
     assert not hits, (
         f"{rel(markdown_file)} uses {hits}. KYB and KYC belong to the payment "
         "provider; this repo makes no claim about them."

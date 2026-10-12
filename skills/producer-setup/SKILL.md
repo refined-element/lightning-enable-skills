@@ -59,8 +59,9 @@ self-test purchase, and the hand-off summary.
     for your action.
   - `access_l402_resource` / `pay_l402_challenge` — the self-test purchase.
   - `receipts` — the durable payment log, for the hand-off.
-  - `renew_lightning_enable_subscription` — renews the plan in sats after the
-    trial (MCP 2.1.0 or later), for the hand-off.
+  - Renewing the plan in sats after the trial is the
+    [`lightning-enable-account`](../lightning-enable-account/) skill's job; this
+    skill only points at it in the hand-off.
 
 Argument names below are the Python server's `snake_case`. The .NET server takes
 the same arguments in `camelCase` — `target_base_url` → `targetBaseUrl`,

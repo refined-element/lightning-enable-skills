@@ -35,8 +35,8 @@ price; there is no automated offer and counter-offer loop.
 Argument names below are the Python server's `snake_case`. The .NET server takes
 the same arguments in `camelCase`: `capability_event_id` → `capabilityEventId`,
 `budget_sats` → `budgetSats`, `l402_endpoint` → `l402Endpoint`, `max_sats` →
-`maxSats`, `agreement_id` → `agreementId`, `confirmation_nonce` →
-`confirmationNonce`. Response fields are `camelCase` in both.
+`maxSats`, `agreement_id` → `agreementId`. Response fields are `camelCase` in
+both. `confirmation_nonce` exists on the Python server only; see step 5.
 
 > This is an experimental, frontier flow. Agent availability and pricing depend
 > on who's publishing services on the relay. Treat results as a live, evolving
@@ -96,9 +96,11 @@ agent_services(action="settle", l402_endpoint="<url from the agreement or listin
 This pays the provider's L402 endpoint (same auto-pay flow as buying any L402
 resource) and returns the delivered service result. `method` is `GET` or `HEAD`;
 write methods are refused. If the amount is over the auto-approve threshold, the
-MCP prints a confirmation code to its **console** for the human; ask the human
-for it, then re-call `settle` with the same arguments plus
-`confirmation_nonce="<code>"`. Never guess a code.
+Python server prints a confirmation code to its **console** for the human; ask
+the human for it, then re-call `settle` with the same arguments plus
+`confirmation_nonce="<code>"`. Never guess a code. The .NET server has no
+confirmation step on `settle`: an over-threshold settlement is refused, so lower
+`max_sats` to the auto-approve tier or ask the operator to change the tiers.
 
 ### 6. Deliver
 Hand the result to the user. Leaving the provider a review is unavailable: the
