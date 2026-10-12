@@ -17,7 +17,7 @@ Use these names exactly, in capitals, as written.
 | `FULFILLMENT_VERIFIED` | The whole flow worked: request, 402, payment, authorized retry, expected 2xx result. | One paid call with a matching preimage and a 2xx result that meets the stated expectations. |
 | `MARKETPLACE_READY` | `FULFILLMENT_VERIFIED`, plus public https, a priced mainnet invoice, a 402 for a bodyless request within 8 seconds, a stable URL, `openapi.json` or `llms.txt` at the host root, and a paid amount equal to the quote. | Everything above. |
 | `INCOMPATIBLE` | A deterministic protocol or transport defect prevents the flow. | Any check. |
-| `INCONCLUSIVE` | The check couldn't decide: the payment is pending or unknown (no terminal wallet result, or no preimage obtained), the authorized retry was ambiguous (a timeout, a dropped connection, or no answer), an opaque behavior, or a refused target. | Any check. |
+| `INCONCLUSIVE` | The check couldn't decide: the payment is pending or unknown (no terminal wallet result, or no preimage obtained), the authorized retry was ambiguous (a timeout, a dropped connection, or no answer), a server error, a DNS failure, an opaque behavior, or a refused target. | Any check. |
 
 A read-only check stops at `CHALLENGE_COMPATIBLE`. Never call an endpoint
 "L402 verified", or "verified" in any form, when only the unpaid challenge was

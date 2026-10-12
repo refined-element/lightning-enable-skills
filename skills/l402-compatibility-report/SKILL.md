@@ -7,7 +7,7 @@ description: >-
   without spending: every WWW-Authenticate scheme, the invoice amount, payment
   hash, and expiry, resource binding, and listing readiness. Optionally runs
   one explicitly approved, capped paid test through HTTP 2xx fulfillment. Use
-  when a developer asks to check, test, debug, diagnose, or certify an L402
+  when a developer asks to check, test, debug, or diagnose an L402
   endpoint ("is my L402 endpoint working", "why won't my endpoint list on
   Amazap", "check this paywall", "run an L402 compatibility report"), or after
   producer-setup, create-l402-proxy, or l402-server-integration to prove the
@@ -75,8 +75,15 @@ In one message, get:
 
 1. **The URL** and, if it isn't `GET`, the method. Query parameters go in the
    URL.
-2. **Headers or a body,** only if the endpoint needs them before it can answer.
-   Credential headers are sent but never shown in the report.
+2. **Non-secret headers or a body,** only if the endpoint needs them before it
+   can answer: `Accept`, a content type, or a harmless custom header. `--header`
+   takes non-secret headers only. The script refuses credential-bearing header
+   names with an error: `Authorization`, `Cookie`, `Proxy-Authorization`, and
+   any name containing `key`, `token`, `secret`, `password`, or `session`, in
+   any case. There is no other way to pass them. An endpoint that needs its own
+   credential before it will issue a 402 is out of scope for this check: report
+   it as "401 before challenge", with the fix from the table under What can go
+   wrong.
 3. **Whether a paid check is wanted,** and if so the most it may cost, in sats.
 
 ### 1. Run the read-only check
@@ -117,7 +124,8 @@ matter:
 
 A response that offers several schemes (`L402` and `Payment`, `LSAT` and
 `L402`, or `L402`, `Payment`, and `x402`) is normal. The report classifies the
-endpoint by its `L402` challenge and lists the others. `Payment` is its own
+endpoint by its `L402` challenge (or `LSAT` when there is no `L402`) and lists
+the others. `Payment` is its own
 scheme, never L402.
 
 ### 3. Decide on the paid check
@@ -142,6 +150,8 @@ get_balance()
 ```
 
 If the session budget or the balance can't cover the amount, stop and say so.
+Report only that the balance covers the amount, never the figure, unless the
+person asks for it.
 
 ### 5. Pay once
 
@@ -150,9 +160,9 @@ access_l402_resource(url="<exact url from step 1>", max_sats=<the approved cap>)
 ```
 
 One call requests the URL, pays the 402's invoice, and retries with the
-`Authorization: L402 <macaroon>:<preimage>` header. Each 402 mints a fresh
-invoice, so the paid invoice is not the one in the read-only report; `max_sats`
-is what bounds it.
+`Authorization: L402 <macaroon>:<preimage>` header. A server may mint a fresh
+invoice for each 402, so the paid invoice need not be the one in the read-only
+report; `max_sats` is what bounds it.
 
 - **`requiresConfirmation: true`:** the code went to the human, never to you.
   Ask for it and repeat the same call with `confirmation_nonce="<code>"`.
@@ -160,6 +170,8 @@ is what bounds it.
   again.** Go to step 6 with what you have.
 - **A budget denial or an invoice over `max_sats`:** nothing was paid. Report
   it.
+- **Anything else (a tool error, a timeout, or `success: false` without
+  `alreadyPaid`):** the outcome is unknown. **Don't call again.** Go to step 6.
 
 Never start a second payment while the first is pending or its outcome is
 unknown.
@@ -172,9 +184,12 @@ Read the payment's receipt:
 receipts(source="durable")
 ```
 
-Pick the receipts written since step 5 for this URL. Then write
-`evidence.json` with no credential in it (the script refuses a file that holds
-one):
+Pick the receipts written since step 5 for this URL and copy each one's
+`paymentHash` and `amountSats` into `evidence.json`. The MCP stores the payment
+hash as SHA-256 of the preimage, never the preimage itself, so a receipt holds
+no credential. The default paid check never moves the token: leave
+`payment.l402Token` where it is. Write `evidence.json` with no credential in it
+(the script refuses a file that holds one):
 
 ```json
 {
@@ -207,24 +222,30 @@ one):
 
 ### 7. Validate the evidence
 
-`--mode-a` adds the read-only report from step 1. When the result carries
-`payment.l402Token` (the .NET server does), pipe it on stdin with
-`--credential-stdin`, never as an argument and never inside the evidence:
+`--mode-a` adds the read-only report from step 1:
 
 ```bash
-python scripts/l402_check.py --evidence evidence.json --mode-a mode-a.json --credential-stdin
+python scripts/l402_check.py --evidence evidence.json --mode-a mode-a.json
 ```
 
-If your shell can't pipe it directly, write it to a temporary file outside the
-repository, redirect that file into stdin, and delete it right after. Without a
-credential, leave out `--credential-stdin`: the preimage can't be checked, so a
-2xx result is `INCONCLUSIVE` rather than `FULFILLMENT_VERIFIED`.
+The script compares the receipt's payment hash with the invoice payment hash
+from Mode A, and with the macaroon identifier's payment hash when Mode A exposed
+one, and the report states whether they match. It also checks that the
+authorized retry returned 2xx and that exactly one payment was recorded at or
+under the cap. It prints the payment hash and the amount, never a credential. A
+run with no preimage and no receipt hash is `INCONCLUSIVE`.
 
-The script checks that SHA-256 of the preimage equals the payment hash (from
-the receipt and, when the macaroon is in Lightning Labs format, from the
-macaroon), that the authorized retry returned 2xx, and that exactly one payment
-was recorded at or under the cap. It prints the payment hash and the amount,
-never the credential.
+**Optional stronger check.** When the result carries `payment.l402Token` (the
+.NET server does), the script can also check the preimage itself. This is the
+only way to pass it:
+
+```bash
+printf '%s' '<token>' | python scripts/l402_check.py --evidence evidence.json --mode-a mode-a.json --credential-stdin
+```
+
+`printf` is a shell builtin, so the token reaches the script on stdin, never as
+a script argument. The command text is still visible to anyone who sees the
+tool call. Never repeat the token in chat, and never write it to a file.
 
 ### 8. Hand off
 
@@ -243,7 +264,7 @@ never the credential.
 | `FULFILLMENT_VERIFIED` | Request, 402, payment, authorized retry, expected 2xx result: all of it worked. |
 | `MARKETPLACE_READY` | `FULFILLMENT_VERIFIED`, plus every listing check and a paid amount equal to the quote. |
 | `INCOMPATIBLE` | A deterministic protocol or transport defect prevents the flow. |
-| `INCONCLUSIVE` | The check couldn't decide: the payment is pending or unknown (no terminal wallet result, or no preimage obtained), the authorized retry was ambiguous (a timeout, a dropped connection, or no answer), the unpaid request timed out, the target was refused, or the behavior was opaque. |
+| `INCONCLUSIVE` | The check couldn't decide: the payment is pending or unknown (no terminal wallet result, or no preimage obtained), the authorized retry was ambiguous (a timeout, a dropped connection, or no answer), the unpaid request timed out or hit a server error or a DNS failure, the target was refused, or the behavior was opaque. |
 
 After a paid call that didn't deliver the resource, the classification is
 `PAYMENT_COMPATIBLE` or `INCONCLUSIVE`. In both cases keep the correlators (the
@@ -259,7 +280,7 @@ read-only check.
 | Symptom | Likely cause | Fix to recommend |
 |---|---|---|
 | Unpaid request gets `200` | The resource is served before the paywall | Place the L402 middleware before resource delivery. |
-| Unpaid request gets `401` | Ordinary auth runs first | Let requests reach the L402 check before ordinary authentication where paid access is intended. |
+| Unpaid request gets `401` ("401 before challenge") | Ordinary auth runs first | Let requests reach the L402 check before ordinary authentication where paid access is intended. |
 | `400` or `422` before any 402 | Input validation runs first | Issue the 402 before validating paid-only parameters, or provide a probe-safe route. |
 | `415` on an empty-body POST | Content-type validation runs first | Issue the 402 before body validation, or provide a fixed-price, single-call route for listing. |
 | `402` with no `WWW-Authenticate` | The challenge header is missing | Emit `WWW-Authenticate: L402 macaroon="...", invoice="..."`. |
@@ -285,8 +306,10 @@ read-only check.
 - **Never echo secrets.** Invoice strings, preimages, macaroons, tokens,
   authorization headers, NWC connection strings, and API keys stay out of your
   output. The script prints the payment hash and the amount only.
-- **Credentials go on stdin,** never in the evidence file or a command-line
-  argument. A temporary file, if you need one, is deleted right after.
+- **Credentials never go in a command-line argument,** the evidence file, or
+  any other file. `--header` refuses credential-bearing headers. The default
+  paid check never moves the token; the optional stronger check pipes it on
+  stdin, and you never repeat it in chat.
 - **Never claim verification you didn't do.** Report the exact classification.
 - **Never publish.** Listing on a marketplace is the human's decision.
 
@@ -302,6 +325,8 @@ read-only check.
 
 ## Example
 
+On the .NET server:
+
 > User: "Check my weather endpoint before I list it. If the challenge looks
 > right, test it for real, up to 10 sats."
 >
@@ -312,11 +337,16 @@ read-only check.
 > 2. "The unpaid challenge is valid; paid delivery is not tested yet. I will
 >    call `GET https://api.example.com/forecast?city=paris` once. It costs 3
 >    sats; your cap is 10. Go ahead?" The human says yes.
-> 3. `budget(action="status")` and `get_balance()` → room for it.
+> 3. `budget(action="status")` and `get_balance()` → the budget and the balance
+>    cover 3 sats.
 > 4. `access_l402_resource(url="https://api.example.com/forecast?city=paris", max_sats=10)`
 >    → paid 3 sats, 200, JSON body.
-> 5. `receipts(source="durable")` → one settled 3-sat receipt. Write
->    `evidence.json`, then pipe the token into
->    `python scripts/l402_check.py --evidence evidence.json --mode-a mode-a.json --credential-stdin`
+> 5. `receipts(source="durable")` → one settled 3-sat receipt with its payment
+>    hash. Copy the hash and the amount into `evidence.json`, then run
+>    `python scripts/l402_check.py --evidence evidence.json --mode-a mode-a.json`
 >    → `FULFILLMENT_VERIFIED`, with one gap for listing: publish `llms.txt` or
 >    `openapi.json` at the host root.
+
+On the Python server, the same run ends `INCONCLUSIVE` when the receipt has no
+payment hash: the result carries no preimage, so neither a preimage nor a hash
+is available to check.
