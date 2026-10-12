@@ -126,10 +126,10 @@ def _parse_header(text: str, index: int, result: ParseResult) -> None:
                 result.errors.append(f"header {index}: unexpected character at offset {cur.pos}")
                 return
             current = Challenge(scheme=scheme, header_index=index)
-            result.challenges.append(current)
             if cur.peek() not in (" ", "\t", ",", ""):
                 result.errors.append(f"header {index}: unexpected character at offset {cur.pos}")
                 return
+            result.challenges.append(current)
             cur.skip_ws()
             if cur.peek() in (",", "") or _is_param_start(cur):
                 continue

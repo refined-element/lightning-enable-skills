@@ -88,6 +88,12 @@ def test_unterminated_quote_is_an_error():
     assert result.errors == ["header 0: unterminated quoted-string at offset 5"]
 
 
+def test_empty_auth_param_value_is_an_error_not_a_phantom_scheme():
+    result = l402_challenge.parse(['L402 macaroon="m", invoice=, foo=bar'])
+    assert [c.scheme for c in result.challenges] == ["L402"]
+    assert len(result.errors) == 1
+
+
 def test_bare_scheme_and_empty_input():
     assert [c.scheme for c in l402_challenge.parse(["Negotiate"]).challenges] == ["Negotiate"]
     assert l402_challenge.parse([]).challenges == []
