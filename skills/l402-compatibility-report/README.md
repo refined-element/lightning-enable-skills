@@ -1,6 +1,6 @@
 # l402-compatibility-report
 
-**Find out exactly how far an endpoint gets through L402, without spending a sat, then prove paid delivery with one approved payment.**
+**Find out exactly how far an endpoint gets through L402, without spending a sat, then test paid delivery with one approved payment.**
 
 An [L402](https://github.com/lightninglabs/L402) endpoint answers an unpaid
 request with `402 Payment Required`, a Lightning invoice, and a macaroon, and
@@ -16,7 +16,8 @@ fails and how to fix it.
   invoice's amount, payment hash, and expiry, with no wallet needed.
 - **Honest about what was tested.** A valid challenge is
   `CHALLENGE_COMPATIBLE`, not "verified". Paid delivery needs a paid check,
-  and marketplace readiness needs both plus listing metadata.
+  and marketplace readiness (`MARKETPLACE_READY`, a separate level above
+  `FULFILLMENT_VERIFIED`) needs both plus listing metadata.
 - **Multi-scheme aware.** Servers that offer `L402` beside `Payment`, `LSAT`, or
   `x402` are normal; the report classifies the L402 challenge and lists the
   rest, and never treats `Payment` as L402.
@@ -35,9 +36,11 @@ fails and how to fix it.
    Enable MCP's `access_l402_resource`, capped at the amount you approved.
 3. **Evidence check:** the agent pipes the paid call's L402 token to
    `l402_check.py --evidence ... --credential-stdin`, which checks that SHA-256
-   of the preimage equals the payment hash in the token's macaroon and in the
-   wallet receipt, that the paid retry returned the expected 2xx, and that
-   exactly one payment happened. `FULFILLMENT_VERIFIED` requires that token.
+   of the preimage equals the payment hash in the token's macaroon (when it is
+   in Lightning Labs format) and in the wallet receipt (when you supplied its
+   `paymentHash`), that the paid retry returned the expected 2xx, and that
+   exactly one payment happened. `FULFILLMENT_VERIFIED` and
+   `PAYMENT_COMPATIBLE` both require that token.
    Without it (the Python MCP server returns none), the result is
    `INCONCLUSIVE` with `preimage_unchecked`; the receipt is supporting
    evidence and never upgrades it.
@@ -68,7 +71,8 @@ fails and how to fix it.
   payment is confirmed, pending, or ambiguous.
 - No credential goes in a command-line argument or a file. The script refuses
   credential-bearing request headers and takes the L402 token only on stdin,
-  through one `printf` recipe. The token shows in that command text and stays
+  through a `printf` recipe (or its PowerShell equivalent). The token shows in
+  that command text and stays
   reusable until its expiry, so the paid check runs against the cheapest
   route. No credential appears in the output.
 - An endpoint that needs its own credential before it will issue a 402 is out

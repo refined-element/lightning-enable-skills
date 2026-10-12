@@ -13,7 +13,7 @@ Use these names exactly, in capitals, as written.
 | Classification | Means | Needs |
 |---|---|---|
 | `CHALLENGE_COMPATIBLE` | A valid unpaid L402 challenge and a priced invoice were observed. Paid fulfillment was not tested. | One unpaid request. |
-| `PAYMENT_COMPATIBLE` | The payment is confirmed: the wallet reports terminal success and the SHA-256 hash of the preimage equals the invoice payment hash. The authorized retry then returned a definitive answer that is not a 2xx meeting the stated expectations, such as a `500`, a `403`, or another `402`, so delivery of the resource was not proven. | One paid call with a confirmed payment and a definitive retry answer that is not a 2xx meeting the stated expectations. |
+| `PAYMENT_COMPATIBLE` | The payment is confirmed: the wallet reports terminal success and the SHA-256 hash of the preimage from the credential equals the invoice payment hash. The authorized retry then returned a definitive answer that is not a 2xx meeting the stated expectations, such as a `500`, a `403`, or another `402`, so delivery of the resource was not proven. | One paid call, the credential from it (its preimage must hash to the payment hash), and a definitive retry answer that is not a 2xx meeting the stated expectations. A wallet receipt alone never suffices. |
 | `FULFILLMENT_VERIFIED` | The whole flow worked: request, 402, payment, authorized retry, expected 2xx result. | One paid call, the credential from it (its preimage must hash to the payment hash), and a 2xx result that meets the stated expectations. A wallet receipt alone never suffices. |
 | `MARKETPLACE_READY` | `FULFILLMENT_VERIFIED`, plus public https, a priced mainnet invoice, a 402 for a bodyless request within 8 seconds, a stable URL, `openapi.json` or `llms.txt` at the host root, and a paid amount equal to the quote. | Everything above. |
 | `INCOMPATIBLE` | A deterministic protocol or transport defect prevents the flow. | Any check. |
@@ -67,12 +67,14 @@ is unknown. When a paid call didn't deliver the resource, classify it by
 what you know:
 
 - **Payment confirmed, definitive answer.** The wallet reports terminal
-  success, the SHA-256 hash of the preimage equals the invoice payment hash,
+  success, the SHA-256 hash of the preimage from the credential equals the
+  invoice payment hash,
   and the authorized retry returned a definitive answer that is not a 2xx
   meeting the stated expectations, such as a `500`, a `403`, or another
   `402`. Classify the check `PAYMENT_COMPATIBLE`.
 - **Payment or retry ambiguous.** The payment is pending or unknown (no
-  terminal wallet result, or no preimage obtained), or the retry outcome is
+  terminal wallet result, or no preimage obtained), the preimage went
+  unchecked because no credential was available, or the retry outcome is
   ambiguous (a timeout, a dropped connection, or no answer). Classify the
   check `INCONCLUSIVE`.
 

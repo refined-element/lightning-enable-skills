@@ -49,7 +49,7 @@ default `standard` profile advertises.
 |---|---|
 | 🧩 **[l402-client-integration](skills/l402-client-integration/)** | Add auto-paying L402 to your own code with `l402-requests` (Python), `L402Requests` (.NET), or `l402-requests` (npm). |
 | 🧱 **[l402-server-integration](skills/l402-server-integration/)** | Charge for your own API in-process with `L402Server.AspNetCore` or `l402-express`, no proxy. |
-| 🩺 **[l402-compatibility-report](skills/l402-compatibility-report/)** | Check how far an endpoint gets through L402 without paying, then prove paid delivery with one approved, capped payment. |
+| 🩺 **[l402-compatibility-report](skills/l402-compatibility-report/)** | Check how far an endpoint gets through L402 without paying, then, with your yes, test paid delivery with one capped payment through the Lightning Enable MCP. |
 
 Each skill folder has a human-facing `README.md` (what it is) and an agent-facing
 `SKILL.md` (the instructions Claude loads).

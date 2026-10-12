@@ -239,10 +239,13 @@ step 1:
 printf '%s' '<token>' | python scripts/l402_check.py --evidence evidence.json --mode-a mode-a.json --credential-stdin
 ```
 
-`printf` is a shell builtin, so the token reaches the script on stdin, never as
-a script argument. The token is still visible in the command text to anyone who
-sees the tool call, and it stays reusable until its expiry. That is why the
-paid check runs against the cheapest route. Never repeat the token in chat, and
+In a POSIX shell (bash, zsh), `printf` is a builtin, so the token reaches the
+script on stdin, never as a script argument. The token is still visible in the
+command text to anyone who sees the tool call, and it stays reusable until its
+expiry. That is why the paid check runs against the cheapest route. On Windows
+PowerShell, the equivalent is to pipe the token from a variable
+(`$token | python scripts/l402_check.py --evidence evidence.json --mode-a mode-a.json --credential-stdin`),
+and the same visibility caveat applies to the command that sets the variable. Never repeat the token in chat, and
 never write it to a file. `--evidence` and `--mode-a` take file paths, never
 `-`: stdin carries the token only, and the script refuses to read the token
 from a terminal.
@@ -366,7 +369,8 @@ read-only check.
   output. The script prints the payment hash and the amount only.
 - **Credentials never go in a command-line argument,** the evidence file, or
   any other file. `--header` refuses credential-bearing headers. The token
-  reaches the script only through the one `printf` recipe in step 7. It shows
+  reaches the script only on stdin, through the `printf` recipe in step 7 (or
+  its PowerShell equivalent). It shows
   in that command text and stays reusable until its expiry, so the paid check
   runs against the cheapest route, and you never repeat the token in chat.
 - **A receipt never upgrades the classification.** Without the credential, the
