@@ -399,9 +399,17 @@ def test_a_head_redirect_keeps_head_and_drops_the_body(status):
 class _FakeSock:
     def __init__(self):
         self.timeouts = []
+        self.shut_down = False
+        self.closed = False
 
     def settimeout(self, value):
         self.timeouts.append(value)
+
+    def shutdown(self, how):
+        self.shut_down = True
+
+    def close(self):
+        self.closed = True
 
 
 class _FakeResponse:
@@ -463,7 +471,7 @@ def _target(scheme="https"):
 def test_head_never_reads_a_body(monkeypatch):
     response = _FakeResponse(402, [("WWW-Authenticate", "L402 fixture-string")], b"fixture-string-body")
     conn = _FakeConnection(response)
-    monkeypatch.setattr(l402_http, "_open_connection", lambda target, timeout: conn)
+    monkeypatch.setattr(l402_http, "_open_connection", lambda target, deadline, watchdog: conn)
     result = l402_http.pinned_transport(_target(), "HEAD", {}, None, 5.0)
     assert result.status == 402
     assert result.body == b""
@@ -474,7 +482,7 @@ def test_head_never_reads_a_body(monkeypatch):
 def test_the_body_is_truncated_at_the_cap(monkeypatch):
     response = _FakeResponse(200, [], b"x" * (l402_http.MAX_BODY_BYTES + 5000))
     conn = _FakeConnection(response)
-    monkeypatch.setattr(l402_http, "_open_connection", lambda target, timeout: conn)
+    monkeypatch.setattr(l402_http, "_open_connection", lambda target, deadline, watchdog: conn)
     result = l402_http.pinned_transport(_target(), "GET", {}, None, 5.0)
     assert len(result.body) == l402_http.MAX_BODY_BYTES
     assert result.truncated is True
@@ -484,7 +492,7 @@ def test_the_body_is_truncated_at_the_cap(monkeypatch):
 
 def test_a_body_under_the_cap_is_not_truncated(monkeypatch):
     response = _FakeResponse(200, [], b"fixture-string-body")
-    monkeypatch.setattr(l402_http, "_open_connection", lambda target, timeout: _FakeConnection(response))
+    monkeypatch.setattr(l402_http, "_open_connection", lambda target, deadline, watchdog: _FakeConnection(response))
     result = l402_http.pinned_transport(_target(), "GET", {}, None, 5.0)
     assert result.body == b"fixture-string-body"
     assert result.truncated is False
@@ -499,7 +507,7 @@ def test_body_chunks_are_bounded_by_the_deadline(monkeypatch):
 
     response = _FakeResponse(200, [], b"x" * (l402_http.READ_CHUNK_BYTES * 10), on_read=slow_drip)
     conn = _FakeConnection(response)
-    monkeypatch.setattr(l402_http, "_open_connection", lambda target, timeout: conn)
+    monkeypatch.setattr(l402_http, "_open_connection", lambda target, deadline, watchdog: conn)
     with pytest.raises(TimeoutError, match="no response within 5 s"):
         l402_http.pinned_transport(_target(), "GET", {}, None, 5.0)
     timeouts = conn.sock.timeouts
@@ -509,27 +517,173 @@ def test_body_chunks_are_bounded_by_the_deadline(monkeypatch):
     assert len(response.read_sizes) == 3
 
 
-def test_the_tls_wrap_verifies_the_vetted_host_name(monkeypatch):
-    seen = {}
+class _FakeTimer:
+    """Stands in for the watchdog's timer; ``fire()`` runs the watchdog on cue."""
 
-    class _Raw:
-        def close(self):
-            seen["raw_closed"] = True
+    instances = []
+
+    def __init__(self, interval, function, args=None, kwargs=None):
+        self.interval = interval
+        self.function = function
+        self.daemon = False
+        self.started = self.cancelled = False
+        _FakeTimer.instances.append(self)
+
+    def start(self):
+        self.started = True
+
+    def cancel(self):
+        self.cancelled = True
+
+    def fire(self):
+        self.function()
+
+
+@pytest.fixture
+def fake_timer(monkeypatch):
+    _FakeTimer.instances = []
+    monkeypatch.setattr(l402_http, "_Timer", _FakeTimer)
+    return _FakeTimer
+
+
+class _FakeTls(_FakeSock):
+    def __init__(self, on_handshake=None):
+        super().__init__()
+        self._on_handshake = on_handshake
+
+    def do_handshake(self):
+        if self._on_handshake:
+            self._on_handshake()
+
+
+def _patch_tls(monkeypatch, seen, on_wrap=None, on_handshake=None):
+    raw = _FakeSock()
 
     class _Context:
-        def wrap_socket(self, raw, server_hostname=None):
+        def wrap_socket(self, sock, server_hostname=None, do_handshake_on_connect=True):
             seen["server_hostname"] = server_hostname
-            raise ssl.SSLCertVerificationError("fixture-string-handshake-refused")
+            seen["do_handshake_on_connect"] = do_handshake_on_connect
+            if on_wrap:
+                on_wrap()
+            return seen.setdefault("tls", _FakeTls(on_handshake))
 
     def fake_connect(address, timeout=None, *args, **kwargs):
         seen["address"] = address
-        return _Raw()
+        seen["connect_timeout"] = timeout
+        return raw
 
     monkeypatch.setattr(l402_http.socket, "create_connection", fake_connect)
     monkeypatch.setattr(l402_http.ssl, "create_default_context", lambda: _Context())
+    return raw
+
+
+def test_the_tls_wrap_verifies_the_vetted_host_name(monkeypatch, fake_timer):
+    seen = {}
+
+    def refuse():
+        raise ssl.SSLCertVerificationError("fixture-string-handshake-refused")
+
+    raw = _patch_tls(monkeypatch, seen, on_handshake=refuse)
     with pytest.raises(ssl.SSLError):
         l402_http.pinned_transport(_target(), "GET", {}, None, 5.0)
-    assert seen == {"address": ("93.184.215.14", 443), "server_hostname": "api.example.com", "raw_closed": True}
+    assert seen["address"] == ("93.184.215.14", 443)
+    assert seen["server_hostname"] == "api.example.com"
+    assert seen["do_handshake_on_connect"] is False
+    assert seen["connect_timeout"] == pytest.approx(5, abs=0.5)
+    assert raw.timeouts and seen["tls"].timeouts
+    assert seen["tls"].closed
+
+
+def test_the_watchdog_can_abort_the_tls_handshake(monkeypatch, fake_timer):
+    seen = {}
+    raw = _patch_tls(monkeypatch, seen, on_wrap=lambda: fake_timer.instances[0].fire())
+    with pytest.raises(TimeoutError, match="no response within 5 s"):
+        l402_http.pinned_transport(_target(), "GET", {}, None, 5.0)
+    assert raw.shut_down, "the raw socket is watched before the wrap"
+    assert seen["tls"].shut_down
+    assert seen["tls"].closed
+
+
+def _fresh_connections(monkeypatch, make_connection):
+    """Each request gets a new fake connection; returns the list of them."""
+    made = []
+
+    def open_connection(target, deadline, watchdog):
+        made.append(make_connection())
+        return made[-1]
+
+    monkeypatch.setattr(l402_http, "_open_connection", open_connection)
+    return made
+
+
+def test_a_watchdog_firing_mid_headers_is_a_timeout_not_a_response(monkeypatch, fake_timer):
+    # The shutdown makes the blocked header read return b"", so http.client
+    # parses a 402 with no headers: the dripped WWW-Authenticate never arrived.
+    def make_connection():
+        conn = _FakeConnection(_FakeResponse(402, [], b""))
+        real_getresponse = conn.getresponse
+
+        def getresponse():
+            fake_timer.instances[-1].fire()
+            return real_getresponse()
+
+        conn.getresponse = getresponse
+        return conn
+
+    made = _fresh_connections(monkeypatch, make_connection)
+    with pytest.raises(TimeoutError):
+        l402_http.pinned_transport(_target(), "GET", {}, None, 5.0)
+    assert made[0].sock.shut_down
+
+    result = l402_http.probe("https://api.example.com/a", resolver=resolver({}), timeout=5)
+    assert result.error_kind == "timeout"
+    assert result.response is None
+    assert result.final_target is None
+    assert made[1].sock.shut_down
+
+
+def test_a_watchdog_firing_mid_body_is_a_timeout_not_a_short_body(monkeypatch, fake_timer):
+    class _CutShort(_FakeResponse):
+        def read1(self, n):
+            # The shutdown makes the blocked read return b"", which looks like a clean end of body.
+            self.read_sizes.append(n)
+            fake_timer.instances[-1].fire()
+            return b""
+
+    def make_connection():
+        return _FakeConnection(_CutShort(402, [("WWW-Authenticate", "L402 fixture-string")], b"fixture-string-body"))
+
+    made = _fresh_connections(monkeypatch, make_connection)
+    with pytest.raises(TimeoutError):
+        l402_http.pinned_transport(_target(), "GET", {}, None, 5.0)
+    assert made[0].sock.shut_down
+    assert made[0].response.read_sizes
+
+    result = l402_http.probe("https://api.example.com/a", resolver=resolver({}), timeout=5)
+    assert result.error_kind == "timeout"
+    assert result.response is None
+    assert made[1].response.read_sizes
+
+
+def test_dns_resolution_is_bounded_by_the_deadline():
+    release = threading.Event()
+    calls = []
+
+    def hung_resolver(host, port):
+        calls.append(host)
+        release.wait(5)
+        return [support.PUBLIC_TEST_ADDRESS]
+
+    log = []
+    try:
+        result = l402_http.probe("https://api.example.com/a", resolver=hung_resolver, timeout=0.05,
+                                 transport=support.fake_transport([], log))
+    finally:
+        release.set()
+    assert result.error_kind == "timeout"
+    assert result.error_message == "no response within 0.05 s"
+    assert calls == ["api.example.com"]
+    assert log == []
 
 
 def test_the_user_agent_says_it_never_pays():

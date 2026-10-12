@@ -52,6 +52,8 @@ _FORBIDDEN_VALUE_CHARS = ("\r", "\n", "\0")
 
 # The clock every deadline reads. Tests replace it; nothing else should.
 _clock = time.monotonic
+# The watchdog's timer. Tests replace it to fire the watchdog on cue.
+_Timer = threading.Timer
 
 
 class RefusedHeaderError(ValueError):
@@ -207,48 +209,120 @@ class ProbeResult:
     connected_address: str | None = None
 
 
-class _PinnedHTTPConnection(http.client.HTTPConnection):
-    def __init__(self, host: str, port: int, address: str, timeout: float):
-        super().__init__(host, port, timeout=timeout)
-        self._address = address
-
-    def connect(self) -> None:
-        self.sock = socket.create_connection((self._address, self.port), self.timeout)
-
-
-class _PinnedHTTPSConnection(http.client.HTTPSConnection):
-    def __init__(self, host: str, port: int, address: str, timeout: float):
-        super().__init__(host, port, timeout=timeout)
-        self._address = address
-        self._pinned_context = ssl.create_default_context()
-
-    def connect(self) -> None:
-        raw = socket.create_connection((self._address, self.port), self.timeout)
-        try:
-            self.sock = self._pinned_context.wrap_socket(raw, server_hostname=self.host)
-        except BaseException:
-            raw.close()
-            raise
-
-
-def _open_connection(target: Target, timeout: float) -> http.client.HTTPConnection:
-    """An unconnected connection that will dial only the first vetted address."""
-    cls = _PinnedHTTPSConnection if target.scheme == "https" else _PinnedHTTPConnection
-    return cls(target.host, target.port, target.addresses[0], timeout)
-
-
-def _abort(holder: list) -> None:
-    """Watchdog: shut the socket down so a blocked read returns at the deadline."""
-    sock = holder[0] if holder else None
-    if sock is None:
-        return
+def _shutdown(sock) -> None:
+    """Shut ``sock`` down in both directions so any blocked call on it returns now."""
     try:
-        socket.socket.shutdown(sock, socket.SHUT_RDWR)
+        if isinstance(sock, socket.socket):
+            # The base method, not SSLSocket.shutdown, which would unwrap TLS under a reader.
+            socket.socket.shutdown(sock, socket.SHUT_RDWR)
+        else:
+            sock.shutdown(socket.SHUT_RDWR)
     except (OSError, ValueError):
         pass
 
 
-def _read_capped(resp, sock, deadline: _Deadline) -> tuple[bytes, bool]:
+class _Watchdog:
+    """Shuts the current socket down at the deadline, and remembers that it did.
+
+    A shutdown can make a blocked read return ``b""`` instead of raising, which
+    http.client would take for the end of the headers or the body. So the
+    transport calls ``check`` after every phase: once the watchdog has fired or
+    the deadline has passed, the request is a timeout, never a success.
+    """
+
+    def __init__(self, deadline: _Deadline):
+        self.deadline = deadline
+        self.fired = threading.Event()
+        self._lock = threading.Lock()
+        self._sock = None
+        self._timer = _Timer(deadline.remaining(), self.fire)
+        self._timer.daemon = True
+
+    def start(self) -> None:
+        self._timer.start()
+
+    def cancel(self) -> None:
+        self._timer.cancel()
+
+    def watch(self, sock) -> None:
+        """Make ``sock`` the socket to shut down; shut it down now if the watchdog already fired."""
+        with self._lock:
+            self._sock = sock
+            already = self.fired.is_set()
+        if already:
+            _shutdown(sock)
+
+    def fire(self) -> None:
+        with self._lock:
+            self.fired.set()
+            sock = self._sock
+        if sock is not None:
+            _shutdown(sock)
+
+    def check(self) -> None:
+        if self.fired.is_set() or self.deadline.expired():
+            raise TimeoutError(f"no response within {self.deadline.seconds:g} s")
+
+
+def _dial(address: str, port: int, deadline: _Deadline, watchdog: _Watchdog) -> socket.socket:
+    """Connect to the vetted ``address`` (never a host name) and hand the socket to the watchdog."""
+    raw = socket.create_connection((address, port), deadline.remaining())
+    watchdog.watch(raw)
+    try:
+        watchdog.check()
+        raw.settimeout(deadline.remaining())
+    except BaseException:
+        raw.close()
+        raise
+    return raw
+
+
+class _PinnedHTTPConnection(http.client.HTTPConnection):
+    def __init__(self, host: str, port: int, address: str, deadline: _Deadline, watchdog: _Watchdog):
+        super().__init__(host, port, timeout=deadline.remaining())
+        self._address = address
+        self._deadline = deadline
+        self._watchdog = watchdog
+
+    def connect(self) -> None:
+        self.sock = _dial(self._address, self.port, self._deadline, self._watchdog)
+
+
+class _PinnedHTTPSConnection(http.client.HTTPSConnection):
+    def __init__(self, host: str, port: int, address: str, deadline: _Deadline, watchdog: _Watchdog):
+        super().__init__(host, port, timeout=deadline.remaining())
+        self._address = address
+        self._deadline = deadline
+        self._watchdog = watchdog
+        self._pinned_context = ssl.create_default_context()
+
+    def connect(self) -> None:
+        # The raw socket is watched before the wrap, and the handshake runs as
+        # its own step on a watched socket, so the watchdog can abort it.
+        raw = _dial(self._address, self.port, self._deadline, self._watchdog)
+        try:
+            tls = self._pinned_context.wrap_socket(raw, server_hostname=self.host, do_handshake_on_connect=False)
+        except BaseException:
+            raw.close()
+            raise
+        try:
+            self._watchdog.watch(tls)
+            tls.settimeout(self._deadline.remaining())
+            tls.do_handshake()
+            self._watchdog.check()
+        except BaseException:
+            tls.close()
+            raise
+        self.sock = tls
+
+
+def _open_connection(target: Target, deadline: _Deadline, watchdog: _Watchdog) -> http.client.HTTPConnection:
+    """An unconnected connection that will dial only the first vetted address."""
+    cls = _PinnedHTTPSConnection if target.scheme == "https" else _PinnedHTTPConnection
+    return cls(target.host, target.port, target.addresses[0], deadline, watchdog)
+
+
+def _read_capped(resp, sock, deadline: _Deadline, watchdog: _Watchdog) -> tuple[bytes, bool]:
     """Read at most MAX_BODY_BYTES (+1 to detect truncation), each chunk bounded by the deadline."""
     chunks: list[bytes] = []
     total = 0
@@ -256,6 +330,7 @@ def _read_capped(resp, sock, deadline: _Deadline) -> tuple[bytes, bool]:
     while total <= MAX_BODY_BYTES and not resp.isclosed():
         sock.settimeout(deadline.remaining())
         chunk = resp.read1(min(READ_CHUNK_BYTES, MAX_BODY_BYTES + 1 - total))
+        watchdog.check()
         if not chunk:
             break
         chunks.append(chunk)
@@ -267,31 +342,33 @@ def _read_capped(resp, sock, deadline: _Deadline) -> tuple[bytes, bool]:
 def pinned_transport(target: Target, method: str, headers: dict, body: bytes | None, timeout: float) -> HttpResponse:
     """Send one request to the first vetted address of ``target``; the host name is never resolved here.
 
-    ``timeout`` is the whole budget for this request: connect, send, the header
-    read, and every body chunk each get only the time remaining, and a watchdog
-    shuts the socket down when it runs out. Running out raises TimeoutError.
+    ``timeout`` is the whole budget for this request: connect, the TLS
+    handshake, send, the header read, and every body chunk each get only the
+    time remaining, and a watchdog shuts the socket down when it runs out.
+    Running out raises TimeoutError, even when the shutdown made a read look
+    like a clean end of headers or body.
     """
     deadline = _Deadline(timeout)
-    conn = _open_connection(target, deadline.remaining())
-    holder: list = []
-    watchdog = threading.Timer(deadline.remaining(), _abort, args=(holder,))
-    watchdog.daemon = True
+    watchdog = _Watchdog(deadline)
+    conn = _open_connection(target, deadline, watchdog)
     resp = None
     started = _clock()
     watchdog.start()
     try:
-        conn.timeout = deadline.remaining()
         conn.connect()
         sock = conn.sock
-        holder.append(sock)
+        watchdog.watch(sock)
+        watchdog.check()
         sock.settimeout(deadline.remaining())
         conn.request(method, target.path_query, body=body, headers=headers)
         sock.settimeout(deadline.remaining())
         resp = conn.getresponse()
+        watchdog.check()  # the status line and headers
         if method == "HEAD":
             data, truncated = b"", False
         else:
-            data, truncated = _read_capped(resp, sock, deadline)
+            data, truncated = _read_capped(resp, sock, deadline, watchdog)
+        watchdog.check()
         return HttpResponse(
             status=resp.status,
             headers=list(resp.getheaders()),
@@ -300,7 +377,7 @@ def pinned_transport(target: Target, method: str, headers: dict, body: bytes | N
             truncated=truncated,
         )
     except (OSError, http.client.HTTPException):
-        if deadline.expired():
+        if watchdog.fired.is_set() or deadline.expired():
             raise TimeoutError(f"no response within {deadline.seconds:g} s") from None
         raise
     finally:
@@ -308,6 +385,31 @@ def pinned_transport(target: Target, method: str, headers: dict, body: bytes | N
         if resp is not None:
             resp.close()
         conn.close()
+
+
+def _resolve_within(url: str, allow_private: bool, resolver: Resolver | None, deadline: _Deadline) -> Target:
+    """``resolve_target`` bounded by the deadline.
+
+    The system resolver (getaddrinfo) takes no timeout, so the lookup runs on a
+    daemon thread and the probe stops waiting at the deadline. A lookup that
+    outlives the deadline finishes in the background and its answer is unused.
+    """
+    box: dict = {}
+
+    def work() -> None:
+        try:
+            box["target"] = resolve_target(url, allow_private=allow_private, resolver=resolver)
+        except BaseException as exc:  # handed back to the caller below
+            box["error"] = exc
+
+    worker = threading.Thread(target=work, name="l402-probe-resolve", daemon=True)
+    worker.start()
+    worker.join(deadline.remaining())
+    if worker.is_alive():
+        raise TimeoutError(f"no response within {deadline.seconds:g} s")
+    if "error" in box:
+        raise box["error"]
+    return box["target"]
 
 
 def probe(
@@ -341,13 +443,16 @@ def probe(
     timeout_message = f"no response within {timeout:g} s"
     for hop_index in range(max_redirects + 1):
         try:
-            target = resolve_target(current_url, allow_private=allow_private, resolver=resolver)
+            target = _resolve_within(current_url, allow_private, resolver, deadline)
         except UnsafeTargetError as exc:
             result.error_kind = "refused" if hop_index == 0 else "redirect_refused"
             result.error_reason, result.error_message = exc.reason, str(exc)
             return result
         except ResolutionError as exc:
             result.error_kind, result.error_message = "dns", str(exc)
+            return result
+        except TimeoutError:
+            result.error_kind, result.error_message = "timeout", timeout_message
             return result
         if first_origin is None:
             first_origin = target.origin
