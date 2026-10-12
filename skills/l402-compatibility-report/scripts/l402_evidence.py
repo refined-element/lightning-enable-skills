@@ -32,12 +32,17 @@ from l402_analyze import (
 )
 
 # Key names refused anywhere in the evidence file, compared case-insensitively
-# with underscores removed (so l402_token and L402TOKEN both match l402token).
+# with underscores and hyphens removed (l402_token, l402-token, and L402TOKEN
+# all match l402token).
 FORBIDDEN_KEYS = frozenset({"preimage", "l402token", "macaroon", "credential", "authorization", "token"})
 TERMINAL_PAYMENT_STATUSES = frozenset({"settled", "succeeded", "paid", "complete", "completed"})
-# Answers that say "not now" or "no answer in time": the retry outcome is ambiguous.
-AMBIGUOUS_RETRY_STATUSES = frozenset(TRANSIENT_STATUSES) | {504}
-HEX64 = re.compile(r"^[0-9a-f]{64}$")
+# Answers that say "not now" or "no answer in time" (including a gateway that
+# could not reach the server): the retry outcome is ambiguous.
+AMBIGUOUS_RETRY_STATUSES = frozenset(TRANSIENT_STATUSES) | {502, 503, 504}
+HEX64 = re.compile(r"[0-9a-f]{64}")  # always used with fullmatch
+# Credential forms shorter than this are not added to the scrub list, so a tiny
+# bad credential can't turn into a one-character scrub of the whole report.
+MIN_SECRET_LENGTH = 8
 MODE_A_KEYS = ("checked_at", "target", "transport", "challenge", "invoice", "binding",
                "marketplace", "findings", "evidence")
 NOT_CHECKED_BY_PAID_CHECK = "a synchronous, bounded response"
@@ -52,8 +57,16 @@ PAID_FIXES = {
 # Guidance for the person running the check. Not server fixes: listed under "rerun".
 PAID_RERUN_NOTES = {
     "preimage_unchecked": (
-        "If the MCP returned payment.l402Token, validate the same evidence again with the token piped "
-        "through --credential-stdin. That reuses the one payment; it does not pay again."
+        "If the MCP returned payment.l402Token, validate the same evidence again with the whole token, "
+        "<macaroon>:<preimage>, piped through --credential-stdin. That reuses the one payment; it does not pay again."
+    ),
+    "result_unreported": (
+        "Copy status_code, content_type, and body_length from the access_l402_resource result into evidence.json "
+        "and validate again. That reuses the one payment; it does not pay again."
+    ),
+    "paid_amount_mismatch": (
+        "Check that the receipts in evidence.json are the ones written for this call and that paid_sats matches "
+        "the tool result, then validate again. That reuses the one payment; it does not pay again."
     ),
     "no_hash_to_compare": (
         "Add the receipt's paymentHash from receipts(source=\"durable\") to evidence.json and validate "
@@ -70,6 +83,16 @@ PAID_RERUN_NOTES = {
 }
 
 
+# check_preimage results that leave the preimage unchecked, with the reason the report gives.
+UNCHECKED_REASONS = {
+    "not_available": "no credential was piped",
+    "no_macaroon": ("the piped credential is a bare preimage with no macaroon; pipe the whole L402 token, "
+                    "<macaroon>:<preimage>"),
+    "missing_preimage": "the piped credential has a macaroon but its preimage is missing",
+    "malformed": "the piped preimage is not 64 hex characters",
+}
+
+
 class EvidenceError(ValueError):
     """The evidence file is unusable. The message never echoes a value."""
 
@@ -77,7 +100,7 @@ class EvidenceError(ValueError):
 def _reject_embedded_credentials(node, path: str = "evidence") -> None:
     if isinstance(node, dict):
         for key, value in node.items():
-            if isinstance(key, str) and key.replace("_", "").lower() in FORBIDDEN_KEYS:
+            if isinstance(key, str) and key.replace("_", "").replace("-", "").lower() in FORBIDDEN_KEYS:
                 raise EvidenceError(
                     f"{path}.{key} looks like a credential. Keep credentials out of the evidence file; "
                     "pass the L402 token on stdin with --credential-stdin."
@@ -89,30 +112,47 @@ def _reject_embedded_credentials(node, path: str = "evidence") -> None:
 
 
 def split_credential(credential: str | None) -> tuple[str | None, str | None]:
-    """(macaroon, preimage) from 'L402 <macaroon>:<preimage>', '<macaroon>:<preimage>', or '<preimage>'."""
+    """(macaroon, preimage) from 'L402 <macaroon>:<preimage>' or '<macaroon>:<preimage>'.
+
+    Values keep their original case. Text with no colon has no macaroon and is
+    returned as (None, text): check_preimage refuses that as a bare preimage.
+    """
     if not credential:
         return None, None
     text = credential.strip()
     text = re.sub(r"^(?:authorization:\s*)?(?:l402|lsat)\s+", "", text, flags=re.IGNORECASE)
     if ":" in text:
         macaroon, _, preimage = text.rpartition(":")
-        return macaroon.strip() or None, preimage.strip().lower() or None
-    return None, text.lower() or None
+        return macaroon.strip() or None, preimage.strip() or None
+    return None, text or None
 
 
 def credential_secrets(credential: str | None) -> set[str]:
-    """Every form of the credential that must stay out of output: pass it to l402_report."""
+    """Every form of the credential that must stay out of output: pass it to l402_report.
+
+    Split before any case change, so the original-case macaroon and preimage
+    are included, plus both case forms of the preimage and the joined
+    macaroon:preimage. Preimage forms are added only for exactly 64 hex
+    characters, and no form shorter than MIN_SECRET_LENGTH is added.
+    """
     if not credential:
         return set()
     macaroon, preimage = split_credential(credential)
-    found = {credential, credential.strip(), macaroon, preimage}
-    if preimage:
-        found.add(preimage.upper())
-    return {s for s in found if s}
+    found = {credential, credential.strip(), macaroon}
+    if macaroon and preimage:
+        found.add(f"{macaroon}:{preimage}")
+    if preimage and HEX64.fullmatch(preimage.lower()):
+        found.update({preimage, preimage.lower(), preimage.upper()})
+    return {s for s in found if s and len(s) >= MIN_SECRET_LENGTH}
 
 
 def check_preimage(credential: str | None, payments: list[dict]) -> tuple[str, list[dict]]:
-    """Return (result, sources). result: matched, mismatch, malformed, not_available, no_hash_source.
+    """Return (result, sources).
+
+    result: matched, mismatch, malformed, not_available (nothing piped),
+    no_macaroon (a bare preimage, refused: the credential must be
+    <macaroon>:<preimage>), missing_preimage (a macaroon with nothing after
+    the colon), or no_hash_source.
 
     A source is a payment hash the preimage can be compared with: the one in a
     Lightning Labs macaroon identifier, and the receipt's when exactly one
@@ -122,10 +162,15 @@ def check_preimage(credential: str | None, payments: list[dict]) -> tuple[str, l
     credential, and records every comparison so a receipt that disagrees with
     a matching macaroon still shows.
     """
-    macaroon, preimage = split_credential(credential)
-    if preimage is None:
+    if not credential or not credential.strip():
         return "not_available", []
-    if not HEX64.match(preimage):
+    macaroon, preimage = split_credential(credential)
+    if macaroon is None:
+        return "no_macaroon", []
+    if preimage is None:
+        return "missing_preimage", []
+    preimage = preimage.lower()
+    if not HEX64.fullmatch(preimage):
         return "malformed", []
     digest = hashlib.sha256(bytes.fromhex(preimage)).hexdigest()
     sources = []
@@ -183,7 +228,7 @@ def _require(evidence: dict) -> tuple[dict, int, dict, list, dict]:
             raise EvidenceError(f"{path}.amount_sats must be a non-negative integer")
         if not isinstance(payment.get("status"), str):
             raise EvidenceError(f"{path}.status must be the receipt's status string")
-        _optional(payment, "payment_hash", path, lambda v: isinstance(v, str) and bool(HEX64.match(v.lower())),
+        _optional(payment, "payment_hash", path, lambda v: isinstance(v, str) and bool(HEX64.fullmatch(v.lower())),
                   "the receipt's paymentHash, 64 hex characters")
         for text_field in ("context", "timestamp"):
             _optional(payment, text_field, path, lambda v: isinstance(v, str), "a string")
@@ -201,7 +246,8 @@ def evaluate(evidence: dict, credential: str | None = None) -> dict:
     """Build the paid-mode report from the read-only report plus the recorded evidence.
 
     ``credential`` is what the agent piped on stdin (``L402 <macaroon>:<preimage>``
-    or a bare preimage), or None. The returned report holds payment hashes and
+    or ``<macaroon>:<preimage>``), or None. A bare preimage is refused: the run
+    is then INCONCLUSIVE with preimage_unchecked. The returned report holds payment hashes and
     amounts, never the credential, its macaroon, or its preimage.
     """
     mode_a, cap, tool, payments, expected = _require(evidence)
@@ -209,14 +255,14 @@ def evaluate(evidence: dict, credential: str | None = None) -> dict:
     report["mode"] = "paid"
     findings: list[Finding] = []
     paid_sats = int(tool.get("paid_sats") or 0)
-    total_paid = sum(p["amount_sats"] for p in payments) if payments else paid_sats
+    receipt_sats = sum(p["amount_sats"] for p in payments) if payments else None
+    # The larger of the tool's figure and the receipts' sum is what gets held to the cap.
+    total_paid = max(paid_sats, receipt_sats or 0)
+    # Never inferred: with no reported status the retry outcome is ambiguous.
     status = tool.get("status_code")
-    status_inferred = status is None and tool.get("success") is True
-    if status_inferred:
-        status = 200
     preimage_result, sources = check_preimage(credential, payments)
     method = str((mode_a.get("target") or {}).get("method") or "GET").upper()
-    expectations = _expectations(tool, expected, status, status_inferred, method)
+    expectations = _expectations(tool, expected, status, method)
     quoted = (mode_a.get("invoice") or {}).get("amount_sats")
     quote_hash = (mode_a.get("invoice") or {}).get("payment_hash")
     payment_hashes = [str(p["payment_hash"]).lower() for p in payments if p.get("payment_hash")]
@@ -224,12 +270,12 @@ def evaluate(evidence: dict, credential: str | None = None) -> dict:
 
     marketplace = copy.deepcopy(report.get("marketplace") or {"checks": [], "not_checked_by_script": []})
     marketplace["checks"] = list(marketplace.get("checks", [])) + _paid_marketplace_checks(
-        quoted, total_paid, status, status_inferred)
+        quoted, total_paid, status)
     marketplace["not_checked_by_script"] = [
         item for item in marketplace.get("not_checked_by_script", []) if item != NOT_CHECKED_BY_PAID_CHECK]
 
-    classification = _classify(mode_a, cap, tool, payments, paid_sats, total_paid, status, preimage_result,
-                               sources, expectations, marketplace["checks"], findings)
+    classification = _classify(mode_a, cap, tool, payments, paid_sats, receipt_sats, total_paid, status,
+                               preimage_result, sources, expectations, marketplace["checks"], findings)
     report["paid_fulfillment"] = {
         "tested": True,
         "tool": "access_l402_resource",
@@ -249,8 +295,9 @@ def evaluate(evidence: dict, credential: str | None = None) -> dict:
         ],
         "preimage_check": preimage_result,
         "hash_sources": sources,
+        "tool_paid_sats": tool.get("paid_sats"),
+        "receipt_sats": receipt_sats,
         "status": status,
-        "status_inferred": status_inferred,
         "content_type": tool.get("content_type"),
         "body_length": tool.get("body_length"),
         "expectations": expectations,
@@ -285,7 +332,7 @@ def evaluate(evidence: dict, credential: str | None = None) -> dict:
     report["marketplace"] = marketplace
     evidence_section = dict(report.get("evidence") or {})
     evidence_section.update({
-        "statuses": list(evidence_section.get("statuses", [])) + ([status] if status is not None and not status_inferred else []),
+        "statuses": list(evidence_section.get("statuses", [])) + ([status] if status is not None else []),
         "amount_sats": total_paid or evidence_section.get("amount_sats"),
         "payment_hash": paid_hash,
         "quote_payment_hash": quote_hash,
@@ -308,27 +355,33 @@ def _finding_dict(f: Finding) -> dict:
     return {"code": f.code, "severity": f.severity, "section": f.section, "message": f.message, "fix": _fix(f)}
 
 
-def _expectations(tool: dict, expected: dict, status, status_inferred: bool, method: str) -> list[dict]:
+def _expectations(tool: dict, expected: dict, status, method: str) -> list[dict]:
+    """Each check passes (True), fails (False), or can't be judged because the evidence omits the field (None)."""
     checks = []
     if method != "HEAD":
-        checks.append({"name": "non_empty_body", "pass": bool(tool.get("body_length")),
-                       "detail": f"body_length={tool.get('body_length')}"})
-    if "status" in expected:
-        if status_inferred:
-            checks.append({"name": "expected_status", "pass": False,
-                           "detail": f"expected {expected['status']}, status not reported"})
-        else:
-            checks.append({"name": "expected_status", "pass": status == expected["status"],
-                           "detail": f"expected {expected['status']}, got {status}"})
-    if "content_type" in expected:
-        got = (tool.get("content_type") or "").split(";", 1)[0].strip().lower()
+        length = tool.get("body_length")
+        checks.append({"name": "non_empty_body", "pass": None if length is None else length > 0,
+                       "detail": "body_length not reported" if length is None else f"body_length={length}"})
+    if expected.get("status") is not None:
+        checks.append({"name": "expected_status",
+                       "pass": None if status is None else status == expected["status"],
+                       "detail": f"expected {expected['status']}, "
+                                 + ("status not reported" if status is None else f"got {status}")})
+    if expected.get("content_type") is not None:
         want = str(expected["content_type"]).split(";", 1)[0].strip().lower()
-        checks.append({"name": "expected_content_type", "pass": got == want, "detail": f"expected {want}, got {got or 'none'}"})
+        reported = tool.get("content_type")
+        if reported is None:
+            checks.append({"name": "expected_content_type", "pass": None,
+                           "detail": f"expected {want}, content_type not reported"})
+        else:
+            got = reported.split(";", 1)[0].strip().lower()
+            checks.append({"name": "expected_content_type", "pass": got == want,
+                           "detail": f"expected {want}, got {got or 'none'}"})
     return checks
 
 
-def _paid_marketplace_checks(quoted, total_paid: int, status, status_inferred: bool) -> list[dict]:
-    if status_inferred or status is None:
+def _paid_marketplace_checks(quoted, total_paid: int, status) -> list[dict]:
+    if status is None:
         synchronous, detail = False, "The paid call's status was not reported."
     elif status == 202:
         synchronous, detail = False, "The paid call returned 202 Accepted: the resource was deferred, not delivered."
@@ -343,11 +396,16 @@ def _paid_marketplace_checks(quoted, total_paid: int, status, status_inferred: b
     ]
 
 
-def _payment_blockers(cap, tool, payments, paid_sats, total_paid, findings) -> bool:
+def _payment_blockers(cap, tool, payments, paid_sats, receipt_sats, total_paid, findings) -> bool:
     """Findings that cap the result at INCONCLUSIVE. True when any was added."""
     blocked = False
     if total_paid > cap:
         findings.append(Finding("paid_over_cap", "error", "security", f"{total_paid} sats paid against a {cap}-sat cap."))
+        blocked = True
+    if receipt_sats is not None and tool.get("paid_sats") is not None and tool["paid_sats"] != receipt_sats:
+        findings.append(Finding("paid_amount_mismatch", "warning", "paid",
+                                f"The tool reported {tool['paid_sats']} sats paid, but the receipts add up to "
+                                f"{receipt_sats} sats. Reconcile them from the wallet receipts; do not pay again."))
         blocked = True
     if len(payments) > 1:
         findings.append(Finding("multiple_payments", "error", "security",
@@ -368,8 +426,8 @@ def _payment_blockers(cap, tool, payments, paid_sats, total_paid, findings) -> b
     return blocked
 
 
-def _classify(mode_a, cap, tool, payments, paid_sats, total_paid, status, preimage_result, sources, expectations,
-              marketplace_checks, findings) -> str:
+def _classify(mode_a, cap, tool, payments, paid_sats, receipt_sats, total_paid, status, preimage_result, sources,
+              expectations, marketplace_checks, findings) -> str:
     if mode_a.get("classification") != CHALLENGE_COMPATIBLE:
         findings.append(Finding("paid_check_without_challenge", "error", "paid",
                                 f"The read-only check was {mode_a.get('classification')}; the paid check should not "
@@ -384,7 +442,7 @@ def _classify(mode_a, cap, tool, payments, paid_sats, total_paid, status, preima
                                     "No payment was recorded, so there is nothing to evaluate. If the call's outcome "
                                     "is unknown, check the wallet receipts; do not pay again."))
         return INCONCLUSIVE
-    if _payment_blockers(cap, tool, payments, paid_sats, total_paid, findings):
+    if _payment_blockers(cap, tool, payments, paid_sats, receipt_sats, total_paid, findings):
         return INCONCLUSIVE
     retry = f"status {status}" if status is not None else "no status"
     # The payment is confirmed only when SHA-256 of the piped preimage equals a comparable hash.
@@ -413,15 +471,19 @@ def _classify(mode_a, cap, tool, payments, paid_sats, total_paid, status, preima
                                 f"is not in Lightning Labs format and the receipt gave no paymentHash. The authorized "
                                 f"retry got {retry}. Do not pay again."))
         return INCONCLUSIVE
-    if preimage_result in ("not_available", "malformed"):
-        why = ("no credential was piped" if preimage_result == "not_available"
-               else "the piped preimage is not 64 hex characters")
+    if preimage_result in UNCHECKED_REASONS:
+        why = UNCHECKED_REASONS[preimage_result]
         findings.append(Finding("preimage_unchecked", "warning", "paid",
-                                f"The preimage went unchecked because {why}, so the payment is not confirmed. The "
-                                f"authorized retry got {retry}. A receipt is supporting evidence only. Do not pay again."))
+                                f"The preimage went unchecked: {why}. The payment is not confirmed. The authorized "
+                                f"retry got {retry}. A receipt is supporting evidence only. Do not pay again."))
         return INCONCLUSIVE
-    # Payment confirmed. Classify the authorized retry.
-    if status is None or status in AMBIGUOUS_RETRY_STATUSES:
+    # Payment confirmed. Classify the authorized retry; a status is never inferred.
+    if status is None:
+        findings.append(Finding("ambiguous_fulfillment", "warning", "paid",
+                                "Paid, but the evidence reports no status for the authorized retry, so its outcome "
+                                "is ambiguous. The payment hash is retained; do not pay again."))
+        return INCONCLUSIVE
+    if status in AMBIGUOUS_RETRY_STATUSES:
         findings.append(Finding("ambiguous_fulfillment", "warning", "paid",
                                 f"Paid, then the authorized retry gave no definitive answer ({retry}). "
                                 "The payment hash is retained; do not pay again."))
@@ -443,10 +505,17 @@ def _classify(mode_a, cap, tool, payments, paid_sats, total_paid, status, preima
         findings.append(Finding("paid_retry_failed", "error", "paid",
                                 f"The payment is confirmed, and the authorized retry got {status}. Do not pay again."))
         return PAYMENT_COMPATIBLE
-    if not all(check["pass"] for check in expectations):
-        findings.append(Finding("unexpected_result", "warning", "paid", "The paid result did not meet: "
-                                + ", ".join(c["name"] for c in expectations if not c["pass"]) + "."))
+    failed = [c["name"] for c in expectations if c["pass"] is False]
+    if failed:
+        findings.append(Finding("unexpected_result", "warning", "paid",
+                                "The paid result did not meet: " + ", ".join(failed) + "."))
         return PAYMENT_COMPATIBLE
+    unreported = [c["name"] for c in expectations if c["pass"] is None]
+    if unreported:
+        findings.append(Finding("result_unreported", "warning", "paid",
+                                f"The authorized retry returned {status}, but the evidence omits what these checks "
+                                "need: " + ", ".join(unreported) + ". The payment hash is retained; do not pay again."))
+        return INCONCLUSIVE
     gaps = [c["name"] for c in marketplace_checks if not c["pass"]]
     if gaps:
         findings.append(Finding("marketplace_gaps", "info", "marketplace", "Not yet marketplace-ready: " + ", ".join(gaps) + "."))

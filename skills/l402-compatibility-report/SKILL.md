@@ -214,8 +214,8 @@ holds one):
 
 | Evidence field | Python server result | .NET server result |
 |---|---|---|
-| `status_code` | not returned; leave it out (success implies 2xx) | `statusCode` |
-| `content_type` | not returned; leave it out | `contentType` |
+| `status_code` | not returned; leave it out (no status is ever inferred, so the result is `INCONCLUSIVE`) | `statusCode` |
+| `content_type` | not returned; leave it out (an expected content type then can't be judged) | `contentType` |
 | `body_length` | length of `response` | length of `content` |
 | `paid_sats` | `paid_sats` | `payment.amountSats` |
 | `already_paid` | `alreadyPaid` | `alreadyPaid` |
@@ -242,12 +242,14 @@ sees the tool call, and it stays reusable until its expiry. That is why the
 paid check runs against the cheapest route. Never repeat the token in chat, and
 never write it to a file.
 
-The script checks that SHA-256 of the preimage equals the payment hash inside
+Pipe the whole token, `<macaroon>:<preimage>`; the script refuses a bare
+preimage. It checks that SHA-256 of the preimage equals the payment hash inside
 the token's macaroon identifier (Lightning Labs format) when it can read one,
 and equals the receipt's `paymentHash` when you supplied it. It also requires
-an authorized retry that returned a 2xx meeting the stated expectations, and
-exactly one payment recorded at or under the cap. It prints the payment hash
-and the amount, never a credential.
+an authorized retry with a reported 2xx status that meets the stated
+expectations, and exactly one payment recorded at or under the cap, with the
+tool's `paid_sats` and the receipts agreeing. It prints the payment hash and
+the amount, never a credential.
 
 Without the credential, because you chose not to pipe it or because the Python
 server returned none, run the same command without `printf` and without
@@ -267,26 +269,36 @@ mint a fresh invoice for each 402, and it is never a finding.
 
 Paid-check finding codes and marketplace checks, as the report prints them:
 
-- `preimage_unchecked`: no credential was piped, or its preimage isn't 64 hex
-  characters. `INCONCLUSIVE`; a receipt never upgrades it.
-- `no_hash_to_compare`: a credential was piped, but the macaroon isn't in
-  Lightning Labs format and the evidence has no receipt `paymentHash`.
-  `INCONCLUSIVE`.
-- `preimage_mismatch`: SHA-256 of the preimage differs from the hash in the
-  macaroon identifier, so the server's own challenge disagrees with the paid
-  preimage. `INCOMPATIBLE`.
-- `receipt_mismatch`: SHA-256 of the preimage differs from the receipt's
-  `paymentHash`. With no macaroon hash it is `INCONCLUSIVE` (likely the wrong
-  receipt); when the macaroon hash matches, the macaroon governs and this is
-  information only.
-- `multiple_payments`: more than one payment recorded for one check. The result
-  is `INCONCLUSIVE` at best; reconcile from the receipts.
-- `paid_retry_failed`: the payment is confirmed and the authorized retry got a
-  5xx or another non-2xx, non-4xx answer. `PAYMENT_COMPATIBLE`.
-- `stable_price`: marketplace check; the paid amount equals the read-only
-  quote.
-- `synchronous_response`: marketplace check; the authorized retry returned a
-  2xx other than `202 Accepted`.
+- **Nothing to evaluate (`INCONCLUSIVE`):** `paid_check_without_challenge` (the
+  read-only check wasn't `CHALLENGE_COMPATIBLE`), `awaiting_confirmation` (the
+  call waits for the human's code; nothing was paid), `no_payment`.
+- **Payment not settled or not single (`INCONCLUSIVE`):** `payment_pending` (no
+  terminal wallet success), `paid_over_cap` (the larger of `paid_sats` and the
+  receipts' sum is over the cap), `paid_amount_mismatch` (`paid_sats` and the
+  receipts disagree), `multiple_payments` (more than one payment for one check;
+  reconcile from the receipts).
+- **Preimage not confirmed (`INCONCLUSIVE`):** `preimage_unchecked` (nothing
+  piped, a bare preimage, a missing preimage, or not 64 hex characters; a
+  receipt never upgrades it), `no_hash_to_compare` (the macaroon isn't in
+  Lightning Labs format and there's no receipt `paymentHash`),
+  `receipt_mismatch` (SHA-256 of the preimage differs from the receipt's
+  `paymentHash` and there's no macaroon hash, likely the wrong receipt; when
+  the macaroon hash matches, the macaroon governs and this is information
+  only).
+- **Server defect (`INCOMPATIBLE`):** `preimage_mismatch` (SHA-256 of the
+  preimage differs from the hash in the macaroon identifier, so the server's
+  own challenge disagrees with the paid preimage).
+- **Retry ambiguous (`INCONCLUSIVE`):** `ambiguous_fulfillment` (no reported
+  status, or 408, 425, 429, 502, 503, or 504), `result_unreported` (the
+  evidence omits `body_length`, or `content_type` when one is expected).
+- **Paid but not delivered (`PAYMENT_COMPATIBLE`):** `paid_retry_402`,
+  `paid_retry_rejected` (another 4xx), `paid_retry_failed` (a 5xx or another
+  non-2xx answer), `unexpected_result` (a 2xx that misses the stated
+  expectations).
+- **Marketplace:** `marketplace_gaps` lists the failed listing checks under
+  `FULFILLMENT_VERIFIED`, including `stable_price` (the paid amount equals the
+  read-only quote) and `synchronous_response` (a reported 2xx other than
+  `202 Accepted`).
 
 ### 8. Hand off
 

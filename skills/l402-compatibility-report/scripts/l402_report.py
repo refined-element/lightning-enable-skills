@@ -274,10 +274,14 @@ def _paid(report: dict) -> list[str]:
         f"Preimage check: {p['preimage_check']}"
         + ("" if not p["hash_sources"]
            else " (" + "; ".join(f"[{s['source']}] {_yes(s['match'])}" for s in p["hash_sources"]) + ")"),
-        f"Authorized retry status: {p['status']}" + (" (inferred from success)" if p["status_inferred"] else ""),
-        f"Content type: {p['content_type'] or 'unknown'}; body length: {p['body_length']}",
+        "Authorized retry status: " + (str(p["status"]) if p["status"] is not None else "not reported"),
+        f"Content type: {p['content_type'] or 'not reported'}; body length: "
+        + (str(p["body_length"]) if p["body_length"] is not None else "not reported"),
     ]
-    rows += [f"[{c['name']}] {'pass' if c['pass'] else 'fail'} ({c['detail']})" for c in p["expectations"]]
+    if p.get("tool_paid_sats") is not None and p.get("receipt_sats") is not None:
+        rows.append(f"Amounts: the tool reported {p['tool_paid_sats']} sats; the receipts add up to {p['receipt_sats']} sats")
+    verdict = {True: "pass", False: "fail", None: "not reported"}
+    rows += [f"[{c['name']}] {verdict.get(c['pass'], 'fail')} ({c['detail']})" for c in p["expectations"]]
     rows += [_finding(f) for f in report["findings"] if f["section"] == "paid"]
     return _bullets(rows)
 
