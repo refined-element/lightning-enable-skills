@@ -50,7 +50,7 @@ def test_fixture_macaroons_and_tokens_are_placeholders(name):
 @pytest.mark.parametrize("name", support.fixture_names())
 def test_fixture_bodies_carry_no_live_macaroon(name):
     for response in support.load_fixture(name)["responses"]:
-        for value in re.findall(r'"macaroon"\s*:\s*"([^"]*)"', response["body"]):
+        for value in re.findall(r'"(?:macaroon|token|preimage)"\s*:\s*"([^"]*)"', response["body"]):
             assert value.startswith("fixture-string-")
 
 
