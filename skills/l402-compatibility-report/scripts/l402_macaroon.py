@@ -9,28 +9,55 @@ from __future__ import annotations
 
 import base64
 import binascii
+import re
 from dataclasses import dataclass, field
 
 FIELD_EOS, FIELD_LOCATION, FIELD_IDENTIFIER, FIELD_VID, FIELD_SIGNATURE = 0, 1, 2, 4, 6
 LIGHTNING_LABS_ID_LENGTH = 66  # uint16 version + 32-byte payment hash + 32-byte token id
 
-# Caveat-name fragments mapped to the binding they evidence. Heuristic: the
-# report labels these as inferred from caveat names.
-BINDING_HINTS = (
-    ("method", ("method",)),
-    ("path", ("path", "resource", "route", "endpoint", "uri", "url")),
-    ("query", ("query",)),
-    ("body_digest", ("body", "digest", "content_hash", "request_hash")),
-    ("expiry", ("expires", "expiry", "valid_until", "valid_before", "exp", "time")),
-    ("scope", ("services", "capabilities", "scope", "tier")),
+KEY_SEPARATORS = re.compile(r"[_\-.:]+")
+
+# Binding category -> token phrases that evidence it. A caveat key is split
+# into whole tokens on _ - . : and matches a phrase only when its tokens END
+# with that phrase, so the phrase names what the caveat constrains:
+# `request_path` binds a path, while `query_count` or `max_body_size` (a count,
+# a size) and `security` or `lifetime` (no whole-token match) bind nothing.
+# Heuristic all the same: the report labels these as inferred from caveat names.
+BINDING_HINTS: tuple[tuple[str, tuple[tuple[str, ...], ...]], ...] = (
+    ("method", (("method",), ("methods",))),
+    ("path", (
+        ("path",), ("paths",), ("uri",), ("route",), ("routes",),
+        ("resource",), ("resources",), ("endpoint",), ("endpoints",),
+    )),
+    ("query", (("query",), ("query", "string"), ("query", "params"))),
+    ("body_digest", (
+        ("body",), ("body", "hash"), ("body", "digest"), ("digest",),
+        ("content", "hash"), ("request", "hash"),
+    )),
+    ("payment_hash", (("payment", "hash"),)),
+    ("expiry", (
+        ("expires",), ("expiry",), ("expiration",), ("exp",), ("expires", "at"),
+        ("expiry", "time"), ("expiration", "time"), ("valid", "until"),
+        ("valid", "before"), ("not", "after"),
+    )),
+    ("scope", (("services",), ("service",), ("capabilities",), ("scope",), ("scopes",), ("tier",))),
 )
+
+
+def _binding_category(key: str) -> str | None:
+    tokens = tuple(token for token in KEY_SEPARATORS.split(key.lower()) if token)
+    for category, phrases in BINDING_HINTS:
+        if any(tokens[-len(phrase):] == phrase for phrase in phrases if len(phrase) <= len(tokens)):
+            return category
+    return None
 
 
 @dataclass
 class MacaroonInfo:
     format: str  # "v2", "v1", or "opaque"
-    identifier: bytes = b""
-    caveats: list[str] = field(default_factory=list)
+    identifier: bytes = field(default=b"", repr=False)  # holds the token id; never echo it
+    caveats: list[str] = field(default_factory=list)  # first-party caveats only
+    third_party_caveats: int = 0  # caveats with a verification id; not inspectable
 
     @property
     def payment_hash(self) -> str | None:
@@ -49,18 +76,23 @@ class MacaroonInfo:
                 keys.append(key)
         return keys
 
-    def bindings(self) -> dict[str, list[str]]:
-        """Binding category -> caveat keys that suggest it."""
+    def bindings(self) -> dict[str, list[str]] | None:
+        """Binding category -> caveat keys that suggest it.
+
+        None when the macaroon is opaque (binding not externally verifiable);
+        {} when it decoded and no first-party caveat suggests a binding.
+        """
+        if self.format == "opaque":
+            return None
         found: dict[str, list[str]] = {}
         for key in self.caveat_keys:
-            for category, fragments in BINDING_HINTS:
-                if any(fragment in key for fragment in fragments):
-                    found.setdefault(category, []).append(key)
-                    break
+            category = _binding_category(key)
+            if category is not None:
+                found.setdefault(category, []).append(key)
         return found
 
     def unrecognized_caveat_keys(self) -> list[str]:
-        matched = {key for keys in self.bindings().values() for key in keys}
+        matched = {key for keys in (self.bindings() or {}).values() for key in keys}
         return [key for key in self.caveat_keys if key not in matched]
 
 
@@ -120,7 +152,9 @@ def _parse_v2(data: bytes) -> MacaroonInfo:
         fields, pos = _v2_fields(data, pos)
         kinds = {kind for kind, _ in fields}
         caveat_id = next((value for kind, value in fields if kind == FIELD_IDENTIFIER), b"")
-        if FIELD_VID not in kinds:  # first-party caveat
+        if FIELD_VID in kinds:
+            info.third_party_caveats += 1
+        else:
             info.caveats.append(caveat_id.decode("utf-8", errors="replace"))
     if pos >= len(data) or data[pos] != FIELD_SIGNATURE:
         raise ValueError("no signature")
@@ -131,14 +165,16 @@ def _parse_v1(data: bytes) -> MacaroonInfo:
     info = MacaroonInfo(format="v1")
     pos = 0
     pending_cid: str | None = None
-    seen_identifier = False
+    seen_identifier = seen_signature = False
     while pos < len(data):
         size = int(data[pos:pos + 4].decode("ascii"), 16)
         if size < 5 or pos + size > len(data):
             raise ValueError("bad packet")
         packet = data[pos + 4:pos + size]
         pos += size
-        key, _, value = packet.rstrip(b"\n").partition(b" ")
+        if packet.endswith(b"\n"):  # exactly one terminator; a binary value may end in 0x0a
+            packet = packet[:-1]
+        key, _, value = packet.partition(b" ")
         if key == b"identifier":
             info.identifier = value
             seen_identifier = True
@@ -147,13 +183,18 @@ def _parse_v1(data: bytes) -> MacaroonInfo:
                 info.caveats.append(pending_cid)
             pending_cid = value.decode("utf-8", errors="replace")
         elif key == b"vid":
-            pending_cid = None  # third-party caveat: not inspectable
+            if pending_cid is not None:  # third-party caveat: counted, not inspectable
+                info.third_party_caveats += 1
+            pending_cid = None
         elif key == b"signature":
+            seen_signature = True
             break
     if pending_cid is not None:
         info.caveats.append(pending_cid)
     if not seen_identifier:
         raise ValueError("no identifier")
+    if not seen_signature:
+        raise ValueError("no signature")
     return info
 
 
