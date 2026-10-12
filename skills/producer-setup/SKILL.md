@@ -334,11 +334,17 @@ Tell the human, in this order:
   `discover_api`.
 - **What to watch:** `l402_producer(action="list_challenges", challenge_status="paid")`
   for sales, `l402_producer(action="status")` for the account, and
-  `receipts(action="durable")` for the wallet's own payment log.
+  `receipts(source="durable")` for the wallet's own payment log.
 - **How to add an endpoint:** one `l402_producer(action="add_endpoint", …)` call
-  per route on the same proxy, each with its own `endpoint_id`.
-- **How to change a price:** re-run `add_endpoint` for that `endpoint_id` with
-  the new `price_sats`. Challenges already minted keep the price they carry.
+  per route on the same proxy, each with its own `endpoint_id` and a
+  `price_sats` equal to the proxy's `default_price_sats`.
+- **How to change a price:** in the dashboard's proxy pricing, not the MCP. See
+  the [proxy setup walkthrough](https://docs.lightningenable.com/products/agentic-commerce/proxy-setup-walkthrough).
+  Re-running `add_endpoint` with the same `endpoint_id` is refused as a
+  duplicate, and a route's `price_sats` only changes the advertised price: the
+  charged price comes from `default_price_sats` or a pricing rule. Keep each
+  route's `price_sats` equal to `default_price_sats` so the advertised and
+  charged prices match. Challenges already minted keep the price they carry.
 - **What the trial means:** the Fast Lane account runs a **30-day trial with no
   card**. Reminder emails arrive 7 days and 1 day before it ends. Add billing and
   the account stays on the paid plan; do nothing and it drops to the **Free
