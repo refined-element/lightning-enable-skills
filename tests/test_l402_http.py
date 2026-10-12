@@ -107,6 +107,77 @@ def test_credential_header_names_are_refused_before_any_request(name):
     assert "fixture-string-header-value" not in str(caught.value)
 
 
+@pytest.mark.parametrize("name", [
+    "Host", "host", " HOST ", "Content-Length", "Transfer-Encoding", "transfer-encoding", "Connection",
+])
+def test_host_and_framing_header_names_are_refused_before_any_request(name):
+    log = []
+    with pytest.raises(l402_http.ReservedHeaderError) as caught:
+        l402_http.probe("https://api.example.com/a", headers={name: "fixture-string-header-value"},
+                        resolver=resolver({}), transport=support.fake_transport([], log))
+    assert log == []
+    assert isinstance(caught.value, l402_http.RefusedHeaderError)
+    assert caught.value.header_name == name
+    assert caught.value.reason == "reserved_header"
+    assert "fixture-string-header-value" not in str(caught.value)
+
+
+@pytest.mark.parametrize("status", [307, 308])
+@pytest.mark.parametrize("location", [
+    "https://cdn.example.net/a",  # host differs
+    "https://api.example.com:8443/a",  # port differs
+])
+def test_a_body_is_never_resent_across_origins(status, location):
+    responses = [{"url": "https://api.example.com/a", "status": status,
+                  "headers": [["Location", location]], "body": ""}]
+    log = []
+    result = l402_http.probe("https://api.example.com/a", method="POST", body=b'{"fixture":"string"}',
+                             resolver=resolver({}), transport=support.fake_transport(responses, log))
+    assert result.error_kind == "redirect_refused"
+    assert result.error_reason == "redirect_cross_origin_with_body"
+    assert [(h.url, h.status) for h in result.hops] == [("https://api.example.com/a", status)]
+    assert [entry["url"] for entry in log] == ["https://api.example.com/a"]
+
+
+@pytest.mark.parametrize("status", [307, 308])
+def test_a_same_origin_307_or_308_resends_the_body(status):
+    responses = [
+        {"url": "https://api.example.com/a", "status": status, "headers": [["Location", "/b"]], "body": ""},
+        {"url": "https://api.example.com/b", "status": 402, "headers": [], "body": ""},
+    ]
+    log = []
+    result = l402_http.probe("https://api.example.com/a", method="POST", body=b'{"fixture":"string"}',
+                             resolver=resolver({}), transport=support.fake_transport(responses, log))
+    assert result.error_kind is None
+    assert result.response.status == 402
+    assert [(entry["method"], entry["body"]) for entry in log] == [
+        ("POST", b'{"fixture":"string"}'), ("POST", b'{"fixture":"string"}'),
+    ]
+
+
+def test_a_cross_origin_307_without_a_body_is_followed():
+    responses = [
+        {"url": "https://api.example.com/a", "status": 307, "headers": [["Location", "https://cdn.example.net/a"]], "body": ""},
+        {"url": "https://cdn.example.net/a", "status": 402, "headers": [], "body": ""},
+    ]
+    result = l402_http.probe("https://api.example.com/a", resolver=resolver({}),
+                             transport=support.fake_transport(responses))
+    assert result.error_kind is None
+    assert result.response.status == 402
+
+
+def test_a_303_drops_the_body_and_may_change_origin():
+    responses = [
+        {"url": "https://api.example.com/a", "status": 303, "headers": [["Location", "https://cdn.example.net/a"]], "body": ""},
+        {"url": "https://cdn.example.net/a", "status": 402, "headers": [], "body": ""},
+    ]
+    log = []
+    result = l402_http.probe("https://api.example.com/a", method="POST", body=b'{"fixture":"string"}',
+                             resolver=resolver({}), transport=support.fake_transport(responses, log))
+    assert result.error_kind is None
+    assert [(entry["method"], entry["body"]) for entry in log[1:]] == [("GET", None)]
+
+
 @pytest.mark.parametrize("name", ["Accept", "Content-Type", "X-Request-Id", "Accept-Language", "X-Fixture-Header"])
 def test_non_secret_header_names_are_sent(name):
     log = []

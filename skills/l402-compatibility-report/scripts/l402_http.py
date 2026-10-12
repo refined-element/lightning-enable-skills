@@ -4,9 +4,11 @@
 only to an address that check returned (the first one, recorded on the hop),
 so a DNS answer cannot change between the check and the connection. Redirects
 are followed up to ``max_redirects``; a redirect into a blocked range stops the
-probe and is reported, an https-to-http downgrade is refused, and caller
-headers are dropped when a redirect leaves the origin. Credential-bearing
-header names are refused before any request is sent. Nothing here sends an
+probe and is reported, an https-to-http downgrade is refused, caller headers
+are dropped when a redirect leaves the origin, and a 307/308 that would resend
+a body to a different origin is not followed. Credential-bearing header names,
+and the Host and framing headers the probe sets itself, are refused before any
+request is sent. Nothing here sends an
 Authorization header, and nothing here pays.
 """
 from __future__ import annotations
@@ -23,8 +25,8 @@ from l402_netsafety import Resolver, ResolutionError, Target, UnsafeTargetError,
 
 __all__ = [
     "CredentialHeaderError", "DEFAULT_TIMEOUT", "Hop", "HttpResponse", "MAX_BODY_BYTES", "MAX_REDIRECTS",
-    "ProbeResult", "ResolutionError", "Target", "Transport", "USER_AGENT", "check_header_names",
-    "is_credential_header", "pinned_transport", "probe",
+    "ProbeResult", "RefusedHeaderError", "ReservedHeaderError", "ResolutionError", "Target", "Transport",
+    "USER_AGENT", "check_header_names", "is_credential_header", "is_reserved_header", "pinned_transport", "probe",
 ]
 
 MAX_BODY_BYTES = 256 * 1024
@@ -35,32 +37,73 @@ REDIRECT_STATUSES = (301, 302, 303, 307, 308)
 
 CREDENTIAL_HEADER_NAMES = frozenset({"authorization", "cookie", "proxy-authorization"})
 CREDENTIAL_HEADER_FRAGMENTS = ("key", "token", "secret", "password", "session")
+RESERVED_HEADER_NAMES = frozenset({"host", "content-length", "transfer-encoding", "connection"})
 
 
-class CredentialHeaderError(ValueError):
-    """A caller header name looks like it carries a credential. The value is never echoed."""
+class RefusedHeaderError(ValueError):
+    """A caller header name the probe will not send. The value is never echoed."""
+
+    def __init__(self, header_name: str, reason: str, message: str):
+        super().__init__(message)
+        self.header_name = header_name
+        self.reason = reason
+
+
+class CredentialHeaderError(RefusedHeaderError):
+    """A caller header name looks like it carries a credential."""
 
     def __init__(self, header_name: str):
         super().__init__(
+            header_name, "credential_header",
             f"refusing to send the header {header_name.strip()!r}: credential-bearing headers "
             "(Authorization, Cookie, Proxy-Authorization, or a name containing key, token, secret, "
-            "password, or session) are never passed to the read-only check"
+            "password, or session) are never passed to the read-only check",
         )
-        self.header_name = header_name
-        self.reason = "credential_header"
+
+
+class ReservedHeaderError(RefusedHeaderError):
+    """A caller header name the probe sets itself (Host and message framing)."""
+
+    def __init__(self, header_name: str):
+        super().__init__(
+            header_name, "reserved_header",
+            f"refusing to send the header {header_name.strip()!r}: Host, Content-Length, "
+            "Transfer-Encoding, and Connection are set by the probe itself",
+        )
 
 
 def is_credential_header(name: str) -> bool:
-    """True when ``name`` is a header this check refuses to send."""
+    """True when ``name`` is a credential-bearing header this check refuses to send."""
     lowered = name.strip().lower()
     return lowered in CREDENTIAL_HEADER_NAMES or any(f in lowered for f in CREDENTIAL_HEADER_FRAGMENTS)
 
 
+def is_reserved_header(name: str) -> bool:
+    """True when ``name`` is a header the probe sets itself and refuses from the caller."""
+    return name.strip().lower() in RESERVED_HEADER_NAMES
+
+
 def check_header_names(headers: dict | None) -> None:
-    """Raise CredentialHeaderError for the first credential-bearing name in ``headers``."""
+    """Raise RefusedHeaderError for the first credential-bearing or reserved name in ``headers``."""
     for name in headers or {}:
         if is_credential_header(str(name)):
             raise CredentialHeaderError(str(name))
+        if is_reserved_header(str(name)):
+            raise ReservedHeaderError(str(name))
+
+
+def _origin_key(url: str) -> tuple[str, str, int] | None:
+    """(scheme, host, port) for ``url``, the same normalization as ``Target``; None if unparseable."""
+    parts = urlsplit(url)
+    scheme = parts.scheme.lower()
+    host = (parts.hostname or "").lower().rstrip(".")
+    try:
+        port = parts.port
+    except ValueError:
+        return None
+    if port is None:
+        port = 443 if scheme == "https" else 80
+    return scheme, host, port
 
 
 @dataclass
@@ -161,8 +204,11 @@ def probe(
 ) -> ProbeResult:
     """Request ``url`` without paying, following at most ``max_redirects`` redirects.
 
-    Raises CredentialHeaderError, before any request, when a caller header name
-    is credential-bearing. Every other failure is reported on the result.
+    Raises RefusedHeaderError (CredentialHeaderError or ReservedHeaderError),
+    before any request, when a caller header name is credential-bearing or is
+    one the probe sets itself. A 307/308 redirect that would resend a body to
+    a different origin is not followed. Every other failure is reported on the
+    result.
     """
     check_header_names(headers)
     send = transport or pinned_transport
@@ -204,6 +250,13 @@ def probe(
         if target.scheme == "https" and urlsplit(next_url).scheme.lower() == "http":
             result.error_kind, result.error_reason = "redirect_refused", "downgrade"
             result.error_message = "the redirect downgrades https to http"
+            return result
+        if (response.status in (307, 308) and current_body
+                and _origin_key(next_url) != (target.scheme, target.host, target.port)):
+            result.error_kind, result.error_reason = "redirect_refused", "redirect_cross_origin_with_body"
+            result.error_message = (
+                f"the {response.status} redirect would resend the request body to a different origin; not followed"
+            )
             return result
         if response.status not in (307, 308) and current_method != "HEAD":
             current_method, current_body = "GET", None
