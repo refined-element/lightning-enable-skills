@@ -112,6 +112,12 @@ def _yes(value) -> str:
     return {True: "yes", False: "no", None: "unknown"}.get(value, str(value))
 
 
+def _finding(f: dict) -> str:
+    # "[code] message", never "code: message": a code such as missing_token
+    # followed by a colon would read to the scrubber as a token value.
+    return f"[{f['code']}] {f['message']}"
+
+
 def _bullets(rows: list[str]) -> list[str]:
     return [f"- {row}" for row in rows] if rows else ["- None."]
 
@@ -143,10 +149,10 @@ def to_markdown(report: dict, secrets: set[str] | frozenset[str] = frozenset()) 
         "Paid fulfillment": _paid(report),
         "Replay/idempotency": [report["replay"]["note"]],
         "Marketplace readiness": _marketplace(report),
-        "Security findings": _bullets([f"{f['code']}: {f['message']}" for f in report.get("security", [])]),
+        "Security findings": _bullets([_finding(f) for f in report.get("security", [])]),
         "Rerun notes": _bullets(report.get("rerun", [])),
         "Required fixes": _bullets(report.get("required_fixes", [])),
-        "Evidence retained": _bullets([f"{k}: {_value(v)}" for k, v in (report.get("evidence") or {}).items()]),
+        "Evidence retained": _bullets([f"[{k}] {_value(v)}" for k, v in (report.get("evidence") or {}).items()]),
     }
     for section in SECTIONS:
         lines += ["", f"## {section}", ""] + body[section]
@@ -165,7 +171,7 @@ def _transport(report: dict) -> list[str]:
         rows.append(f"Final URL: {t['final_url']}")
     if t["error"]:
         rows.append(f"Error: {t['error']}")
-    rows += [f"{f['code']}: {f['message']}" for f in report["findings"] if f["section"] == "transport"]
+    rows += [_finding(f) for f in report["findings"] if f["section"] == "transport"]
     return _bullets(rows)
 
 
@@ -188,7 +194,7 @@ def _challenge(report: dict) -> list[str]:
                 detail += f". {entry['note']}"
             rows.append(detail)
     rows += [f"Parse error: {e}" for e in c["parse_errors"]]
-    rows += [f"{f['code']}: {f['message']}" for f in report["findings"]
+    rows += [_finding(f) for f in report["findings"]
              if f["section"] == "challenge" and f["code"] != "malformed_challenge"]
     return _bullets(rows)
 
@@ -210,7 +216,7 @@ def _invoice(report: dict) -> list[str]:
         + ("none" if i["declared_price_sats"] is None
            else f"{i['declared_price_sats']} sats (matches: {_yes(i['declared_price_matches'])})"),
     ]
-    rows += [f"{f['code']}: {f['message']}" for f in report["findings"] if f["section"] == "invoice"]
+    rows += [_finding(f) for f in report["findings"] if f["section"] == "invoice"]
     return _bullets(rows)
 
 
@@ -239,7 +245,7 @@ def _binding(report: dict) -> list[str]:
     ]
     if b["unrecognized_caveats"]:
         rows.append("Unrecognized caveats: " + ", ".join(b["unrecognized_caveats"]))
-    rows += [f"{f['code']}: {f['message']}" for f in report["findings"] if f["section"] == "binding"]
+    rows += [_finding(f) for f in report["findings"] if f["section"] == "binding"]
     return _bullets(rows)
 
 
@@ -258,19 +264,19 @@ def _paid(report: dict) -> list[str]:
         "Payment hashes: " + (", ".join(p["payment_hashes"]) or "none recorded"),
         f"Preimage check: {p['preimage_check']}"
         + ("" if not p["hash_sources"]
-           else " (" + "; ".join(f"{s['source']}: {_yes(s['match'])}" for s in p["hash_sources"]) + ")"),
+           else " (" + "; ".join(f"[{s['source']}] {_yes(s['match'])}" for s in p["hash_sources"]) + ")"),
         f"Authorized retry status: {p['status']}" + (" (inferred from success)" if p["status_inferred"] else ""),
         f"Content type: {p['content_type'] or 'unknown'}; body length: {p['body_length']}",
     ]
-    rows += [f"{c['name']}: {'pass' if c['pass'] else 'fail'} ({c['detail']})" for c in p["expectations"]]
-    rows += [f"{f['code']}: {f['message']}" for f in report["findings"] if f["section"] == "paid"]
+    rows += [f"[{c['name']}] {'pass' if c['pass'] else 'fail'} ({c['detail']})" for c in p["expectations"]]
+    rows += [_finding(f) for f in report["findings"] if f["section"] == "paid"]
     return _bullets(rows)
 
 
 def _marketplace(report: dict) -> list[str]:
     m = report["marketplace"]
-    rows = [f"{c['name']}: {'pass' if c['pass'] else 'fail'}. {c['detail']}" for c in m["checks"]]
+    rows = [f"[{c['name']}] {'pass' if c['pass'] else 'fail'}. {c['detail']}" for c in m["checks"]]
     rows += [f"Not checked by the script: {item}" for item in m["not_checked_by_script"]]
-    rows += [f"{f['code']}: {f['message']}" for f in report["findings"] if f["section"] == "marketplace"]
+    rows += [_finding(f) for f in report["findings"] if f["section"] == "marketplace"]
     rows.append(m["note"])
     return _bullets(rows)

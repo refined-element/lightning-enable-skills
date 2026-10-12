@@ -265,6 +265,43 @@ def test_placeholder_values_in_fix_text_survive():
     assert 'WWW-Authenticate: L402 macaroon="...", invoice="..."' in l402_report.to_markdown(report, secrets)
 
 
+# Fix round 2: with nothing secret in the report, nothing may be redacted. A
+# finding rendered "missing_token: message" read to the scrubber as a token value.
+def _absent_token_fixture():
+    fixture = support.load_fixture("le-proxy-weather")
+    fixture["responses"][0]["headers"] = [
+        [k, v.replace('macaroon="fixture-string-macaroon", ', "")] for k, v in fixture["responses"][0]["headers"]
+    ]
+    return fixture
+
+
+def _method_not_allowed_fixture():
+    url = "https://api.example.com/paid"
+    return {
+        "observed_at": "2026-10-12T20:37:45Z",
+        "dns": {},
+        "request": {"method": "GET", "url": url},
+        "responses": [{"url": url, "status": 405, "headers": [["Allow", "POST"]], "body": ""}],
+    }
+
+
+@pytest.mark.parametrize("fixture", [
+    *[pytest.param(support.load_fixture(name), id=name) for name in support.fixture_names()],
+    pytest.param(_absent_token_fixture(), id="absent-token"),
+    pytest.param(_method_not_allowed_fixture(), id="method-not-allowed"),
+])
+def test_a_report_with_no_secrets_renders_without_redaction(fixture):
+    report, _ = support.run_fixture(fixture, max_sats=2)
+    for text in both(report, frozenset()):
+        assert l402_report.REDACTED not in text
+
+
+def test_finding_rows_render_code_in_brackets():
+    report, secrets = support.run_fixture(_absent_token_fixture())
+    section = _section(l402_report.to_markdown(report, secrets), "Challenge")
+    assert "- [missing_token] The L402 challenge has no macaroon or token parameter." in section
+
+
 def test_no_rendered_row_reads_as_a_token_value():
     report, secrets = support.run_fixture(support.load_fixture("le-proxy-weather"))
     section = _section(l402_report.to_markdown(report, secrets), "Authorization and binding")
