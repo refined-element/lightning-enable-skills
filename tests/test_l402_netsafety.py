@@ -58,6 +58,51 @@ def test_allow_private_never_admits_metadata_or_public_http():
     assert caught.value.reason == "not_https"
 
 
+@pytest.mark.parametrize("allow_private", [False, True])
+def test_nat64_form_of_metadata_is_refused_even_with_allow_private(allow_private):
+    with pytest.raises(UnsafeTargetError) as caught:
+        resolve_target("https://[64:ff9b::a9fe:a9fe]/", allow_private=allow_private)
+    assert caught.value.reason == "cloud_metadata"
+
+
+def test_nat64_form_of_private_address_needs_allow_private():
+    with pytest.raises(UnsafeTargetError) as caught:
+        resolve_target("https://[64:ff9b::a00:1]/")
+    assert caught.value.reason == "private_address"
+    target = resolve_target("https://[64:ff9b::a00:1]/", allow_private=True)
+    assert not target.is_public
+
+
+@pytest.mark.parametrize("allow_private", [False, True])
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://[::a9fe:a9fe]/",
+        "https://[2002:a9fe:a9fe::1]/",
+        "https://[2001:0:4136:e378:8000:63bf:5601:5601]/",
+    ],
+)
+def test_embedded_ipv4_forms_of_metadata_are_refused(url, allow_private):
+    with pytest.raises(UnsafeTargetError) as caught:
+        resolve_target(url, allow_private=allow_private)
+    assert caught.value.reason == "cloud_metadata"
+
+
+def test_ipv4_compatible_form_of_private_address_needs_allow_private():
+    with pytest.raises(UnsafeTargetError) as caught:
+        resolve_target("https://[::a00:1]/")
+    assert caught.value.reason == "private_address"
+    target = resolve_target("https://[::a00:1]/", allow_private=True)
+    assert not target.is_public
+
+
+def test_resolver_answer_in_nat64_form_is_checked():
+    mapping = {"sneaky.example.com": ["64:ff9b::a9fe:a9fe"]}
+    with pytest.raises(UnsafeTargetError) as caught:
+        resolve_target("https://sneaky.example.com/", resolver=resolver(mapping))
+    assert caught.value.reason == "cloud_metadata"
+
+
 def test_unresolvable_host_is_inconclusive_not_refused():
     def failing(host, port):
         raise ResolutionError("could not resolve host")

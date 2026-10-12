@@ -5,8 +5,10 @@ and any host that resolves to an address that is not globally routable
 (loopback, RFC 1918, link-local, carrier-grade NAT, unique-local, multicast,
 reserved). ``allow_private`` is the explicit local-testing switch: it admits
 non-global addresses, and plain HTTP to them. Cloud metadata endpoints stay
-refused even then. Every address the host resolves to is checked, and the
-caller connects only to an address checked here.
+refused even then. Every address the host resolves to is checked, IPv6 forms
+that embed an IPv4 address (mapped, NAT64, IPv4-compatible, 6to4, Teredo) are
+checked as that IPv4 address too, and the caller connects only to an address
+checked here.
 """
 from __future__ import annotations
 
@@ -53,7 +55,7 @@ class Target:
 
     @property
     def is_public(self) -> bool:
-        return bool(self.addresses) and all(ipaddress.ip_address(a).is_global for a in self.addresses)
+        return bool(self.addresses) and all(_is_global(_normalize(a)) for a in self.addresses)
 
 
 def system_resolver(host: str, port: int) -> list[str]:
@@ -74,6 +76,37 @@ def _normalize(address: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address:
     if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
         return ip.ipv4_mapped
     return ip
+
+
+NAT64_PREFIX = ipaddress.ip_network("64:ff9b::/96")
+
+
+def _embedded_ipv4(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> list[ipaddress.IPv4Address]:
+    """IPv4 addresses an IPv6 address carries inside it.
+
+    A NAT64 (64:ff9b::/96), IPv4-compatible (::/96), 6to4 (2002::/16), or Teredo
+    (2001::/32) address can reach the IPv4 address it embeds, so the range
+    rules apply to that IPv4 address too. ``::`` and ``::1`` are not embeddings.
+    """
+    if not isinstance(ip, ipaddress.IPv6Address):
+        return []
+    embedded: list[ipaddress.IPv4Address] = []
+    value = int(ip)
+    if ip in NAT64_PREFIX or (value >> 32 == 0 and value > 1):
+        embedded.append(ipaddress.IPv4Address(value & 0xFFFFFFFF))
+    if ip.sixtofour is not None:
+        embedded.append(ip.sixtofour)
+    if ip.teredo is not None:
+        embedded.append(ip.teredo[1])
+    return embedded
+
+
+def _views(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+    return [ip, *_embedded_ipv4(ip)]
+
+
+def _is_global(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    return all(view.is_global and not view.is_multicast for view in _views(ip))
 
 
 def resolve_target(url: str, *, allow_private: bool = False, resolver: Resolver | None = None) -> Target:
@@ -106,9 +139,9 @@ def resolve_target(url: str, *, allow_private: bool = False, resolver: Resolver 
         raise ResolutionError("the host resolved to no addresses")
 
     ips = [_normalize(a) for a in addresses]
-    if any(ip in METADATA_ADDRESSES for ip in ips):
+    if any(view in METADATA_ADDRESSES for ip in ips for view in _views(ip)):
         raise UnsafeTargetError("cloud_metadata", "the host resolves to a cloud metadata address; never probed")
-    non_global = [ip for ip in ips if not ip.is_global or ip.is_multicast]
+    non_global = [ip for ip in ips if not _is_global(ip)]
     if non_global and not allow_private:
         raise UnsafeTargetError(
             "private_address",
