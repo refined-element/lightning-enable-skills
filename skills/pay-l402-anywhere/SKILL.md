@@ -11,9 +11,9 @@ description: >-
   with a human in the confirmation loop and a hard budget ceiling. This skill is
   the runtime procedure once a wallet is connected. Do NOT use it to install the
   MCP or connect a wallet from nothing (use agent-wallet-setup), to find a
-  paid API when the user has no URL yet (use discover-paid-apis), to buy a
-  physical product from a Lightning Enable Shopify store (use shop-l402-store),
-  or to sell access to something (use sell-this or producer-setup).
+  paid API when the user has no URL yet (use discover-paid-apis), or to sell
+  access to something (use sell-this or producer-setup). Buying physical goods
+  from a store is out of scope.
 ---
 
 # Pay L402 anywhere

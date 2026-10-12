@@ -82,4 +82,3 @@ Enable account. For selling, use [`producer-setup`](../producer-setup/).
 
 - [`pay-l402-anywhere`](../pay-l402-anywhere/): pay an L402 URL you already have.
 - [`discover-paid-apis`](../discover-paid-apis/): find a paid API and try it once.
-- [`shop-l402-store`](../shop-l402-store/): buy from an L402 store.

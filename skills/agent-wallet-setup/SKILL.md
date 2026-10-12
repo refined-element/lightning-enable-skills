@@ -414,7 +414,6 @@ Tell the human, in this order:
 - **What to do next:**
   - [`pay-l402-anywhere`](../pay-l402-anywhere/) to pay an L402 URL.
   - [`discover-paid-apis`](../discover-paid-apis/) to find a paid API and try it.
-  - [`shop-l402-store`](../shop-l402-store/) to buy from an L402 store.
   - [`producer-setup`](../producer-setup/) to sell an API over Lightning. If the
     human also wants a Lightning Enable account, that is producer-setup's step 2
     (`create_lightning_enable_account`). Don't run it here.
