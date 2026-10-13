@@ -405,7 +405,8 @@ Offer it only after the self-test, and only as an offer; no answer means no.
   link-local, or non-HTTPS URL, a `200` to an unpaid request, or a `400`,
   `415`, or `422` to a request with no body is not listing-ready.
 - **Pay once.** Pay for the gate once, never twice. If the self-test (step 5)
-  made no payment for this endpoint by any means, run that skill's paid check
+  made no payment for this endpoint by any means (a testnet invoice doesn't
+  count), run that skill's paid check
   once, with the human's yes; otherwise the cases below apply and the agent
   never pays again. The paid
   check needs a wallet that can pay this endpoint: if step 5 skipped the
@@ -416,8 +417,10 @@ Offer it only after the self-test, and only as an offer; no answer means no.
   `l402-compatibility-report`, with `--mode-a mode-a.json` and that call's
   token piped on stdin) instead of paying again. If that token is gone, the
   listing is not ready; do not pay again. A self-test payment of a testnet
-  invoice is not reuse evidence: the listing is not ready in that run, and the
-  agent does not pay again. A step 5 payment of this URL with a
+  invoice moved no real money for this endpoint, so it is neither reuse
+  evidence nor a payment for the gate: once the endpoint quotes a mainnet
+  invoice at the chosen price, run the paid check once, with the human's yes.
+  A step 5 payment of this URL with a
   different method also counts as paid: the listing is not ready; do not pay
   again. A payment through `pay_l402_challenge` counts as paid. The
   agent has no tool that fetches the resource with a token it already holds,

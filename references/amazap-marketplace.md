@@ -169,7 +169,8 @@ Three limits of the paid check:
   `INCONCLUSIVE` anyway, so a paid check through it doesn't unlock the listing
   either.
 - Pay once for the gate, never twice. If the self-test made no payment for
-  this endpoint by any means, run the compatibility report's paid check once,
+  this endpoint by any means (a testnet invoice doesn't count), run the
+  compatibility report's paid check once,
   with the human's yes; otherwise the cases below apply and the agent never
   pays again. The paid check needs a wallet that can pay this
   endpoint: if the self-test was skipped because the wallet refused to pay its
@@ -180,9 +181,10 @@ Three limits of the paid check:
   (steps 6 and 7 of `l402-compatibility-report`, with the
   read-only report above as `--mode-a` and that call's token piped on stdin)
   instead of paying again. If that token is gone, the listing is not ready; do
-  not pay again. A self-test payment of a testnet invoice is not reuse
-  evidence: the listing is not ready in that run, and the agent does not pay
-  again. A self-test that paid this URL with a different method also
+  not pay again. A self-test payment of a testnet invoice moved no real money
+  for this endpoint, so it is neither reuse evidence nor a payment for the
+  gate: once the endpoint quotes a mainnet invoice at the chosen price, run
+  the paid check once, with the human's yes. A self-test that paid this URL with a different method also
   counts as paid; the listing is not ready; do not pay again. A payment
   through `pay_l402_challenge` counts as paid. The agent has no tool that
   fetches the resource with a token it already holds, and

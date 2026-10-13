@@ -356,7 +356,8 @@ Offer it only after the self-test, and only as an offer; no answer means no.
   `GET` or `HEAD` only, so a `POST`, `PUT`, or `DELETE` route stays at
   `CHALLENGE_COMPATIBLE` here and is never offered as ready. Step 4 buys the
   first `GET` route. If the self-test (step 4) made no payment for this
-  endpoint by any means, run that skill's paid check once, with the human's
+  endpoint by any means (a testnet invoice doesn't count), run that skill's
+  paid check once, with the human's
   yes; otherwise the cases below apply and the agent never pays again. The
   paid check needs a wallet that
   can pay this endpoint: if step 4 stopped at the 402 because the wallet
@@ -366,9 +367,10 @@ Offer it only after the self-test, and only as an offer; no answer means no.
   call as the evidence (steps 6 and 7 of `l402-compatibility-report`, with
   `--mode-a mode-a.json` and that call's token piped on stdin) instead of
   paying again. If that token is gone, the listing is not ready; do not pay
-  again. A self-test payment of a testnet invoice is not reuse evidence: the
-  listing is not ready in that run, and the agent does not pay again. A step 4
-  payment of this URL with a different method also counts as
+  again. A self-test payment of a testnet invoice moved no real money for this
+  endpoint, so it is neither reuse evidence nor a payment for the gate: once
+  the endpoint quotes a mainnet invoice at the chosen price, run the paid check
+  once, with the human's yes. A step 4 payment of this URL with a different method also counts as
   paid: the listing is not ready; do not pay again. A payment through
   `pay_l402_challenge` (step 4's captured-402 path) counts as paid. The agent
   has no tool that fetches the resource with a token it already holds, and

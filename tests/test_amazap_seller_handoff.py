@@ -585,9 +585,18 @@ def test_handoff_pay_once_opens_with_any_payment_by_any_means(target):
 
 
 @pytest.mark.parametrize("target", HANDOFF_TARGETS)
-def test_handoff_says_a_testnet_payment_is_not_reuse_evidence(target):
+def test_handoff_says_a_testnet_payment_is_not_a_payment_for_the_gate(target):
     text = handoff_text(target)
-    assert "testnet invoice" in text and "is not reuse evidence" in text, target
+    # A testnet payment moved no real money for this endpoint: it is not reuse
+    # evidence, and it doesn't use up the one mainnet paid check.
+    assert "(a testnet invoice doesn't count)" in text, target
+    start = text.find("A self-test payment of a testnet invoice")
+    assert start >= 0, f"{target} has no testnet sentence"
+    sentence = text[start:text.find(". A ", start) + 1]
+    for phrase in ("neither reuse evidence nor a payment for the gate",
+                   "run the paid check once, with the human's yes"):
+        assert phrase in sentence, f"{target}: the testnet sentence is missing {phrase!r}"
+    assert "does not pay again" not in sentence, f"{target}: a testnet payment must not end the run"
 
 
 @pytest.mark.parametrize("target", HANDOFF_TARGETS)
