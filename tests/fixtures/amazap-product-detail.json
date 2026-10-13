@@ -1,0 +1,87 @@
+[
+  {
+    "product": {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "slug": "fixture-string-doi-lookup-0000cccc",
+      "name": "fixture-string-doi-lookup",
+      "description": "fixture-string-description: metadata for one DOI",
+      "provider": "fixture-string-provider-c",
+      "category": "data/research",
+      "endpointUrl": "https://fixture-string-seller-c.example/doi",
+      "httpMethod": "GET",
+      "protocol": "L402",
+      "priceSats": 2,
+      "paymentAsset": "BTC",
+      "paymentNetwork": "Lightning",
+      "healthStatus": "degraded",
+      "listingSource": "imported",
+      "origin": "402index",
+      "inputSchema": {
+        "fields": [
+          {"name": "doi", "type": "string", "required": true, "in": "query"}
+        ],
+        "presentation": "form"
+      },
+      "buyable": false,
+      "lastPaidSuccessAt": null,
+      "hidden": false,
+      "listingState": "paused",
+      "paidSuccesses": 0,
+      "paidFailures": 1,
+      "schemaConfidence": "high",
+      "trust": {
+        "level": "trouble",
+        "label": "Having trouble",
+        "short": "Having trouble",
+        "facts": "Delivery health: degraded. Paid successes: 0. Paid failures: 1. Schema confidence: high."
+      },
+      "feeBps": 2000,
+      "feeMinSats": 3,
+      "feeSats": 3,
+      "totalSats": 7
+    }
+  },
+  {
+    "note": "Shape observed earlier on 2026-10-12: this row was absent from search and the detail endpoint returned it with hidden: true. Later the same day, paused rows were listed with hidden: false.",
+    "product": {
+      "id": "00000000-0000-4000-8000-000000000005",
+      "slug": "fixture-string-hidden-listing-0000eeee",
+      "name": "fixture-string-hidden-listing",
+      "description": "fixture-string-description: a listing hidden from search",
+      "provider": "fixture-string-provider-e",
+      "category": "data/research",
+      "endpointUrl": "https://fixture-string-seller-e.example/lookup",
+      "httpMethod": "GET",
+      "protocol": "L402",
+      "priceSats": 5,
+      "paymentAsset": "BTC",
+      "paymentNetwork": "Lightning",
+      "healthStatus": "untested",
+      "listingSource": "self-registered",
+      "origin": "amazap-seller",
+      "inputSchema": {
+        "fields": [
+          {"name": "id", "type": "string", "required": true, "in": "path"}
+        ],
+        "presentation": "form"
+      },
+      "buyable": false,
+      "lastPaidSuccessAt": null,
+      "hidden": true,
+      "listingState": "paused",
+      "paidSuccesses": 0,
+      "paidFailures": 0,
+      "schemaConfidence": "high",
+      "trust": {
+        "level": "limited",
+        "label": "Limited track record",
+        "short": "Limited record",
+        "facts": "Delivery health: untested. Paid successes: 0. Paid failures: 0. Schema confidence: high."
+      },
+      "feeBps": 2000,
+      "feeMinSats": 3,
+      "feeSats": 3,
+      "totalSats": 8
+    }
+  }
+]

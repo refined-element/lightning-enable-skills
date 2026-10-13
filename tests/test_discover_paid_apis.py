@@ -29,7 +29,11 @@ pays. They hold the spec's Workstream A acceptance tests in guard form:
 ``GET https://amazap.com/api/products`` (shape observed on 2026-10-12) with
 placeholder names. It pins the row fields the skill reads, so a recaptured
 fixture with a renamed field fails here before the skill reads a field that no
-longer exists.
+longer exists. ``fixtures/amazap-product-detail.json`` holds two bodies of
+``GET https://amazap.com/api/products/<slug>``, each wrapping one row in
+``product``: a paused row that search also listed, and, marked by a ``note``, a
+row hidden from search (``hidden: true``) in a shape observed earlier the same
+day. Search has done both, so the skill handles both.
 """
 import json
 import re
@@ -57,6 +61,7 @@ README = SKILL_DIR / "README.md"
 ROOT_README = REPO_ROOT / "README.md"
 REFERENCE = REPO_ROOT / "references" / "amazap-marketplace.md"
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "amazap-products.json"
+DETAIL_FIXTURE = Path(__file__).resolve().parent / "fixtures" / "amazap-product-detail.json"
 
 REFERENCE_BASE = (
     "https://github.com/refined-element/lightning-enable-skills/blob/main/"
@@ -104,6 +109,9 @@ ROW_FIELDS = (
     "trust.label",
     "inputSchema.fields",
 )
+# The spec's trust labels. A live trust.label leads with one of these and can
+# add detail after a ":" or "," ("Verified: delivered 6 times").
+TRUST_LABELS = ("Verified", "Working", "Limited track record", "Having trouble")
 PRODUCTS_PARAMS = (
     "q",
     "protocol",
@@ -172,6 +180,24 @@ def fixture() -> dict:
 
 def rows() -> list[dict]:
     return fixture()["products"]
+
+
+def detail_examples() -> list[dict]:
+    return json.loads(DETAIL_FIXTURE.read_text(encoding="utf-8"))
+
+
+def detail_rows() -> list[dict]:
+    return [example["product"] for example in detail_examples()]
+
+
+def all_rows() -> list[dict]:
+    """Every captured row: the search sample and the detail bodies."""
+    return rows() + detail_rows()
+
+
+def leading_label(label: str) -> str:
+    """The part of a trust.label before any ":" or ","."""
+    return re.split(r"[:,]", label, maxsplit=1)[0].strip()
 
 
 def field(row: dict, dotted: str):
@@ -291,22 +317,53 @@ def test_fixture_has_the_products_api_envelope():
 
 @pytest.mark.parametrize("name", ROW_FIELDS)
 def test_every_fixture_row_carries_the_fields_the_skill_reads(name):
-    for row in rows():
+    for row in all_rows():
         field(row, name)  # a KeyError names the missing field
 
 
 def test_fixture_input_fields_have_the_documented_shape():
-    for row in rows():
+    for row in all_rows():
         for item in row["inputSchema"]["fields"]:
             assert {"name", "type", "required", "in"} <= set(item), item
             assert item["in"] in {"body", "query", "path"}, item
 
 
+def test_every_trust_label_leads_with_a_spec_value():
+    for row in all_rows():
+        label = row["trust"]["label"]
+        assert leading_label(label) in TRUST_LABELS, label
+
+
 def test_fixture_covers_the_rows_the_skill_must_handle():
-    shorts = {row["trust"]["short"] for row in rows()}
-    assert {"Verified", "Having trouble"} <= shorts
-    assert any(row["buyable"] is False for row in rows())
+    # Search may list a paused or degraded row, so the skill reads
+    # listingState and buyable on every row instead of trusting search.
+    leads = {leading_label(row["trust"]["label"]) for row in rows()}
+    assert {"Verified", "Having trouble"} <= leads
+    # Every live Verified label carried detail; quote it whole, never trimmed.
+    labels = [row["trust"]["label"] for row in rows()]
+    assert any(leading_label(label) == "Verified" and label != "Verified" for label in labels)
+    assert any(row["buyable"] is False and row["listingState"] == "paused" for row in rows())
     assert any(row["buyable"] is True for row in rows())
+
+
+def test_detail_fixture_wraps_each_row_in_product():
+    examples = detail_examples()
+    assert len(examples) == 2
+    for example in examples:
+        assert set(example) <= {"product", "note"}, example.keys()
+        assert isinstance(example["product"], dict)
+
+
+def test_detail_fixture_covers_a_listed_paused_row_and_a_hidden_one():
+    listed, hidden = detail_examples()
+    # As observed late on 2026-10-12: a paused row search also lists.
+    assert "note" not in listed
+    assert listed["product"]["hidden"] is False and listed["product"]["listingState"] == "paused"
+    assert listed["product"]["slug"] in {row["slug"] for row in rows()}
+    # As observed earlier the same day: absent from search, returned by slug.
+    assert hidden["note"].strip() and "hidden: true" in hidden["note"]
+    assert hidden["product"]["hidden"] is True and hidden["product"]["buyable"] is False
+    assert hidden["product"]["slug"] not in {row["slug"] for row in rows()}
 
 
 def test_fixture_total_is_not_always_price_plus_fee():
@@ -316,7 +373,7 @@ def test_fixture_total_is_not_always_price_plus_fee():
 
 
 def test_fixture_uses_placeholder_names():
-    for row in rows():
+    for row in all_rows():
         for key in ("name", "provider", "slug"):
             assert row[key].startswith("fixture-string-"), (key, row[key])
         assert re.match(r"^https://fixture-string-[a-z0-9-]+\.example/", row["endpointUrl"])
