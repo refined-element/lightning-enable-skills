@@ -99,12 +99,16 @@ python scripts/l402_check.py "https://api.example.com/search" --method POST --he
 ```
 
 Add `--max-sats <cap>` when a paid check might follow; the report then carries
-a preflight verdict. Add `--json` for machine-readable output, and save it when
-a paid check follows:
+a preflight verdict. Add `--json` for machine-readable output, and save it with
+`--output` when a paid check follows:
 
 ```bash
-python scripts/l402_check.py "https://api.example.com/forecast" --max-sats 50 --json > mode-a.json
+python scripts/l402_check.py "https://api.example.com/forecast" --max-sats 50 --json --output mode-a.json
 ```
+
+Use `--output`, not shell redirection: it writes UTF-8 on every platform,
+while Windows PowerShell 5.1 redirects `>` as UTF-16. The script still reads a
+UTF-16 file that starts with a byte order mark.
 
 The script makes one unpaid request, then requests `/openapi.json` and
 `/llms.txt` at the host root (where Amazap's listing prefill looks). It refuses
@@ -395,7 +399,7 @@ On the .NET server:
 > User: "Check my weather endpoint before I list it. If the challenge looks
 > right, test it for real, up to 10 sats."
 >
-> 1. `python scripts/l402_check.py "https://api.example.com/forecast?city=paris" --max-sats 10 --json > mode-a.json`
+> 1. `python scripts/l402_check.py "https://api.example.com/forecast?city=paris" --max-sats 10 --json --output mode-a.json`
 >    → `CHALLENGE_COMPATIBLE`: one `L402` challenge plus `Payment`, 3 sats,
 >    expires in 24 hours, opaque token, no `llms.txt` or `openapi.json` at the
 >    host root. Preflight: allowed.

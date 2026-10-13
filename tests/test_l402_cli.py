@@ -233,7 +233,7 @@ def test_help_lists_every_flag_and_the_exit_codes():
     result = subprocess.run([sys.executable, str(SCRIPT), "--help"], capture_output=True, text=True, timeout=60)
     assert result.returncode == 0
     for flag in ("url", "--method", "--header", "--body", "--timeout", "--max-sats", "--json", "--allow-private",
-                 "--evidence", "--mode-a", "--credential-stdin"):
+                 "--evidence", "--mode-a", "--credential-stdin", "--output"):
         assert flag in result.stdout
     assert "Exit status" in result.stdout
     assert "non-secret" in result.stdout
@@ -450,7 +450,8 @@ def test_a_report_the_renderer_cannot_use_is_an_evidence_error(tmp_path, capsys,
 
 @pytest.mark.parametrize("content, wanted", [
     (b"{ fixture-string-not-json", "not valid JSON"),
-    (b"\xff\xfe fixture-string-binary", "not UTF-8"),
+    (b"\x80\x81 fixture-string-binary", "not UTF-8 or UTF-16 text"),
+    (b"\xff\xfe" + "fixture-string-odd".encode("utf-16-le") + b"\x41", "not UTF-8 or UTF-16 text"),
 ])
 def test_unreadable_files_are_evidence_errors_without_echoing_content(tmp_path, capsys, content, wanted):
     evidence, mode_a, _ = _evidence_files(tmp_path)
@@ -464,6 +465,66 @@ def test_unreadable_files_are_evidence_errors_without_echoing_content(tmp_path, 
         err = capsys.readouterr().err
         assert wanted in err
         assert "fixture-string" not in err
+
+
+@pytest.mark.parametrize("encoding, bom", [
+    ("utf-16-le", b"\xff\xfe"),  # what Windows PowerShell 5.1 writes for "> mode-a.json"
+    ("utf-16-be", b"\xfe\xff"),
+    ("utf-8", b"\xef\xbb\xbf"),
+])
+def test_files_with_a_byte_order_mark_load(tmp_path, encoding, bom):
+    evidence, mode_a, preimage = _evidence_files(tmp_path)
+    for target in (evidence, mode_a):
+        target.write_bytes(bom + target.read_text(encoding="utf-8").encode(encoding))
+    code, text = run(["--evidence", str(evidence), "--mode-a", str(mode_a), "--credential-stdin", "--json"],
+                     stdin=io.StringIO(f"L402 fixture-string-macaroon:{preimage}\n"))
+    assert code == 0
+    assert json.loads(text)["classification"] == "FULFILLMENT_VERIFIED"
+
+
+def test_output_writes_utf8_that_the_paid_check_reads_back(tmp_path):
+    fixture = support.load_fixture("le-test-ping")
+    saved = tmp_path / "mode-a.json"
+    code, text = run([fixture["request"]["url"], "--max-sats", "50", "--json", "--output", str(saved)], fixture)
+    assert code == 0
+    assert text == f"Wrote the report to {saved}.\n"
+    raw = saved.read_bytes()
+    assert not raw.startswith((b"\xff\xfe", b"\xfe\xff", b"\xef\xbb\xbf"))
+    assert b"\r\n" not in raw
+    assert json.loads(raw.decode("utf-8"))["classification"] == "CHALLENGE_COMPATIBLE"
+    paid_dir = tmp_path / "paid"
+    paid_dir.mkdir()
+    evidence, _, preimage = _evidence_files(paid_dir)
+    paid = tmp_path / "paid.md"
+    code, text = run(["--evidence", str(evidence), "--mode-a", str(saved), "--credential-stdin", "--output", str(paid)],
+                     stdin=io.StringIO(f"L402 fixture-string-macaroon:{preimage}\n"))
+    assert code == 0
+    assert text == f"Wrote the report to {paid}.\n"
+    report = paid.read_text(encoding="utf-8")
+    assert "- Classification: FULFILLMENT_VERIFIED" in report
+    assert preimage not in report
+    assert "fixture-string-macaroon" not in report
+
+
+@pytest.mark.parametrize("which", ["evidence", "mode_a", "dash", "empty"])
+def test_output_never_overwrites_an_input_file(tmp_path, which):
+    evidence, mode_a, _ = _evidence_files(tmp_path)
+    before = {p.name: p.read_bytes() for p in tmp_path.iterdir()}
+    target = {"evidence": str(evidence), "mode_a": str(mode_a), "dash": "-", "empty": ""}[which]
+    with pytest.raises(SystemExit) as caught:
+        l402_check.main(["--evidence", str(evidence), "--mode-a", str(mode_a), "--output", target],
+                        stdout=io.StringIO())
+    assert caught.value.code == 2
+    assert {p.name: p.read_bytes() for p in tmp_path.iterdir()} == before
+
+
+def test_an_unwritable_output_is_an_error(tmp_path, capsys):
+    fixture = support.load_fixture("le-test-ping")
+    code, text = run([fixture["request"]["url"], "--json", "--output", str(tmp_path / "missing-dir" / "out.json")],
+                     fixture)
+    assert code == 2
+    assert text == ""
+    assert "cannot write the report to --output" in capsys.readouterr().err
 
 
 def test_a_missing_file_is_an_evidence_error(tmp_path, capsys):

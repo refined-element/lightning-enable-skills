@@ -4,7 +4,7 @@
 Read-only check (Mode A, the default). One unpaid request, then a report:
 
   python scripts/l402_check.py https://api.example.com/resource
-  python scripts/l402_check.py https://api.example.com/resource --json > mode-a.json
+  python scripts/l402_check.py https://api.example.com/resource --json --output mode-a.json
   python scripts/l402_check.py https://api.example.com/search --method POST --header "Accept=application/json"
   python scripts/l402_check.py https://api.example.com/resource --max-sats 50
 
@@ -18,8 +18,13 @@ The script never pays: it has no payment code path. It never prints an invoice
 string, macaroon, token, preimage, or authorization header, and prints the
 payment hash and amount only. --header takes non-secret headers only; a
 credential, Host, or framing header is refused before any request.
-Exit status: 0 when a report was printed, 2 for a usage, refused-header, or
-evidence error. Standard library only; Python 3.10 or later.
+--output PATH writes the report to PATH as UTF-8 instead of printing it, which
+avoids shell redirection (Windows PowerShell 5.1 redirects as UTF-16). The
+JSON and evidence files are read as UTF-8, with or without a byte order mark,
+or as UTF-16 when they start with a UTF-16 byte order mark.
+Exit status: 0 when a report was printed or written, 2 for a usage,
+refused-header, evidence, or output error. Standard library only; Python 3.10
+or later.
 """
 from __future__ import annotations
 
@@ -64,11 +69,16 @@ a file. Without --credential-stdin the paid check ends at most INCONCLUSIVE.
 This script never pays. It never prints an invoice string, macaroon, token,
 preimage, or authorization header.
 
+--output PATH writes the report to PATH as UTF-8 and prints one line naming
+the file. Use it instead of shell redirection: Windows PowerShell 5.1 writes a
+redirected report as UTF-16.
+
 Exit status:
-  0  a report was printed, whatever its classification (a refused target
-     prints an INCONCLUSIVE report)
-  2  a usage error, a refused --header, or an evidence error; nothing is
-     printed on stdout and the message never echoes a value
+  0  a report was printed or written, whatever its classification (a refused
+     target gives an INCONCLUSIVE report)
+  2  a usage error, a refused --header, an evidence error, or an --output
+     file that can't be written; no report is printed on stdout and the
+     message never echoes a value
 """
 
 
@@ -116,6 +126,9 @@ def build_parser() -> argparse.ArgumentParser:
                         help=f"seconds for the whole check (more than 0, at most {MAX_TIMEOUT:g})")
     parser.add_argument("--max-sats", type=int, help="the cap for a paid check; adds a preflight verdict")
     parser.add_argument("--json", action="store_true", help="print JSON instead of Markdown")
+    parser.add_argument("--output", metavar="PATH",
+                        help="write the report to PATH as UTF-8 instead of printing it (use this, not shell "
+                             "redirection, to save mode-a.json); never --evidence or --mode-a")
     parser.add_argument("--allow-private", action="store_true",
                         help="local testing only: allow loopback, private, and link-local targets, and plain "
                              "http to them; cloud metadata addresses and plain http to a public host stay refused")
@@ -190,13 +203,48 @@ def _is_terminal(stream) -> bool:
         return False
 
 
+UTF16_BOMS = (b"\xff\xfe", b"\xfe\xff")
+
+
+def decode_text(raw: bytes) -> str:
+    """UTF-16 when the bytes start with a UTF-16 byte order mark, else UTF-8 with an optional BOM.
+
+    Windows PowerShell 5.1 redirects output (``> file``) as UTF-16LE with a
+    BOM, and some editors save UTF-8 with one; both must load. Raises
+    UnicodeDecodeError for anything else.
+    """
+    return raw.decode("utf-16" if raw.startswith(UTF16_BOMS) else "utf-8-sig")
+
+
 def _read_text(path: str, label: str) -> str:
     try:
-        return Path(path).read_text(encoding="utf-8")
+        return decode_text(Path(path).read_bytes())
     except UnicodeDecodeError:
-        raise l402_evidence.EvidenceError(f"{label} is not UTF-8 text") from None
+        raise l402_evidence.EvidenceError(f"{label} is not UTF-8 or UTF-16 text") from None
     except OSError as exc:
         raise l402_evidence.EvidenceError(f"cannot read {label}: {exc.strerror or type(exc).__name__}") from None
+
+
+class OutputError(Exception):
+    """The --output file can't be used. The message never echoes report content."""
+
+
+def _same_file(a: str, b: str | None) -> bool:
+    if b is None or b == "-":
+        return False
+    try:
+        return Path(a).resolve() == Path(b).resolve()
+    except (OSError, RuntimeError):
+        return False
+
+
+def write_output(path: str, text: str) -> None:
+    """Write the (already scrubbed) report to ``path`` as UTF-8 with LF line endings."""
+    try:
+        with open(path, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(text)
+    except OSError as exc:
+        raise OutputError(f"cannot write the report to --output: {exc.strerror or type(exc).__name__}") from None
 
 
 def _load_json(text: str, label: str):
@@ -249,6 +297,23 @@ def main(argv: list[str] | None = None, *, stdin=None, stdout=None, resolver=Non
     parser = build_parser()
     args = parser.parse_args(argv)
     render = l402_report.to_json if args.json else l402_report.to_markdown
+    if args.output is not None:
+        if args.output in ("", "-"):
+            parser.error("--output takes a file path; leave it out to print the report")
+        if _same_file(args.output, args.evidence) or _same_file(args.output, args.mode_a):
+            parser.error("--output must not be the --evidence or --mode-a file")
+
+    def emit(text: str) -> int:
+        if args.output is None:
+            stdout.write(text)
+            return 0
+        try:
+            write_output(args.output, text)
+        except OutputError as exc:
+            print(f"{PROG}: error: {exc}", file=sys.stderr)
+            return 2
+        stdout.write(f"Wrote the report to {args.output}.\n")
+        return 0
 
     if args.evidence is not None:
         if args.url:
@@ -258,8 +323,7 @@ def main(argv: list[str] | None = None, *, stdin=None, stdout=None, resolver=Non
         except l402_evidence.EvidenceError as exc:
             print(f"evidence error: {exc}", file=sys.stderr)
             return 2
-        stdout.write(text)
-        return 0
+        return emit(text)
 
     if args.mode_a is not None or args.credential_stdin:
         parser.error("--mode-a and --credential-stdin go with --evidence")
@@ -284,8 +348,7 @@ def main(argv: list[str] | None = None, *, stdin=None, stdout=None, resolver=Non
         # Fixed text: names the header only when the name is a plain token, never its value.
         print(f"{PROG}: error: {refusal_message(exc)}", file=sys.stderr)
         return 2
-    stdout.write(render(report, secrets))
-    return 0
+    return emit(render(report, secrets))
 
 
 if __name__ == "__main__":
