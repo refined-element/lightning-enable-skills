@@ -461,3 +461,135 @@ def test_reference_keeps_the_mcp_budget_off_every_amazap_row():
 def test_reference_never_says_the_mcp_budget_bounds_an_amazap_buy():
     hits = budget_claims(read(REFERENCE))
     assert not hits, f"the MCP budget never bounds an Amazap buy: {hits}"
+
+
+# --- The skill: search and compare ------------------------------------------
+
+
+def test_description_names_both_sources_and_keeps_the_routing():
+    front = test_skill_metadata.parse_frontmatter(read(SKILL))
+    description = front["description"]
+    for phrase in (
+        "Lightning Enable registry and Amazap",
+        "label each source",
+        "at most one bounded trial purchase",
+        "(use pay-l402-anywhere)",
+        "(use cited-answer)",
+        "(use agent-wallet-setup)",
+    ):
+        assert phrase in description, f"the description is missing {phrase!r}"
+
+
+def test_skill_links_the_reference_sections_and_live_pages():
+    text = read(SKILL)
+    missing = [url for url in (*REFERENCE_LINKS, *LIVE_LINKS) if url not in text]
+    assert not missing, f"discover-paid-apis must link {missing}"
+
+
+@pytest.mark.parametrize("phrase", (
+    "`discover_api`",
+    "`search_catalog`",
+    "GET https://amazap.com/api/products",
+    "GET https://amazap.com/api/products/<idOrSlug>",
+    "Amazap does not replace the Lightning Enable registry",
+    "**Label every row** with its source",
+    "Run at least one refinement",
+    "Searching never spends.",
+    "Page with `offset` until `offset >= total`.",
+    "`limit` (at most 200)",
+    "This path reads; it can't buy.",
+    "Don't fetch one by slug to work around that.",
+    "A row can also be hidden from search and still be returned by slug",
+    "read `listingState` and `buyable` on every row",
+    "Never frame a price difference as a reason to bypass Amazap.",
+    NON_GOAL,
+    DIRECT_PAY_SCOPE,
+))
+def test_search_reads_both_sources_and_labels_every_row(phrase):
+    assert phrase in skill_section("### 2. Search both sources"), f"step 2 is missing {phrase!r}"
+
+
+@pytest.mark.parametrize("param", PRODUCTS_PARAMS)
+def test_public_search_names_every_documented_parameter(param):
+    assert f"`{param}`" in skill_section("### 2. Search both sources")
+
+
+def test_amazap_tools_are_named_only_when_the_host_lists_them():
+    text = flat(read(SKILL))
+    for phrase in (
+        "only when the host lists them",
+        "Never claim Amazap MCP access you don't have.",
+        "Amazap search uses the public products API",
+        "https://amazap.com/mcp",
+    ):
+        assert phrase in text, f"discover-paid-apis is missing {phrase!r}"
+
+
+@pytest.mark.parametrize("tool", AMAZAP_TOOLS)
+def test_skill_names_each_amazap_tool(tool):
+    assert f"`{tool}`" in read(SKILL), f"discover-paid-apis never names `{tool}`"
+
+
+@pytest.mark.parametrize("name", ROW_FIELDS)
+def test_comparison_reads_every_row_field(name):
+    assert f"`{name}" in skill_section("### 3. Compare at most five candidates"), (
+        f"step 3 never reads `{name}`"
+    )
+
+
+@pytest.mark.parametrize("phrase", (
+    "Show at most five candidates",
+    "| Source |",
+    "with a one-sentence reason",
+    "Prefer a reliable, clearly specified service over the cheapest.",
+    "never on the price difference between the rows",
+    "`totalSats`, the all-in figure the buyer pays",
+    "Never add `priceSats` and the fee yourself",
+    "quote required",
+    "Quote `trust.label` as returned",
+    "Never upgrade a label.",
+    "`buyable: false`, and never buy it",
+    "Say who receives the input",
+    "never as free or unlimited",
+))
+def test_comparison_rules(phrase):
+    assert phrase in skill_section("### 3. Compare at most five candidates"), (
+        f"step 3 is missing {phrase!r}"
+    )
+
+
+def test_endpoint_url_appears_only_in_a_prohibition():
+    sentences = [s for s in prose_sentences(read(SKILL)) if "endpointUrl" in s]
+    assert sentences, "say plainly that a listing's endpointUrl is never a way to pay directly"
+    loose = [s for s in sentences if not NEGATION.search(s)]
+    assert not loose, f"endpointUrl outside a prohibition: {loose}"
+
+
+@pytest.mark.parametrize("doc", GUARDED_DOCS, ids=lambda p: p.name)
+def test_doc_carries_the_custody_sentence(doc):
+    assert CUSTODY in flat(read(doc))
+
+
+@pytest.mark.parametrize("doc", GUARDED_DOCS, ids=lambda p: p.name)
+def test_doc_has_no_em_dashes_or_banned_words(doc):
+    text = read(doc)
+    assert EM_DASH not in text, f"{doc.name} uses an em-dash"
+    hits = [word for word in BANNED_WORDS if word in text.lower()]
+    assert not hits, f"{doc.name} uses {hits}"
+
+
+@pytest.mark.parametrize("doc", GUARDED_DOCS, ids=lambda p: p.name)
+def test_doc_hard_codes_no_amazap_figures(doc):
+    hits = AMAZAP_FIGURE.findall(flat(read(doc)))
+    assert not hits, (
+        f"{doc.name} hard-codes {hits}; Amazap's fees, limits, and counts are "
+        "read live, and dated figures live only in the shared reference"
+    )
+
+
+@pytest.mark.parametrize("doc", GUARDED_DOCS, ids=lambda p: p.name)
+def test_doc_never_calls_a_listing_verified(doc):
+    # Amazap's "Verified" label is quoted with a capital V; a lowercase
+    # "verified" would be this skill's own claim, which it never makes.
+    hits = LOOSE_VERIFIED.findall(flat(read(doc)))
+    assert not hits, f"{doc.name} makes a 'verified' claim"
