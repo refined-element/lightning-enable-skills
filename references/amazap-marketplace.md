@@ -12,8 +12,8 @@ can pay a known L402 URL directly with
 Amazap are separate products: Lightning Enable helps a developer create, price,
 test, and run an L402 endpoint; Amazap helps agents find and buy listed
 endpoints. Describe the relationship as collaboration or ecosystem support.
-Never claim a partnership or any other commercial relationship between
-Lightning Enable, Amazap, and AMBOSS.
+Never claim a partnership or any other commercial relationship among any of
+Lightning Enable, Amazap, or Amboss.
 
 ## Amazap facts are external
 
@@ -86,7 +86,10 @@ listing:
 - `FULFILLMENT_VERIFIED` is the minimum for calling an endpoint ready to list.
 - `MARKETPLACE_READY` is the target.
 - **Listed** means Amazap's product page or products API row has been read
-  back and shows the listing. **Verified paid delivery** means a paid call
+  back and shows the listing as visible: the row has `hidden: false`, or the
+  product page renders the listing as buyable. Otherwise report the row's
+  state (`hidden`, `listingState`, `healthStatus`), not "listed".
+  **Verified paid delivery** means a paid call
   through the listing returned the promised result. One doesn't imply the
   other.
 
@@ -124,10 +127,12 @@ Don't offer the listing as ready until every item passes:
 
 Run [`l402-compatibility-report`](../skills/l402-compatibility-report/) for the
 protocol items. Its read-only check
-(`python scripts/l402_check.py <url> --json --output mode-a.json` from that
-skill's folder, adding `--method POST` for a `POST` route) covers items 1 to 5
-and saves the report its paid check reads; its paid check covers item 7. Take
-the `classification` field from the JSON report, which is the script's
+(`python scripts/l402_check.py <url> --max-sats <cap> --json --output mode-a.json`
+from that skill's folder, with the human's cap in sats, adding
+`--method POST` for a `POST` route) covers items 1 to 5 and saves the report
+its paid check reads; its paid check covers item 7. `--max-sats` is required
+here: the paid check runs only when that report's preflight says `allowed`.
+Take the `classification` field from the JSON report, which is the script's
 contract (`report_version` 1), not from the Markdown:
 
 - **`INCOMPATIBLE`:** not listing-ready. Give the fix the report names.
@@ -138,7 +143,11 @@ contract (`report_version` 1), not from the Markdown:
 - **`FULFILLMENT_VERIFIED`:** ready, once items 6, 8, 9, and 10 hold. Pass on
   the report's `paid_fulfillment.hash_source`: for an opaque token the
   preimage was matched against the wallet's recorded payment, not the invoice.
-- **`MARKETPLACE_READY`:** the target. The same remaining items apply.
+- **`MARKETPLACE_READY`:** the target. The same remaining items apply. On
+  `api.lightningenable.com`, the host-root metadata check doesn't count for a
+  proxy (see Prefill below), so report such a proxy as
+  `FULFILLMENT_VERIFIED` at most, never as `MARKETPLACE_READY` on the strength
+  of that check.
 
 Three limits of the paid check:
 
@@ -152,14 +161,14 @@ Three limits of the paid check:
   Python MCP server returns the token only on the `alreadyPaid` path, which is
   `INCONCLUSIVE` anyway, so a paid check through it doesn't unlock the listing
   either.
-- Pay once for the gate, never twice. When the skill's own self-test already
-  paid this exact public URL, with the same method, through
-  `access_l402_resource`, record that call as the evidence (steps 6 and 7 of
-  `l402-compatibility-report`, with the read-only report above as `--mode-a`
-  and that call's token piped on stdin) instead of paying again. If that token
-  is no longer at hand, the listing isn't ready; say so rather than paying a
-  second time on your own. Otherwise, run that skill's paid check, which asks
-  for its own yes.
+- Pay once for the gate, never twice. If the skill's own self-test did not
+  already pay this exact URL, run the compatibility report's paid check once,
+  with the human's yes. If the self-test already paid this exact public URL,
+  with the same method, through `access_l402_resource`, record that call as
+  the evidence (steps 6 and 7 of `l402-compatibility-report`, with the
+  read-only report above as `--mode-a` and that call's token piped on stdin)
+  instead of paying again. If that token is gone, the listing is not ready; do
+  not pay again.
 
 ### Handoff flow
 
@@ -183,7 +192,9 @@ Three limits of the paid check:
    the all-in shopper price from Amazap's own draft or page.
 7. The human reviews the contact email, the listing copy, the current margin
    and all-in price, and the terms.
-8. The human submits the listing.
+8. The human submits the listing. Submitting the form publishes the listing
+   automatically once Amazap's checks pass, so the human reviews everything in
+   step 7 before submitting.
 9. Read the listing back (post-listing verification, below) before you report
    anything about it.
 
@@ -192,11 +203,13 @@ parameters from `openapi.json` or `llms.txt` at the root of the endpoint's
 host. Without them, it derives example parameters from parameter names in the
 402 body. A Lightning Enable proxy serves its own `openapi.json` and manifest
 under `/l402/proxy/{proxyId}/`, which the root lookup doesn't read, and the
-root of `api.lightningenable.com` describes Lightning Enable itself. So on
-`api.lightningenable.com`, the human supplies the title, description,
-category, and example parameters by hand. That platform `llms.txt` can also
-make a host-root metadata check pass on the platform's text rather than the
-proxy's. For an API on its own domain, an `openapi.json` or `llms.txt` at the
+root of `api.lightningenable.com` describes Lightning Enable itself. On
+`api.lightningenable.com`, the host-root `openapi.json` and `llms.txt`
+describe the platform, not the proxy, so the host-root metadata check doesn't
+count for a proxy. The handoff reports such a proxy as `FULFILLMENT_VERIFIED`
+at most, even when the script's report says `MARKETPLACE_READY`, and never as
+`MARKETPLACE_READY` on that basis. Tell the human to supply the title,
+description, category, and example parameters by hand. For an API on its own domain, an `openapi.json` or `llms.txt` at the
 host root gives the prefill something accurate to read.
 
 **Price lock.** Amazap reads the price from the probe's invoice and locks it at
@@ -218,7 +231,8 @@ You must not, without the human's explicit approval:
 - opt into announcements;
 - publish a Nostr handle;
 - change the endpoint's price;
-- claim a commercial relationship between Lightning Enable, Amazap, and AMBOSS.
+- claim a commercial relationship among any of Lightning Enable, Amazap, or
+  Amboss.
 
 ### Listing-copy template
 
@@ -262,10 +276,6 @@ you quote any of them.
 - New Amazap accounts had limits of 500 sats per call, 2,000 sats per day, and
   1,000 sats per session, and buys of 50 sats or less auto-approved.
 - The sitemap listed 1,423 product pages.
-- Lightning Enable's rows on Amazap, imported from 402 Index, were failing and
-  hidden earlier that day and had mostly recovered after Amazap's author fixed
-  an issue on Amazap's side: 44 of 46 visible, 39 buyable, four paused after
-  one paid failure each, and one still failing.
 
 ## Custody
 
