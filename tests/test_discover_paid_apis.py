@@ -5,7 +5,8 @@ Enable registry (``discover_api``) and Amazap (its MCP tools when the host
 lists them, otherwise the public products API). It compares at most five
 candidates and makes at most one bounded trial purchase. The shared Amazap
 buyer rules live in ``references/amazap-marketplace.md``, under "Discovery
-versus purchase" and "Two wallets"; the skill links them by GitHub URL,
+versus purchase", "Two wallets", and "Buying through Amazap" (the full buy
+mechanics and the Amazap buy failure rows); the skill links them by GitHub URL,
 because a skill installs by copying one folder.
 
 Like the rest of the suite these are text guards: nothing opens a socket or
@@ -70,6 +71,7 @@ REFERENCE_BASE = (
 REFERENCE_LINKS = (
     REFERENCE_BASE + "#discovery-versus-purchase",
     REFERENCE_BASE + "#two-wallets",
+    REFERENCE_BASE + "#buying-through-amazap",
 )
 LIVE_LINKS = (
     "https://amazap.com/llms.txt",
@@ -134,6 +136,13 @@ SCOPE_RULE = (
     "Lightning Enable registry returned"
 )
 CAP_RULE = "State which cap applies to which path before any purchase."
+# The one row in the skill's "What can go wrong" that points every Amazap buy
+# outcome at the reference's "Buying through Amazap" table.
+AMAZAP_BUY_POINTER = (
+    "`buy` reports a stale quote, `approval_required`, `terms_required`, "
+    "`not_yet_supported`, or an Amazap account limit; too few credits; or a "
+    "paid Amazap call failed"
+)
 TWO_WALLET_RULE = (
     "The Lightning Enable MCP `budget` and `get_balance` don't see Amazap "
     "credits and never bound an Amazap buy"
@@ -445,6 +454,19 @@ def discovery_section() -> str:
 
 def wallets_section() -> str:
     return reference_section("## Two wallets")
+
+
+def buying_section() -> str:
+    return flat(reference_section("## Buying through Amazap"))
+
+
+def reference_buy_rows() -> dict[str, str]:
+    """Each row of the reference's Amazap buy table, keyed by its symptom."""
+    rows_by_symptom = {}
+    for row in table_rows(reference_section("### What can go wrong on an Amazap buy")):
+        if len(row) == 3 and row[0] not in ("Symptom", "---"):
+            rows_by_symptom[row[0]] = flat(" ".join(row[1:]))
+    return rows_by_symptom
 
 
 @pytest.mark.parametrize("phrase", (
@@ -797,9 +819,7 @@ def test_quote_reads_the_amazap_limits_live(phrase):
     "Stop, and ask the person to confirm the exact quote in Amazap",
     "Never re-quote or split the purchase to get around it.",
     "Repeating a `quote_id` never charges twice",
-    "A basket is one buy.",
     "ask before `top_up`",
-    "never copy the invoice into your own message",
     "Never point it at an Amazap listing's `endpointUrl`.",
 ))
 def test_trial_purchase_rules(phrase):
@@ -1032,7 +1052,7 @@ def test_an_unreachable_amazap_falls_back_to_the_registry():
     "The MCP `budget` limits do bound that payment",
 ))
 def test_top_up_paid_from_the_mcp_wallet_is_its_own_payment(phrase):
-    assert phrase in skill_section("### 6. Buy one trial"), f"step 6 is missing {phrase!r}"
+    assert phrase in buying_section(), f"Buying through Amazap is missing {phrase!r}"
 
 
 @pytest.mark.parametrize("phrase", (
@@ -1059,7 +1079,7 @@ def test_comparison_shows_unhealthy_rows_as_not_buyable():
     "The first yes never covers a different total.",
 ))
 def test_stale_quote_needs_a_new_yes(phrase):
-    assert phrase in skill_section("### 6. Buy one trial"), f"step 6 is missing {phrase!r}"
+    assert phrase in buying_section(), f"Buying through Amazap is missing {phrase!r}"
 
 
 @pytest.mark.parametrize("phrase", (
@@ -1077,7 +1097,7 @@ def test_unclear_outcome_is_checked_before_any_retry():
     assert (
         "When the outcome is unclear (a dropped connection, a timeout), check before any "
         "retry: `get_order` or `orders` shows whether the buy went through."
-    ) in skill_section("### 6. Buy one trial")
+    ) in buying_section()
     assert (
         "Check it before any retry: `get_order` or `orders` on the Amazap path, "
         '`receipts(source="session")` on the direct path.'
@@ -1097,12 +1117,7 @@ def test_one_name_for_the_cap():
 @pytest.mark.parametrize("symptom", (
     "Amazap's tools aren't listed",
     "An Amazap row shows `buyable: false`",
-    "`buy` reports a stale quote",
-    "`buy` returns `approval_required`",
-    "`buy` returns `terms_required`",
-    "`buy` returns `not_yet_supported`",
-    "`buy` refuses on an Amazap account limit",
-    "A paid Amazap call failed",
+    AMAZAP_BUY_POINTER,
 ))
 def test_what_can_go_wrong_covers_the_amazap_cases(symptom):
     symptoms = [row[0] for row in table_rows(read(SKILL))]
@@ -1187,6 +1202,45 @@ def test_reference_matches_the_skill_on_row_state_and_the_cap_name():
 ENDINGS = {
     # quote failure
     "No fresh quote, or it doesn't match the parameters": ("Nothing was charged.", "Never buy on an old or mismatched quote."),
+    # policy refusals
+    "The all-in total is above the user's cap": ("Refuse and buy nothing", "Never raise the cap"),
+    "A budget denial on the direct path": ("Don't retry with a smaller `max_sats`",),
+    "The input holds something sensitive": ("Don't send it", "buy nothing"),
+    # direct-path stops
+    "The invoice costs more than `max_sats`": ("Nothing was paid.", "never above the user's cap", "Never guess a price."),
+    # payment failure and unclear outcomes
+    "The payment didn't go through": ("before any retry", "Never retry with a smaller cap"),
+    "The outcome of a buy or a payment is unclear": (
+        "`get_order` or `orders`",
+        '`receipts(source="session")`',
+        "never replaced by a second one",
+    ),
+    # provider failure after payment, on each path
+    "`alreadyPaid: true`": ("Do not pay again",),
+    "The result doesn't match the listing": ("malformed result", "Don't buy or pay again without asking."),
+    "The user, or the person approving in Amazap, says no": ("Nothing was charged.",),
+    # no Amazap connection, and a URL the user already has
+    "Amazap's tools aren't listed": ("`GET https://amazap.com/api/products`", "Never claim Amazap MCP access."),
+    "The user already has the URL": ("`pay-l402-anywhere`", "never for a listing Amazap surfaced"),
+    "An Amazap row is paused, degraded, or failing": ("never buy it, even with `buyable: true`",),
+    "An Amazap row shows `buyable: false`": ("unless it has `hidden: true`; a hidden row is dropped.", "Never buy it."),
+    # Sats limits may keep small payments working; never promise that they do.
+    "Payments refused while no BTC price is available": ("USD limits fail closed.", "may keep working"),
+}
+
+
+@pytest.mark.parametrize("symptom", ENDINGS)
+def test_what_can_go_wrong_covers_every_ending(symptom):
+    rows_by_symptom = what_can_go_wrong()
+    assert symptom in rows_by_symptom, f"'What can go wrong' has no row for {symptom!r}"
+    missing = [phrase for phrase in ENDINGS[symptom] if phrase not in rows_by_symptom[symptom]]
+    assert not missing, f"the {symptom!r} row is missing {missing}"
+
+
+# The Amazap buy mechanics and the Amazap buy failure rows live in the
+# reference's "Buying through Amazap" (audit row 42). The skill keeps a compact
+# buy step, its safety rules, the no-bypass rule, and one row pointing there.
+AMAZAP_BUY_ENDINGS = {
     # stale quote: a fresh total needs a fresh yes
     "`buy` reports a stale quote": (
         "Nothing was charged.",
@@ -1201,47 +1255,75 @@ ENDINGS = {
         "Once they say they approved it, the same `quote_id` can be bought once.",
     ),
     "`buy` returns `terms_required`": ("Set `accept_terms` only on that yes.",),
-    # policy refusals
-    "The all-in total is above the user's cap": ("Refuse and buy nothing", "Never raise the cap"),
+    "`buy` returns `not_yet_supported`": ("Not buyable in sats.",),
     "`buy` refuses on an Amazap account limit": ("Nothing was charged.", "Only the account owner changes it"),
-    "A budget denial on the direct path": ("Don't retry with a smaller `max_sats`",),
-    "The input holds something sensitive": ("Don't send it", "buy nothing"),
-    # direct-path stops
-    "The invoice costs more than `max_sats`": ("Nothing was paid.", "never above the user's cap", "Never guess a price."),
-    # payment failure and unclear outcomes
-    "The payment didn't go through": ("before any retry", "Never retry with a smaller cap"),
-    "The outcome of a buy or a payment is unclear": (
-        "`get_order` or `orders`",
-        '`receipts(source="session")`',
-        "never replaced by a second one",
-    ),
-    # provider failure after payment, on each path
-    "A paid Amazap call failed": ("never cash", "`claim_failed_call`", "Don't buy a replacement without asking."),
-    "`alreadyPaid: true`": ("Do not pay again",),
-    "The result doesn't match the listing": ("malformed result", "Don't buy or pay again without asking."),
-    "The user, or the person approving in Amazap, says no": ("Nothing was charged.",),
-    # no Amazap connection, and a URL the user already has
-    "Amazap's tools aren't listed": ("`GET https://amazap.com/api/products`", "Never claim Amazap MCP access."),
-    "The user already has the URL": ("`pay-l402-anywhere`", "never for a listing Amazap surfaced"),
-    "An Amazap row is paused, degraded, or failing": ("never buy it, even with `buyable: true`",),
     "Too few credits for the trial": (
         "Ask before `top_up`",
         "only when the human explicitly asks to pay it from the MCP wallet",
         "its own `pay_invoice` payment",
         "outside the user's cap",
     ),
-    "An Amazap row shows `buyable: false`": ("unless it has `hidden: true`; a hidden row is dropped.", "Never buy it."),
-    # Sats limits may keep small payments working; never promise that they do.
-    "Payments refused while no BTC price is available": ("USD limits fail closed.", "may keep working"),
+    "A paid Amazap call failed": ("never cash", "`claim_failed_call`", "Don't buy a replacement without asking."),
 }
 
 
-@pytest.mark.parametrize("symptom", ENDINGS)
-def test_what_can_go_wrong_covers_every_ending(symptom):
-    rows_by_symptom = what_can_go_wrong()
-    assert symptom in rows_by_symptom, f"'What can go wrong' has no row for {symptom!r}"
-    missing = [phrase for phrase in ENDINGS[symptom] if phrase not in rows_by_symptom[symptom]]
+@pytest.mark.parametrize("symptom", AMAZAP_BUY_ENDINGS)
+def test_reference_buy_table_covers_every_amazap_buy_ending(symptom):
+    rows_by_symptom = reference_buy_rows()
+    assert symptom in rows_by_symptom, f"the reference's Amazap buy table has no row for {symptom!r}"
+    missing = [phrase for phrase in AMAZAP_BUY_ENDINGS[symptom] if phrase not in rows_by_symptom[symptom]]
     assert not missing, f"the {symptom!r} row is missing {missing}"
+
+
+def test_skill_points_every_amazap_buy_ending_at_the_reference():
+    rows_by_symptom = what_can_go_wrong()
+    row = rows_by_symptom[AMAZAP_BUY_POINTER]
+    for phrase in (
+        REFERENCE_BASE + "#buying-through-amazap",
+        "Never buy on an old yes",
+        "never work around `approval_required`",
+        "never buy a replacement without asking",
+    ):
+        assert phrase in row, f"the pointer row is missing {phrase!r}"
+    stayed = set(AMAZAP_BUY_ENDINGS) & set(rows_by_symptom)
+    assert not stayed, f"these rows live in the reference now: {sorted(stayed)}"
+
+
+@pytest.mark.parametrize("phrase", (
+    "(../skills/discover-paid-apis/)",
+    "A basket is one buy.",
+    "never copy the invoice into your own message",
+    "Never pay the invoice from the Lightning Enable MCP wallet unless the human explicitly asks.",
+    "Then read `balance` again before buying.",
+    "so a retry with the same `quote_id` is safe once the order shows none.",
+    "A new quote is a new purchase.",
+))
+def test_reference_holds_the_amazap_buy_mechanics(phrase):
+    assert phrase in buying_section(), f"Buying through Amazap is missing {phrase!r}"
+
+
+def test_reference_discovery_section_points_at_the_buy_mechanics():
+    assert "(#buying-through-amazap)" in discovery_section()
+
+
+def test_trial_step_keeps_a_compact_amazap_buy_and_links_the_mechanics():
+    step = skill_section("### 6. Buy one trial")
+    assert REFERENCE_BASE + "#buying-through-amazap" in step
+    for kept in (
+        "set `max_total_sats` to the quoted total, not to the user's cap.",
+        "Never buy on the fresh quote automatically.",
+        "Never re-quote or split the purchase to get around it.",
+        "ask before `top_up`",
+    ):
+        assert kept in step, f"step 6 must keep {kept!r}"
+    for moved in (
+        "**Baskets.**",
+        "**Retries.**",
+        "**Credits short.**",
+        "never copy the invoice into your own message",
+        "The first yes never covers a different total.",
+    ):
+        assert moved not in step, f"step 6 still carries {moved!r}; it lives in the reference"
 
 
 def test_price_outage_row_never_promises_small_payments_keep_working():
@@ -1355,9 +1437,6 @@ def test_products_api_is_read_with_a_plain_get(heading, phrase):
     'receives your input. Go ahead?',
     # After the person approves in Amazap, one buy on that quote, no more.
     "Once they say they approved it, the same `quote_id` can be bought once.",
-    # The top-up invoice is the human's to pay.
-    "Never pay the invoice from the Lightning Enable MCP wallet unless the human explicitly asks.",
-    "Then read `balance` again before buying.",
 ))
 def test_trial_step_pins_the_yes_the_approval_and_the_top_up(phrase):
     assert phrase in skill_section("### 6. Buy one trial"), f"step 6 is missing {phrase!r}"

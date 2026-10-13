@@ -54,6 +54,8 @@ REFERENCE_SECTIONS = (
     "## Live pages",
     "## Discovery versus purchase",
     "## Two wallets",
+    "## Buying through Amazap",
+    "### What can go wrong on an Amazap buy",
     "## Merchant of record and the all-in price",
     "## Verification terminology",
     "## Seller handoff",

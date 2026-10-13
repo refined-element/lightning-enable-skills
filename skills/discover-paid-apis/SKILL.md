@@ -425,7 +425,10 @@ For an Amazap buy, the same yes also covers the current Amazap terms. Add:
 them and go ahead?" A bare "Go ahead?" is never consent to the terms, so
 it never sets `accept_terms`.
 
-**Through Amazap, with `buy`.**
+**Through Amazap, with `buy`.** These rules hold on every Amazap buy. The
+full mechanics, with retries, baskets, top-ups, and a row for each Amazap
+`buy` error, are in
+[Amazap marketplace: Buying through Amazap](https://github.com/refined-element/lightning-enable-skills/blob/main/references/amazap-marketplace.md#buying-through-amazap).
 
 ```
 buy(<the listing and parameters from the quote>,
@@ -446,35 +449,19 @@ buy(<the listing and parameters from the quote>,
   (https://amazap.com/terms and https://amazap.com/credits) and getting the
   user's agreement in the same yes as the purchase.
 - **A stale quote.** When `buy` reports a stale quote, the stale attempt
-  charged nothing, and the error carries a fresh quote. Show the fresh quote
-  from the error, and check that its total is still within the user's cap.
-  Then state the fresh total, show the current Amazap terms links again
-  (https://amazap.com/terms and https://amazap.com/credits), and get a new
-  yes, for the purchase and the terms, before buying with its `quote_id`, its
-  `total_cost`, and its total as `max_total_sats`. The first yes never covers
-  a different total. Never buy on the fresh quote automatically.
-- **`approval_required`.** The total is above Amazap's auto-approve amount,
-  and the person must confirm it in Amazap. Stop, and ask the person to
-  confirm the exact quote in Amazap; nothing is charged until they do. Never
-  re-quote or split the purchase to get around it. Once they say they
-  approved it, the same `quote_id` can be bought once.
-- **Retries.** When the outcome is unclear (a dropped connection, a
-  timeout), check before any retry: `get_order` or `orders` shows whether the
-  buy went through. Repeating a `quote_id` never charges twice, so a retry
-  with the same `quote_id` is safe once the order shows none. A new quote is
-  a new purchase.
-- **Baskets.** A basket is one buy. Put several listings in one buy only when
-  the user asked for more than one call.
-- **Credits short.** If `balance` shows too few credits, ask before `top_up`.
-  The human chooses the top-up amount. `top_up` returns a Lightning invoice
-  and a QR code for the human to pay; let the host show that result to the
-  human, and never copy the invoice into your own message. Never pay the invoice
-  from the Lightning Enable MCP wallet unless the human explicitly asks. If
-  they do, it is a separate payment with `pay_invoice`, and the human says
-  yes to that exact amount first. The user's cap doesn't cover a top-up: it
-  bounds the trial, not the credits added. The MCP `budget` limits do bound
-  that payment, because it leaves the MCP wallet. Then read `balance` again
-  before buying.
+  charged nothing. Show the fresh quote from the error, and check that its
+  total is still within the user's cap. Show the current Amazap terms links
+  again and get a new yes before buying on it. Never buy on the fresh quote
+  automatically.
+- **`approval_required`.** The total is above Amazap's auto-approve amount.
+  Stop, and ask the person to confirm the exact quote in Amazap; nothing is
+  charged until they do. Never re-quote or split the purchase to get around
+  it. Once they say they approved it, the same `quote_id` can be bought once.
+- **Before any retry,** check `get_order` or `orders` for whether the buy
+  went through. Repeating a `quote_id` never charges twice.
+- **Too few credits:** ask before `top_up`. The human chooses the amount and
+  pays the invoice; a top-up paid from the MCP wallet follows the Safety
+  rules below.
 
 **Directly, for a Lightning Enable registry result, with
 `access_l402_resource`.**
@@ -619,23 +606,17 @@ After a paid failure:
 | Amazap's tools aren't listed | Amazap's MCP isn't connected in this host | Search with `GET https://amazap.com/api/products`. For a buy, point the human at https://amazap.com/mcp. Never claim Amazap MCP access. |
 | An Amazap row shows `buyable: false` | The listing isn't payable now | Show it, unless it has `hidden: true`; a hidden row is dropped. Never buy it. |
 | An Amazap row is paused, degraded, or failing | `listingState` or `healthStatus` says so | Show it as not buyable, and never buy it, even with `buyable: true`. |
+| `buy` reports a stale quote, `approval_required`, `terms_required`, `not_yet_supported`, or an Amazap account limit; too few credits; or a paid Amazap call failed | An Amazap buy outcome | Follow the row for that outcome in [Amazap marketplace: Buying through Amazap](https://github.com/refined-element/lightning-enable-skills/blob/main/references/amazap-marketplace.md#buying-through-amazap). Never buy on an old yes, never work around `approval_required`, and never buy a replacement without asking. |
 | The user already has the URL | Nothing to discover | Hand off to `pay-l402-anywhere`. That handoff is for a URL the user already has, never for a listing Amazap surfaced. |
 | The input holds something sensitive | Secrets, a private or logged-in URL, credentials, personal data, or proprietary content | Don't send it unless the user explicitly approved that disclosure. Say what you found, and buy nothing. |
 | No fresh quote, or it doesn't match the parameters | Quote failure | Nothing was charged. Never buy on an old or mismatched quote. Quote again, or pick another candidate with the user. |
-| `buy` reports a stale quote | The quote expired, or the parameters changed | Nothing was charged. Show the fresh quote from the error. If its total is within the user's cap, state that total, show the current Amazap terms links again, and get a new yes before buying, with that total as `max_total_sats`. |
 | The all-in total is above the user's cap | Policy refusal | Refuse and buy nothing; say the total and the cap. Never raise the cap or split the purchase to fit under it. |
-| `buy` refuses on an Amazap account limit | Policy refusal: a per-call, per-day, or per-session Amazap limit | Nothing was charged. Report the limit the error names. Only the account owner changes it, on Amazap. |
 | A budget denial on the direct path | Policy refusal: a per-payment or per-session cap on the MCP wallet | Report the limit the error names. Don't retry with a smaller `max_sats` to squeeze under it. Only the human changes the config file. |
 | Payments refused while no BTC price is available | USD limits on the MCP wallet can't be checked during a price outage | Expected on the direct path: USD limits fail closed. When the operator set sats-denominated limits, small payments may keep working during a price outage. |
-| `buy` returns `approval_required` | The total is above Amazap's auto-approve amount | Stop. The person confirms the exact quote in Amazap; nothing is charged until they do. Never re-quote or split the purchase to get around it. Once they say they approved it, the same `quote_id` can be bought once. |
-| `buy` returns `terms_required` | `accept_terms` was missing | Show the current Amazap terms (https://amazap.com/terms and https://amazap.com/credits) and ask again, in one yes for the purchase and the terms. Set `accept_terms` only on that yes. |
-| `buy` returns `not_yet_supported` | A listing payable only in a stablecoin | Not buyable in sats. Pick another candidate with the user. |
-| Too few credits for the trial | The Amazap account needs a top-up | Ask before `top_up`; the human chooses the amount and pays the invoice. Pay it from the MCP wallet only when the human explicitly asks to pay it from the MCP wallet. Then the top-up is its own `pay_invoice` payment, with its own yes on that exact amount: outside the user's cap, and inside the MCP `budget` limits. |
 | `requiresConfirmation: true` | The amount is above the MCP auto-approve tier | Ask the human for the code, then repeat the same call with `confirmation_nonce`. Never guess a code. |
 | The invoice costs more than `max_sats` | The seller raised the price since the listing | Nothing was paid. Tell the human the real price, and ask again only if it is within the user's cap; never above the user's cap. Never guess a price. |
 | The payment didn't go through | Payment failure: a wallet, route, or invoice error | Report it, and check the outcome before any retry. Never retry with a smaller cap or `max_sats` to squeeze under a limit. |
 | The outcome of a buy or a payment is unclear | A dropped connection or a timeout | Check before any retry: `get_order` or `orders` on the Amazap path, `receipts(source="session")` on the direct path. A pending or unclear payment is never replaced by a second one. |
-| A paid Amazap call failed | Provider failure after payment: the service failed or returned nothing | Re-credited as Amazap credits, never cash. Say whether it was automatic; if not, offer `claim_failed_call` within the window the current Amazap credit terms state. Don't buy a replacement without asking. |
 | `alreadyPaid: true` | Provider failure after a direct payment: paid, then the endpoint errored or redirected | Do not pay again or call the URL again. Report the sats paid and the error. |
 | The result doesn't match the listing | A malformed result, after payment | Report it as a malformed result, and quote what came back; never claim data it lacks. On Amazap, offer `report_sku` with the user's approval. Don't buy or pay again without asking. |
 | The user, or the person approving in Amazap, says no | User-declined approval | Stop. Nothing was charged. Report that nothing was bought. |
