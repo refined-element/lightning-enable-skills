@@ -339,9 +339,10 @@ available: say so, and give the human its GitHub URL,
 https://github.com/refined-element/lightning-enable-skills/tree/main/skills/l402-compatibility-report.
 
 - **Read-only check.** From that skill's folder, run it on the endpoint `url`
-  from step 4, with the method step 5 used and the human's cap in sats:
-  `python scripts/l402_check.py <url> --json --max-sats <cap> --output mode-a.json`.
-  Take the `classification` field from the JSON, never from the Markdown.
+  from step 4, with the route's `http_method` from step 4 and the human's cap
+  in sats: `python scripts/l402_check.py <url> --json --max-sats <cap> --output mode-a.json`
+  (add `--method POST` for a `POST` route). Take the `classification` field
+  from the JSON, never from the Markdown.
   `INCOMPATIBLE` comes with its fix: a private, loopback, link-local, or
   non-HTTPS URL, a `200` to an unpaid request, or a `400`, `415`, or `422` to
   a request with no body each has one. `CHALLENGE_COMPATIBLE` is the most the
@@ -461,7 +462,8 @@ after the hand-off, as an option; no answer means no.
 - **Read back.** Never call the endpoint listed or live until you have read
   `GET https://amazap.com/api/products/<slug>` and checked `hidden`,
   `listingState`, and `healthStatus`; call it listed only with
-  `hidden: false`. Listed is not verified paid delivery.
+  `hidden: false` and when the row's endpoint URL and seller price match this
+  endpoint. Listed is not verified paid delivery.
 
 Lightning Enable does not hold funds; the payment provider facilitates custody
 and settlement. Full rules:

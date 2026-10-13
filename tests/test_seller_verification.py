@@ -272,8 +272,14 @@ def test_verify_step_names_the_lightning_enable_report(skill):
 def test_hand_off_says_how_buyers_find_and_pay_you(skill):
     text = flat(hand_off(skill))
     common = ("**How buyers find and pay you:**", "`discover_api(url=", "`access_l402_resource`",
-              "(../pay-l402-anywhere/)", 'list_challenges", challenge_status="paid")',
-              "No marketplace account or credits")
+              "(../pay-l402-anywhere/)", "No marketplace account or credits")
+    # The "What to watch" bullet also names the paid list_challenges call, so
+    # check the seller's own view inside the buyer bullet itself.
+    start = text.find("**How buyers find and pay you:**")
+    end = text.find(" - **", start)
+    bullet = "" if start < 0 else text[start:end] if end >= 0 else text[start:]
+    for phrase in ('list_challenges", challenge_status="paid")', "the dashboard"):
+        assert phrase in bullet, f"{skill}: the buyer bullet must name {phrase!r}"
     if skill in PROXY_SKILLS:
         wanted = common + ("Lightning Enable registry", "`discover_api(query=")
     else:
