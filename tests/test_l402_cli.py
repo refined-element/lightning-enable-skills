@@ -28,7 +28,7 @@ def test_markdown_is_the_default_and_json_is_available():
     fixture = support.load_fixture("le-test-ping")
     code, markdown = run([fixture["request"]["url"]], fixture)
     assert code == 0
-    assert markdown.startswith("# L402 Compatibility Report\n")
+    assert markdown.startswith("# Lightning Enable L402 Compatibility Report\n")
     code, text = run([fixture["request"]["url"], "--json"], fixture)
     assert code == 0
     assert json.loads(text)["classification"] == "CHALLENGE_COMPATIBLE"
@@ -222,7 +222,9 @@ def test_body_is_sent_but_never_printed():
                                   ["https://api.example.com/x", "--method", "GE T"],
                                   ["https://api.example.com/x", "--mode-a", "mode-a.json"],
                                   ["https://api.example.com/x", "--credential-stdin"],
-                                  ["https://api.example.com/x", "--evidence", "evidence.json"]])
+                                  ["https://api.example.com/x", "--evidence", "evidence.json"],
+                                  ["https://api.example.com/x", "--profile", "other"],
+                                  ["--evidence", "evidence.json", "--profile", "amazap"]])
 def test_usage_errors_exit_2(argv):
     with pytest.raises(SystemExit) as caught:
         l402_check.main(argv, stdout=io.StringIO())
@@ -233,11 +235,33 @@ def test_help_lists_every_flag_and_the_exit_codes():
     result = subprocess.run([sys.executable, str(SCRIPT), "--help"], capture_output=True, text=True, timeout=60)
     assert result.returncode == 0
     for flag in ("url", "--method", "--header", "--body", "--timeout", "--max-sats", "--json", "--allow-private",
-                 "--evidence", "--mode-a", "--credential-stdin", "--output"):
+                 "--evidence", "--mode-a", "--credential-stdin", "--output", "--profile"):
         assert flag in result.stdout
     assert "Exit status" in result.stdout
     assert "non-secret" in result.stdout
     assert "\N{EM DASH}" not in result.stdout
+
+
+def test_an_unknown_profile_is_a_usage_error_that_never_echoes_the_name(capsys):
+    with pytest.raises(SystemExit) as caught:
+        l402_check.main(["https://api.example.com/x", "--profile", "fixture-string-profile"], stdout=io.StringIO())
+    assert caught.value.code == 2
+    err = capsys.readouterr().err
+    assert "the profile must be one of: amazap" in err
+    assert "fixture-string-profile" not in err
+
+
+def test_the_amazap_profile_flag_is_the_only_way_to_probe_the_host_root():
+    fixture = support.load_fixture("l402kit-worldstate-single-l402")
+    with_flag, without_flag = [], []
+    run([fixture["request"]["url"], "--json", "--profile", "amazap"], fixture,
+        transport=support.fake_transport(fixture["responses"], with_flag))
+    code, text = run([fixture["request"]["url"], "--json"], fixture,
+                     transport=support.fake_transport(fixture["responses"], without_flag))
+    assert len(with_flag) == 3
+    assert len(without_flag) == 1
+    assert code == 0
+    assert json.loads(text)["marketplace_profiles"]["amazap"]["status"] == "NOT_CHECKED"
 
 
 def test_a_refused_target_from_the_shell_prints_an_inconclusive_report():
@@ -412,7 +436,11 @@ def test_a_terminal_stdin_is_fine_without_credential_stdin(tmp_path):
 
 @pytest.mark.parametrize("key, value", [
     ("target", []), ("target", {"url": "x"}), ("transport", []), ("challenge", "fixture-string-x"),
-    ("invoice", []), ("binding", 5), ("marketplace", {"checks": 5}), ("marketplace", {"checks": [1]}),
+    ("invoice", []), ("binding", 5), ("marketplace_profiles", []), ("marketplace_profiles", {"amazap": {"checks": 5}}), ("marketplace_profiles", {"amazap": {"checks": [1]}}), ("marketplace_profiles", {"fixture-string-x": {}}),
+    ("marketplace_profiles", {}), ("marketplace_profiles", {"amazap": {"checks": []}}),
+    ("marketplace_profiles", {"amazap": {"checks": [{}]}}), ("marketplace_profiles", {"amazap": {}}),
+    ("marketplace_profiles", {"amazap": {"checks": [{"name": "fixture-string-x", "pass": True, "required": True,
+                                                     "detail": "fixture-string-x"}]}}),
     ("findings", 5), ("findings", ["fixture-string-x"]), ("evidence", []), ("rerun", "x"),
 ])
 def test_a_malformed_read_only_report_is_an_evidence_error_not_a_traceback(tmp_path, capsys, key, value):

@@ -1,9 +1,9 @@
-# L402 Compatibility Report
+# Lightning Enable L402 Compatibility Report
 
 - Target: <METHOD> <redacted-safe URL>
 - Checked at: <UTC timestamp, YYYY-MM-DDTHH:MM:SSZ>
 - Mode: read-only | paid
-- Classification: <CHALLENGE_COMPATIBLE | PAYMENT_COMPATIBLE | FULFILLMENT_VERIFIED | MARKETPLACE_READY | INCOMPATIBLE | INCONCLUSIVE>
+- Classification: <CHALLENGE_COMPATIBLE | PAYMENT_COMPATIBLE | FULFILLMENT_VERIFIED | INCOMPATIBLE | INCONCLUSIVE>
 
 ## Summary
 
@@ -33,10 +33,6 @@
 
 <Not tested unless a replay was run on a read-only operation with no harmful side effects.>
 
-## Marketplace readiness
-
-<Each listing check with pass or fail, plus what the script cannot check.>
-
 ## Security findings
 
 <Refused targets, blocked redirects, credentials in the unpaid body, payments over the cap, second payments.>
@@ -52,3 +48,7 @@
 ## Evidence retained
 
 <Timestamp, safe URL and method, HTTP statuses, amount, payment hash, latency, classification. Never an invoice string, preimage, macaroon or token, authorization header, NWC URI, API key, wallet balance, or private request body.>
+
+## Optional marketplace profiles
+
+<Optional. One subsection per marketplace profile (### Amazap): its status (READY, NOT_READY, or NOT_CHECKED), each check with pass, fail, or not checked, "(advisory)" on a check that never decides the status, what the script cannot check, and a note. A profile the run did not request (no --profile amazap) is one line instead, with no checks or verdicts. A profile never changes the classification.>

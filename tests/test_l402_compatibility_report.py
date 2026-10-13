@@ -23,13 +23,22 @@ def report_for(name, **kwargs):
     return support.run_fixture(support.load_fixture(name), **kwargs)
 
 
+def amazap(report):
+    return report["marketplace_profiles"]["amazap"]
+
+
+def amazap_checks(report):
+    return {check["name"]: check for check in amazap(report)["checks"]}
+
+
 def test_script_classifications_match_the_shared_reference():
     assert CLASSIFICATIONS == test_shared_references.CLASSIFICATIONS
 
 
 def test_the_vocabulary_has_one_home():
     # l402_analyze re-exports the shared names; it never defines its own copies.
-    for name in ("CLASSIFICATIONS", "FIXES", "Finding", "TRANSIENT_STATUSES", "REPORT_VERSION"):
+    for name in ("CLASSIFICATIONS", "FIXES", "Finding", "TRANSIENT_STATUSES", "REPORT_VERSION",
+                 "MARKETPLACE_PROFILES", "profile_status", "profile_note"):
         assert getattr(l402_analyze, name) is getattr(l402_levels, name)
 
 
@@ -65,7 +74,8 @@ def test_valid_unpaid_challenge_is_challenge_compatible_only():
     assert report["classification"] == "CHALLENGE_COMPATIBLE"
     assert report["paid_fulfillment"]["tested"] is False
     assert report["mode"] == "read-only"
-    assert report["marketplace"]["listing_ready"] is False
+    assert amazap(report)["status"] == "NOT_CHECKED"
+    assert "marketplace" not in report
 
 
 # 2 and 11. Payment is its own scheme; a multi-scheme 402 is classified by L402 and lists the rest.
@@ -101,13 +111,12 @@ def test_amazap_extra_token_param_is_reported():
     assert l402["token_present"] is True and l402["invoice_present"] is True
 
 
-# 3. Amountless invoice is incompatible with marketplace readiness.
-def test_amountless_invoice_fails_marketplace_readiness():
+# 3. An amountless invoice fails the core check, and the Amazap profile with it.
+def test_amountless_invoice_fails_the_core_check_and_the_amazap_profile():
     report, _ = report_for("synthetic-amountless-invoice")
     assert report["classification"] == "INCOMPATIBLE"
-    checks = {c["name"]: c["pass"] for c in report["marketplace"]["checks"]}
-    assert checks["priced_invoice"] is False
-    assert report["marketplace"]["listing_ready"] is False
+    assert amazap_checks(report)["priced_invoice"]["pass"] is False
+    assert amazap(report)["status"] == "NOT_READY"
     assert any("priced invoice" in fix for fix in report["required_fixes"])
 
 
@@ -149,15 +158,15 @@ def test_comma_joined_header_gives_the_same_report(name):
         assert joined_report[key] == separate_report[key]
 
 
-# 13. A 415 on an empty-body POST is not marketplace-ready, with the section 40 fix.
+# 13. A 415 on an empty-body POST is INCOMPATIBLE and fails the Amazap profile's
+# no-body check, with the section 40 fix.
 def test_415_on_empty_body_post():
     report, _ = report_for("store-checkout-empty-post-415")
     assert report["classification"] == "INCOMPATIBLE"
-    checks = {c["name"]: c["pass"] for c in report["marketplace"]["checks"]}
-    assert checks["probe_without_body"] is False
+    assert amazap_checks(report)["probe_without_body"]["pass"] is False
     assert report["required_fixes"] == [
         "Issue the 402 before content-type or body validation, or provide a fixed-price, "
-        "single-call route for marketplace listing."
+        "single-call route whose unpaid request with no body gets the 402."
     ]
     finding = next(f for f in report["findings"] if f["code"] == "unsupported_media_before_challenge")
     assert "empty-body POST" in finding["message"]
@@ -204,32 +213,121 @@ def test_expired_invoice_reports_zero_remaining():
     assert report["invoice"]["remaining_seconds"] == 0
 
 
-def test_host_root_metadata_is_probed_and_reported():
-    fixture = support.load_fixture("le-test-ping")
+def test_host_root_metadata_is_probed_only_with_the_amazap_profile():
+    fixture = support.load_fixture("l402kit-worldstate-single-l402")
     log = []
-    llms = {"url": "https://api.lightningenable.com/llms.txt", "status": 200, "headers": [], "body": "# llms"}
-    report, _ = support.run_fixture(fixture, extra_responses=[llms], log=log)
+    llms = {"url": "https://l402kit.com/llms.txt", "status": 200, "headers": [], "body": "# llms"}
+    report, _ = support.run_fixture(fixture, extra_responses=[llms], log=log, profiles=("amazap",))
     assert [e["url"] for e in log] == [
-        "https://api.lightningenable.com/l402/test/ping",
-        "https://api.lightningenable.com/openapi.json",
-        "https://api.lightningenable.com/llms.txt",
+        fixture["request"]["url"],
+        "https://l402kit.com/openapi.json",
+        "https://l402kit.com/llms.txt",
     ]
-    checks = {c["name"]: c for c in report["marketplace"]["checks"]}
-    assert checks["host_root_metadata"]["pass"] is True
-    assert "/llms.txt" in checks["host_root_metadata"]["detail"]
+    check = amazap_checks(report)["host_root_metadata"]
+    assert check["pass"] is True
+    assert check["required"] is False
+    assert "/llms.txt" in check["detail"]
     assert all(entry["method"] == "GET" and entry["body"] is None for entry in log)
+
+
+def test_a_read_only_run_without_the_profile_makes_exactly_one_request():
+    log = []
+    report, _ = report_for("l402kit-worldstate-single-l402", log=log)
+    assert len(log) == 1
+    check = amazap_checks(report)["host_root_metadata"]
+    assert check["pass"] is None
+    assert check["detail"] == "Not probed: the Amazap profile was not requested."
+    assert amazap(report)["requested"] is False
+    assert amazap(report)["status"] == "NOT_CHECKED"
+
+
+@pytest.mark.parametrize("name", ["le-test-ping", "le-proxy-weather"])
+def test_on_the_lightning_enable_host_the_host_root_files_describe_the_platform(name):
+    llms = {"url": "https://api.lightningenable.com/llms.txt", "status": 200, "headers": [], "body": "# llms"}
+    report, _ = report_for(name, extra_responses=[llms], profiles=("amazap",))
+    assert amazap(report)["requested"] is True
+    check = amazap_checks(report)["host_root_metadata"]
+    assert check["pass"] is False
+    assert "Lightning Enable platform" in check["detail"]
+    assert "by hand" in check["detail"]
+    # Not requested: "Not probed" on the Lightning Enable host too, never a failing Amazap check.
+    unrequested, _ = report_for(name)
+    check = amazap_checks(unrequested)["host_root_metadata"]
+    assert check["pass"] is None
+    assert check["detail"].startswith("Not probed")
+    assert "Lightning Enable platform" not in check["detail"]
+    assert amazap(unrequested)["requested"] is False
 
 
 def test_metadata_is_not_probed_when_there_is_no_402():
     log = []
-    report_for("synthetic-200-unpaid", log=log)
+    report, _ = report_for("synthetic-200-unpaid", log=log, profiles=("amazap",))
     assert len(log) == 1
+    # Requested but skipped reads differently from "not requested".
+    check = amazap_checks(report)["host_root_metadata"]
+    assert check["pass"] is None
+    assert check["detail"].startswith("Skipped:")
+    assert "only after the listed URL answers 402" in check["detail"]
+    assert "add --profile amazap" not in check["detail"]
+    unrequested, _ = report_for("synthetic-200-unpaid")
+    assert amazap_checks(unrequested)["host_root_metadata"]["detail"].startswith("Not probed")
 
 
-def test_proxy_manifest_link_is_noted_for_amazap_prefill():
+def test_the_not_ready_note_covers_the_classification_case():
+    note = l402_levels.profile_note("NOT_READY")
+    assert "A required check failed, or the classification rules readiness out" in note
+    assert "see the checks and the classification" in note
+    assert "verified" not in " ".join(l402_levels.PROFILE_NOTES[s] for s in ("NOT_READY", "NOT_CHECKED")).lower()
+
+
+def test_a_linked_l402_manifest_is_a_core_discovery_note():
     report, _ = report_for("le-proxy-weather")
-    note = next(f for f in report["findings"] if f["code"] == "proxy_manifest_link")
-    assert "host root" in note["message"]
+    note = next(f for f in report["findings"] if f["code"] == "l402_manifest_link")
+    assert note["section"] == "challenge"
+    assert note["severity"] == "info"
+    assert "discover" in note["message"]
+    assert "Amazap" not in note["message"]
+
+
+def test_a_slow_402_fails_only_the_amazap_profile():
+    fixture = support.load_fixture("le-test-ping")
+    fixture["responses"][0]["latency_ms"] = 9000
+    report, _ = support.run_fixture(fixture)
+    assert report["classification"] == "CHALLENGE_COMPATIBLE"
+    assert amazap_checks(report)["within_probe_window"]["pass"] is False
+    assert amazap(report)["status"] == "NOT_READY"
+    assert "slow_challenge" not in {f["code"] for f in report["findings"]}
+
+
+@pytest.mark.parametrize("name", support.fixture_names())
+def test_marketplace_checks_never_become_core_findings_or_fixes(name):
+    report, _ = support.run_fixture(support.load_fixture(name), profiles=("amazap",))
+    codes = {f["code"] for f in report["findings"]}
+    assert not codes & {"no_host_root_metadata", "slow_challenge", "proxy_manifest_link", "marketplace_gaps"}
+    assert all(f["section"] != "marketplace" for f in report["findings"])
+    assert not [fix for fix in report["required_fixes"] if "host root" in fix or "Amazap" in fix]
+    assert amazap(report)["status"] in l402_levels.PROFILE_STATUSES
+
+
+def test_profile_status_rules():
+    status = l402_levels.profile_status
+    ok = [{"name": "a", "pass": True, "required": True}]
+    assert status("FULFILLMENT_VERIFIED", ok) == "READY"
+    assert status("FULFILLMENT_VERIFIED", ok + [{"name": "b", "pass": False, "required": False}]) == "READY"
+    assert status("CHALLENGE_COMPATIBLE", ok) == "NOT_CHECKED"
+    assert status("INCONCLUSIVE", ok + [{"name": "c", "pass": None, "required": True}]) == "NOT_CHECKED"
+    assert status("FULFILLMENT_VERIFIED", ok + [{"name": "c", "pass": False, "required": True}]) == "NOT_READY"
+    assert status("PAYMENT_COMPATIBLE", ok) == "NOT_READY"
+    assert status("INCOMPATIBLE", ok) == "NOT_READY"
+
+
+def test_the_fix_table_holds_no_marketplace_fix():
+    assert not {"no_host_root_metadata", "slow_challenge", "proxy_manifest_link"} & set(l402_levels.FIXES)
+
+
+def test_no_script_names_a_marketplace_classification():
+    for script in sorted(support.SCRIPTS.glob("*.py")):
+        assert "MARKETPLACE_READY" not in script.read_text(encoding="utf-8"), script.name
 
 
 def test_secret_in_unpaid_body_is_flagged_by_kind_only():

@@ -29,7 +29,7 @@ verifies the proof, and proxies the call.
 
 **Automated:** wallet connection, budget tightening, account creation (paid over
 L402), receive-wallet wiring, proxy creation, endpoint pricing, publishing, the
-self-test purchase, and the hand-off summary.
+self-test purchase, the compatibility check, and the hand-off summary.
 
 **Not automated — the human must supply these:**
 
@@ -47,6 +47,7 @@ self-test purchase, and the hand-off summary.
   installed and running.
 - A wallet that returns Lightning **preimages**: NWC, LND, or Strike. OpenNode
   does not return preimages and cannot pay L402 challenges.
+- The [`l402-compatibility-report`](../l402-compatibility-report/) skill, for step 6.
 - Tools this skill uses:
   - `setup_wallet` — reports the configured wallet, or connects one over NWC.
   - `get_balance` — the real funds.
@@ -243,7 +244,7 @@ l402_producer(action="add_endpoint", proxy_id="<id>", endpoint_id="forecast",
   Producer Sandbox that is 3 distinct resource paths, counted for the life of the
   account.
 
-Start with **one** priced route. More routes are one call each, and step 6 tells
+Start with **one** priced route. More routes are one call each, and step 7 tells
 the human how to add them.
 
 Publish it:
@@ -328,13 +329,82 @@ If this action reports that the route is unavailable, the deployment predates th
 challenge-listing route. Fall back to `l402_producer(action="status")`, which
 carries the recent challenges too.
 
-### 6. Hand off
+### 6. Verify your endpoint
+
+Check the endpoint the way a buyer's agent meets it, with the Lightning Enable
+L402 compatibility report,
+[`l402-compatibility-report`](../l402-compatibility-report/). This step reads;
+step 5's purchase is its paid evidence. If `l402-compatibility-report` is not
+installed, paid delivery stays unverified and no classification is
+available: say so, and give the human its GitHub URL,
+https://github.com/refined-element/lightning-enable-skills/tree/main/skills/l402-compatibility-report.
+
+- **Read-only check.** From that skill's folder, run it on the endpoint `url`
+  from step 4, with the route's `http_method` from step 4 and the human's cap
+  in sats: `python scripts/l402_check.py <url> --json --max-sats <cap> --output mode-a.json`
+  (add `--method POST` for a `POST` route). Take the `classification` field
+  from the JSON, never from the Markdown.
+  `INCOMPATIBLE` comes with its fix: a private, loopback, link-local, or
+  non-HTTPS URL, a `200` to an unpaid request, or a `400`, `415`, or `422` to
+  a request with no body each has one. `CHALLENGE_COMPATIBLE` is the most the
+  read-only check can return for a correct endpoint: say "challenge-compatible,
+  fulfillment unverified", and do not report paid delivery as proven until
+  the paid evidence below lifts it.
+- **Pay once, never twice.** If the self-test (step 5) made no payment for
+  this endpoint by any means (a testnet invoice doesn't count), run that
+  skill's paid check once, with the human's yes; otherwise the cases below
+  apply and the agent never pays again. The paid check needs a wallet that
+  can pay this endpoint: if step 5 skipped the purchase because the wallet
+  refused to pay its own invoice, do not attempt the paid check with the same
+  wallet, and paid delivery stays unverified. If step 5 paid this exact URL
+  with the same method through `access_l402_resource`, from either wallet,
+  record that call as the evidence (steps 6 and 7 of
+  `l402-compatibility-report`, with `--mode-a mode-a.json` and that call's
+  token piped on stdin) instead of paying again. If that token is gone, paid
+  delivery stays unverified; do not pay again. A self-test payment of a
+  testnet invoice moved no real money for this endpoint, so it is neither
+  reuse evidence nor the one paid check: once the endpoint quotes a mainnet
+  invoice at the chosen price, run the paid check once, with the human's
+  yes. A step 5 payment of this URL with a different method also counts as
+  paid: paid delivery stays unverified; do not pay again. A payment through
+  `pay_l402_challenge` counts as paid. The agent has no tool that fetches the
+  resource with a token it already holds, and `access_l402_resource` would
+  pay again, so in that run the result stays at `CHALLENGE_COMPATIBLE`, and
+  the agent does not pay again. A self-test payment made by hand, outside
+  both tools, also counts as paid: paid delivery stays unverified in that
+  run, and the agent does not pay again. If the human wants the paid check
+  later, they choose it in a later run, and the skill says plainly that it is
+  a second payment for this endpoint. Without the token the paid check ends
+  `INCONCLUSIVE`, so a paid check through the Python MCP server never proves
+  paid delivery. The paid check runs on `GET` or `HEAD` only, so a `POST`
+  route stays at `CHALLENGE_COMPATIBLE`.
+- **Report the result.** `FULFILLMENT_VERIFIED` means the request, the 402,
+  the payment, the authorized retry, and the expected 2xx all worked, with
+  the preimage matched to the payment hash. Pass on the report's
+  `paid_fulfillment.hash_source`: for an opaque token the preimage was matched
+  against the wallet's recorded payment, not the invoice. The report's
+  optional Amazap profile matters only for step 8 and never changes this
+  result.
+
+### 7. Hand off
 
 Tell the human, in this order:
 
-- **What to share:** the OpenAPI URL and the manifest URL. Published endpoints
-  also appear in the L402 registry, where other agents discover them with
-  `discover_api`.
+- **What to share:** the OpenAPI URL and the manifest URL.
+- **How buyers find and pay you:** `publish` listed the endpoint in the
+  Lightning Enable registry. A buyer's agent finds it with
+  `discover_api(query="<words from the service description>")`, or reads the
+  manifest URL directly with `discover_api(url="<manifest URL>")`, then pays
+  each call from its own wallet over L402: `access_l402_resource`, the
+  [`pay-l402-anywhere`](../pay-l402-anywhere/) skill, or any L402 client. No
+  marketplace account or credits are involved, and every sat settles to the
+  wallet from step 3. Each paid call shows up in
+  `l402_producer(action="list_challenges", challenge_status="paid")`; the
+  dashboard's Endpoints page shows challenges minted per endpoint, not
+  payments.
+- **What step 6 showed:** the report's classification, the payment hash, and
+  the amount, never a credential. `FULFILLMENT_VERIFIED` is the complete
+  result.
 - **What to watch:** `l402_producer(action="list_challenges", challenge_status="paid")`
   for sales, `l402_producer(action="status")` for the account, and
   `receipts(source="durable")` for the wallet's own payment log.
@@ -363,111 +433,42 @@ Tell the human, in this order:
 State this as fact, not as a sales pitch, and do not quote plan prices from
 memory — point at [lightningenable.com](https://www.lightningenable.com) instead.
 
-### 7. Optional: list on Amazap
+### 8. Optional: list on Amazap
 
-[Amazap](https://amazap.com/sell) is a storefront where agents find and buy
-L402 endpoints. Listing there is optional distribution, and the human decides.
-Offer it only after the self-test, and only as an offer; no answer means no.
+The setup is complete at step 7. [Amazap](https://amazap.com/sell), a
+separate marketplace, can extend it with more distribution. Offer it once,
+after the hand-off, as an option; no answer means no.
 
-- **Existing row first.** A published endpoint can already be in Amazap's
-  catalog, imported from 402 Index. Search by service name,
-  `GET https://amazap.com/api/products?q=<service name>`, and page with
-  `limit` and `offset` until `offset >= total` before you conclude there is
-  no row; a host search returns every Lightning Enable proxy. Every proxy
-  shares `api.lightningenable.com`, so match the full endpoint URL the row
-  stores (a per-route URL or the proxy's base URL), not the host alone.
-  Search skips hidden rows, so when the human knows a slug, also read
-  `GET https://amazap.com/api/products/<slug>`, and look for the service in
-  https://amazap.com/sitemap.xml. If a row exists, report its `hidden`,
-  `listingState`, and `healthStatus`, and let the human decide with Amazap
-  whether to refresh it. Never draft a duplicate listing.
-- **Ask first.** Ask whether the human wants an Amazap listing before any paid
-  gate check, so no sats are spent on a listing they don't want. No answer
-  means no.
-- **Gate.** Run [`l402-compatibility-report`](../l402-compatibility-report/)
-  on the endpoint URL with the method you would list:
-  `python scripts/l402_check.py <url> --json --max-sats <cap> --output mode-a.json`
-  from that skill's folder, with the human's cap in sats (add
-  `--method POST` for a `POST` route). Its paid check reads that saved report.
-  If `l402-compatibility-report` is not installed, the listing is not ready;
-  give the human its GitHub URL,
-  https://github.com/refined-element/lightning-enable-skills/tree/main/skills/l402-compatibility-report.
-  Take the `classification` field from the JSON. Offer the listing as ready
-  only at `FULFILLMENT_VERIFIED` or `MARKETPLACE_READY`, and only once example
-  parameters are known, replay behavior is understood, no error or output
-  exposes a secret, and the human has chosen title, description, category,
-  and price. For a Lightning Enable proxy, `FULFILLMENT_VERIFIED` is the
-  ceiling: `MARKETPLACE_READY` is not reachable, because the host-root
-  metadata check doesn't count (see Fields by hand). `CHALLENGE_COMPATIBLE` is
-  the most the read-only check can return for a correct endpoint: say
-  "challenge-compatible, fulfillment unverified", and do not offer the listing
-  as ready until the paid check below lifts it. A private, loopback,
-  link-local, or non-HTTPS URL, a `200` to an unpaid request, or a `400`,
-  `415`, or `422` to a request with no body is not listing-ready.
-- **Pay once.** Pay for the gate once, never twice. If the self-test (step 5)
-  made no payment for this endpoint by any means (a testnet invoice doesn't
-  count), run that skill's paid check
-  once, with the human's yes; otherwise the cases below apply and the agent
-  never pays again. The paid
-  check needs a wallet that can pay this endpoint: if step 5 skipped the
-  purchase because the wallet refused to pay its own invoice, do not attempt
-  the paid check with the same wallet, and the listing is not ready. If step 5
-  paid this exact URL with the same method through `access_l402_resource`,
-  from either wallet, record that call as the evidence (steps 6 and 7 of
-  `l402-compatibility-report`, with `--mode-a mode-a.json` and that call's
-  token piped on stdin) instead of paying again. If that token is gone, the
-  listing is not ready; do not pay again. A self-test payment of a testnet
-  invoice moved no real money for this endpoint, so it is neither reuse
-  evidence nor a payment for the gate: once the endpoint quotes a mainnet
-  invoice at the chosen price, run the paid check once, with the human's yes.
-  A step 5 payment of this URL with a
-  different method also counts as paid: the listing is not ready; do not pay
-  again. A payment through `pay_l402_challenge` counts as paid. The
-  agent has no tool that fetches the resource with a token it already holds,
-  and `access_l402_resource` would pay again, so in that run the gate stays at
-  `CHALLENGE_COMPATIBLE`: the listing is not ready, and the agent does not pay
-  again. A self-test payment made by hand, outside both tools, also counts
-  as paid: the listing is not ready in that run, and the agent does not pay
-  again. If the human wants the paid check later, they choose it in a later
-  run, and the skill says plainly that it is a second payment for this
-  endpoint. Without the
-  token the paid check ends `INCONCLUSIVE`, so a paid check through the Python
-  MCP server is never offered as ready. The paid check runs on `GET` or `HEAD`
-  only, so a `POST` route stays at `CHALLENGE_COMPATIBLE` here and is never
-  offered as ready.
-- **Draft, never publish.** Only once the gate passes, call Amazap's read-only
-  `list_my_endpoint` tool when the host lists it; otherwise give the human
-  https://amazap.com/sell and a draft built from the reference's listing-copy
-  template. Show the draft beside the current Amazap seller terms, linked
-  live.
-- **Fields by hand.** On `api.lightningenable.com`, the human supplies the
-  title, description, category, and example parameters by hand: Amazap's
-  prefill reads the host root, which describes Lightning Enable, not this
-  proxy. For the same reason the host-root metadata check doesn't count for a
-  proxy there, so report it as `FULFILLMENT_VERIFIED` at most, even when the
-  report says `MARKETPLACE_READY`.
-- **Two prices.** Show the seller price (the invoice amount) and Amazap's
-  all-in shopper price separately, never added together; the all-in figure
-  comes from Amazap's draft or page. Amazap locks the price at listing time,
-  so after any price change the seller must re-run Amazap's checks.
-- **The human decides.** Without the human's explicit approval, never submit
-  the listing, accept seller terms, provide or infer a contact email, opt into
-  announcements, publish a Nostr handle, change the endpoint's price, or claim
-  a commercial relationship among any of Lightning Enable, Amazap, or Amboss.
-  The human enters the contact email and submits. Submitting publishes the
-  listing automatically once Amazap's checks pass, so the human reviews the
-  email, the copy, both prices, and the terms first.
+- **Ask first.** Ask whether the human wants an Amazap listing. No answer
+  means no. Only after a yes, look for an existing row, imported from 402
+  Index: match the full endpoint URL the row stores, not the host alone.
+  Never draft a duplicate listing.
+- **Gate.** Reuse the step 6 report; never pay again for a listing. Offer the
+  listing as ready only when its `classification` is `FULFILLMENT_VERIFIED`
+  and its `marketplace_profiles.amazap.status` is `READY`, and only once
+  example parameters are known, replay behavior is understood, no error or
+  output exposes a secret, and the human has chosen title, description,
+  category, and price. Without that report, the listing is not ready.
+- **Draft, never publish.** Only once the gate passes, call Amazap's
+  read-only `list_my_endpoint` tool when the host lists it, or give the human
+  https://amazap.com/sell. On `api.lightningenable.com` the human supplies
+  the title, description, category, and example parameters by hand.
+- **The human decides.** Show the seller price and Amazap's all-in price
+  separately. Without the human's explicit approval, never submit the
+  listing, accept seller terms, provide or infer a contact email, opt into
+  announcements, publish a Nostr handle, change the endpoint's price, or
+  claim a commercial relationship among any of Lightning Enable, Amazap, or
+  Amboss. The human enters the contact email and submits. Submitting
+  publishes the listing automatically once Amazap's checks pass. After any
+  price change, re-run Amazap's checks.
 - **Read back.** Never call the endpoint listed or live until you have read
-  its product page or `GET https://amazap.com/api/products/<slug>` and checked
-  `hidden`, `listingState`, and `healthStatus`. Before you say "listed", the
-  row's endpoint URL and displayed seller price must match this endpoint;
-  otherwise report the row's state and that it may be an imported row, not
-  this listing. Call it listed only when the row also has `hidden: false` or
-  the page shows the listing as buyable; otherwise report those three fields.
-  Listed is not verified paid delivery.
+  `GET https://amazap.com/api/products/<slug>` and checked `hidden`,
+  `listingState`, and `healthStatus`; call it listed only with
+  `hidden: false` and when the row's endpoint URL and seller price match this
+  endpoint. Listed is not verified paid delivery.
 
 Lightning Enable does not hold funds; the payment provider facilitates custody
-and settlement. Full rules, including the listing-copy template:
+and settlement. Full rules:
 [Amazap marketplace: Seller handoff](https://github.com/refined-element/lightning-enable-skills/blob/main/references/amazap-marketplace.md#seller-handoff).
 
 ## What can go wrong
@@ -551,6 +552,11 @@ never retry a call that failed on a cap.
 > 7. `access_l402_resource` on the endpoint URL → 402 → paid 10 sats → 200
 >    forecast. `l402_producer(action="list_challenges", challenge_status="paid")`
 >    shows the sale.
-> 8. Hand off: "Live and charging 10 sats a call. Share the OpenAPI URL. Spent
->    110 sats. Trial ends in 30 days; without billing it drops to the Free
->    Producer Sandbox."
+> 8. `python scripts/l402_check.py <endpoint url> --json --max-sats 20 --output mode-a.json`
+>    → `CHALLENGE_COMPATIBLE`; recording item 7's self-test call as the
+>    evidence turns it into `FULFILLMENT_VERIFIED`, with no second payment.
+> 9. Hand off: "Live and charging 10 sats a call, listed in the Lightning
+>    Enable registry, where agents find it with `discover_api` and pay from
+>    their own wallets. The compatibility report reads `FULFILLMENT_VERIFIED`.
+>    Share the OpenAPI URL. Spent 110 sats. Trial ends in 30 days; without
+>    billing it drops to the Free Producer Sandbox."

@@ -26,19 +26,16 @@ SEED_1_PREIMAGE = support.preimage_from_seed("fixture-string-preimage-1")
 OPAQUE_MACAROON = "fixture-string-macaroon"
 
 
-def mode_a(root_metadata_ok: bool = False) -> dict:
-    extra = []
-    if root_metadata_ok:
-        extra = [{"url": "https://api.lightningenable.com/llms.txt", "status": 200, "headers": [], "body": "# llms"}]
-    report, _ = support.run_fixture(support.load_fixture("le-test-ping"), extra_responses=extra)
+def mode_a(profiles: tuple = ()) -> dict:
+    report, _ = support.run_fixture(support.load_fixture("le-test-ping"), profiles=profiles)
     return report
 
 
-def evidence_for(name: str, *, root_metadata_ok: bool = False):
+def evidence_for(name: str):
     evidence = support.load_evidence(name)
     seed = evidence.pop("test_preimage_seed")
     macaroon_hash = evidence.pop("test_macaroon_hash", None)
-    evidence["mode_a_report"] = mode_a(root_metadata_ok)
+    evidence["mode_a_report"] = mode_a()
     if not seed:
         return evidence, None
     preimage = support.preimage_from_seed(seed)
@@ -53,7 +50,7 @@ def paid_codes(report: dict) -> set[str]:
 @pytest.mark.parametrize(
     "name, classification, code",
     [
-        ("fulfilled-2xx", "FULFILLMENT_VERIFIED", "marketplace_gaps"),
+        ("fulfilled-2xx", "FULFILLMENT_VERIFIED", None),
         # Receipt-only mismatch: likely the wrong receipt, so the payment is unconfirmed.
         ("preimage-mismatch", "INCONCLUSIVE", "receipt_mismatch"),
         ("receipt-mismatch", "INCONCLUSIVE", "receipt_mismatch"),
@@ -80,7 +77,7 @@ def test_evidence_classification(name, classification, code):
     report = l402_evidence.evaluate(evidence, credential)
     assert report["mode"] == "paid"
     assert report["classification"] == classification
-    assert code in paid_codes(report)
+    assert code is None or code in paid_codes(report)
 
 
 # 6. The paid check proves preimage/payment-hash correspondence.
@@ -132,9 +129,9 @@ def test_a_readable_macaroon_names_the_macaroon_identifier_as_the_hash_source():
     assert "Hash source: the macaroon identifier's payment hash" in l402_report.to_markdown(report)
 
 
-@pytest.mark.parametrize("status, classification", [(200, "MARKETPLACE_READY"), (500, "PAYMENT_COMPATIBLE")])
+@pytest.mark.parametrize("status, classification", [(200, "FULFILLMENT_VERIFIED"), (500, "PAYMENT_COMPATIBLE")])
 def test_every_confirmed_summary_names_the_hash_source(status, classification):
-    evidence, credential = evidence_for("fulfilled-2xx", root_metadata_ok=True)
+    evidence, credential = evidence_for("fulfilled-2xx")
     evidence["tool_result"]["status_code"] = status
     report = l402_evidence.evaluate(evidence, credential)
     assert report["classification"] == classification
@@ -197,9 +194,9 @@ def test_macaroon_and_receipt_both_disagreeing_is_incompatible():
 
 
 def test_macaroon_match_governs_when_only_the_receipt_disagrees():
-    evidence, credential = evidence_for("macaroon-match-receipt-mismatch", root_metadata_ok=True)
+    evidence, credential = evidence_for("macaroon-match-receipt-mismatch")
     report = l402_evidence.evaluate(evidence, credential)
-    assert report["classification"] == "MARKETPLACE_READY"
+    assert report["classification"] == "FULFILLMENT_VERIFIED"
     paid = report["paid_fulfillment"]
     assert paid["preimage_check"] == "matched"
     assert paid["hash_sources"] == [
@@ -281,7 +278,7 @@ def test_a_credential_with_no_colon_adds_the_bare_macaroon_as_a_secret(prefix):
 
 # Without the credential, a receipt is supporting evidence and never upgrades the class.
 def test_receipt_without_credential_is_recorded_but_never_upgrades():
-    evidence, credential = evidence_for("credential-absent-with-receipt", root_metadata_ok=True)
+    evidence, credential = evidence_for("credential-absent-with-receipt")
     assert credential is None
     report = l402_evidence.evaluate(evidence, None)
     assert report["classification"] == "INCONCLUSIVE"
@@ -385,7 +382,7 @@ def test_no_answer_or_a_timeout_after_payment_is_inconclusive(status):
 
 # A status is never inferred: success without a status_code is not a 2xx.
 def test_success_without_a_status_is_inconclusive_and_never_claims_200():
-    evidence, credential = evidence_for("fulfilled-2xx", root_metadata_ok=True)
+    evidence, credential = evidence_for("fulfilled-2xx")
     del evidence["tool_result"]["status_code"]
     report = l402_evidence.evaluate(evidence, credential)
     assert report["classification"] == "INCONCLUSIVE"
@@ -415,7 +412,7 @@ def test_a_definitive_miss_outranks_an_unreported_field():
 
 
 def test_tool_and_receipt_amounts_that_disagree_are_inconclusive():
-    evidence, credential = evidence_for("fulfilled-2xx", root_metadata_ok=True)
+    evidence, credential = evidence_for("fulfilled-2xx")
     evidence["tool_result"]["paid_sats"] = 3
     report = l402_evidence.evaluate(evidence, credential)
     assert report["classification"] == "INCONCLUSIVE"
@@ -433,7 +430,7 @@ def test_the_cap_holds_against_the_larger_of_tool_and_receipt_amounts():
 
 
 def test_two_payments_cap_the_result_at_inconclusive_even_when_everything_else_passes():
-    evidence, credential = evidence_for("second-payment", root_metadata_ok=True)
+    evidence, credential = evidence_for("second-payment")
     evidence["expected"] = {"status": 200, "content_type": "application/json"}
     report = l402_evidence.evaluate(evidence, credential)
     assert report["classification"] == "INCONCLUSIVE"
@@ -457,38 +454,171 @@ def test_quote_and_paid_hashes_are_compared_as_information_only(same):
     assert report["classification"] == baseline["classification"]
 
 
-# 10. Marketplace classification needs paid fulfillment plus metadata and bounded execution.
-def test_marketplace_ready_needs_fulfillment_and_every_listing_check():
-    evidence, credential = evidence_for("fulfilled-2xx", root_metadata_ok=True)
+def amazap(report: dict) -> dict:
+    return report["marketplace_profiles"]["amazap"]
+
+
+def profile_checks(report: dict) -> dict:
+    return {check["name"]: check for check in amazap(report)["checks"]}
+
+
+# The top classification is FULFILLMENT_VERIFIED; the Amazap profile sits beside it.
+def test_a_fulfilled_endpoint_is_fulfillment_verified_with_a_ready_amazap_profile():
+    evidence, credential = evidence_for("fulfilled-2xx")
     report = l402_evidence.evaluate(evidence, credential)
-    assert report["classification"] == "MARKETPLACE_READY"
-    assert report["marketplace"]["listing_ready"] is True
-
-    without_metadata, credential = evidence_for("fulfilled-2xx")
-    assert l402_evidence.evaluate(without_metadata, credential)["classification"] == "FULFILLMENT_VERIFIED"
-
-    unproven, _ = evidence_for("preimage-not-surfaced", root_metadata_ok=True)
+    assert report["classification"] == "FULFILLMENT_VERIFIED"
+    assert amazap(report)["status"] == "READY"
+    checks = profile_checks(report)
+    assert checks["synchronous_response"]["pass"] is True
+    # Amazap pays a live invoice only when it fits the price it stored at listing time.
+    assert checks["stable_price"]["pass"] is True
+    assert checks["stable_price"]["required"] is True
+    # The read-only report did not request the Amazap profile, so the host-root
+    # check was not probed, even on api.lightningenable.com.
+    assert checks["host_root_metadata"]["pass"] is None
+    assert checks["host_root_metadata"]["required"] is False
+    assert amazap(report)["requested"] is False
+    assert "marketplace" not in report
+    assert "marketplace" not in report["summary"].lower()
+    assert "marketplace_gaps" not in paid_codes(report)
+    unproven, _ = evidence_for("preimage-not-surfaced")
     assert l402_evidence.evaluate(unproven, None)["classification"] == "INCONCLUSIVE"
 
 
-def test_price_change_between_quote_and_payment_blocks_marketplace_ready():
-    evidence, credential = evidence_for("fulfilled-2xx", root_metadata_ok=True)
+# The paid check accepts the read-only report with or without --profile amazap,
+# and with no "requested" field (an earlier version 2 report).
+@pytest.mark.parametrize("shape", ["unrequested", "requested", "no-field"])
+def test_the_paid_check_accepts_both_read_only_shapes(shape):
+    evidence, credential = evidence_for("fulfilled-2xx")
+    if shape == "requested":
+        evidence["mode_a_report"] = mode_a(("amazap",))
+    if shape == "no-field":
+        del evidence["mode_a_report"]["marketplace_profiles"]["amazap"]["requested"]
+    report = l402_evidence.evaluate(evidence, credential)
+    assert report["classification"] == "FULFILLMENT_VERIFIED"
+    # The advisory host-root check never decides the status: it fails on the
+    # Lightning Enable host only when the profile was requested.
+    assert amazap(report)["status"] == "READY"
+    host_root = profile_checks(report)["host_root_metadata"]["pass"]
+    assert host_root is (False if shape == "requested" else None)
+    markdown = l402_report.to_markdown(report)
+    tail = markdown.split("\n## Optional marketplace profiles\n", 1)[1]
+    if shape == "unrequested":
+        assert "fail (advisory)" not in markdown
+        assert "--profile amazap" not in markdown
+        assert "### Amazap" not in tail
+        assert "marketplace_profiles.amazap" in tail
+    else:
+        assert "### Amazap" in tail
+
+
+def test_a_requested_field_that_is_not_a_boolean_is_refused():
+    evidence, credential = evidence_for("fulfilled-2xx")
+    evidence["mode_a_report"]["marketplace_profiles"]["amazap"]["requested"] = "fixture-string-yes"
+    with pytest.raises(l402_evidence.EvidenceError) as refused:
+        l402_evidence.evaluate(evidence, credential)
+    assert "requested must be true or false" in str(refused.value)
+    assert "fixture-string" not in str(refused.value)
+
+
+def test_a_price_change_keeps_the_core_result_and_makes_the_amazap_profile_not_ready():
+    evidence, credential = evidence_for("fulfilled-2xx")
     evidence["tool_result"]["paid_sats"] = 2
     evidence["payments"][0]["amount_sats"] = 2
     report = l402_evidence.evaluate(evidence, credential)
     assert report["classification"] == "FULFILLMENT_VERIFIED"
-    gaps = next(f for f in report["findings"] if f["code"] == "marketplace_gaps")
-    assert "stable_price" in gaps["message"]
+    assert profile_checks(report)["stable_price"]["pass"] is False
+    assert amazap(report)["status"] == "NOT_READY"
+    assert "stable_price" not in paid_codes(report)
+    assert not [fix for fix in report["required_fixes"] if "price" in fix.lower()]
 
 
-def test_accepted_but_deferred_response_blocks_marketplace_ready():
-    evidence, credential = evidence_for("fulfilled-2xx", root_metadata_ok=True)
+def test_an_accepted_but_deferred_response_is_not_ready_for_amazap():
+    evidence, credential = evidence_for("fulfilled-2xx")
     evidence["tool_result"]["status_code"] = 202
     del evidence["expected"]["status"]
     report = l402_evidence.evaluate(evidence, credential)
     assert report["classification"] == "FULFILLMENT_VERIFIED"
-    gaps = next(f for f in report["findings"] if f["code"] == "marketplace_gaps")
-    assert "synchronous_response" in gaps["message"]
+    assert profile_checks(report)["synchronous_response"]["pass"] is False
+    assert amazap(report)["status"] == "NOT_READY"
+
+
+def test_with_nothing_paid_the_price_is_not_judged():
+    evidence, credential = evidence_for("awaiting-confirmation")
+    report = l402_evidence.evaluate(evidence, credential)
+    assert profile_checks(report)["stable_price"]["pass"] is None
+    assert amazap(report)["status"] == "NOT_CHECKED"
+
+
+@pytest.mark.parametrize("name, status", [
+    ("paid-retry-402", "NOT_READY"),
+    ("macaroon-mismatch", "NOT_READY"),
+    ("preimage-not-surfaced", "NOT_CHECKED"),
+    ("ambiguous-fulfillment", "NOT_CHECKED"),
+    ("awaiting-confirmation", "NOT_CHECKED"),
+])
+def test_the_amazap_profile_follows_the_paid_classification(name, status):
+    evidence, credential = evidence_for(name)
+    report = l402_evidence.evaluate(evidence, credential)
+    assert amazap(report)["status"] == status
+
+
+def _tamper_checks(checks: list, how: str) -> list:
+    if how == "empty":
+        return []
+    if how == "empty-object":
+        return [{}]
+    if how == "missing-required":
+        return [c for c in checks if c["name"] != "priced_invoice"]
+    if how == "required-made-advisory":
+        return [dict(c, required=False) if c["name"] == "priced_invoice" else c for c in checks]
+    if how == "pass-not-bool":
+        return [dict(c, **{"pass": "fixture-string-yes"}) if c["name"] == "public_https" else c for c in checks]
+    if how == "missing-pass":
+        return [{k: v for k, v in c.items() if k != "pass"} if c["name"] == "stable_path" else c for c in checks]
+    if how == "detail-not-str":
+        return [dict(c, detail=5) if c["name"] == "stable_path" else c for c in checks]
+    if how == "duplicate":
+        return checks + [checks[0]]
+    if how == "paid-name":
+        return checks + [{"name": "stable_price", "pass": True, "required": True, "detail": "fixture-string-x"}]
+    if how == "unknown-name":
+        return checks + [{"name": "fixture-string-name", "pass": True, "required": False, "detail": "x"}]
+    raise AssertionError(how)
+
+
+# An emptied or edited read-only checks list can never reach READY, and never raises a traceback.
+@pytest.mark.parametrize("how", ["empty", "empty-object", "missing-required", "required-made-advisory",
+                                 "pass-not-bool", "missing-pass", "detail-not-str", "duplicate", "paid-name",
+                                 "unknown-name"])
+def test_a_tampered_read_only_checks_list_is_refused(how):
+    evidence, credential = evidence_for("fulfilled-2xx")
+    profile = evidence["mode_a_report"]["marketplace_profiles"]["amazap"]
+    profile["checks"] = _tamper_checks(profile["checks"], how)
+    with pytest.raises(l402_evidence.EvidenceError) as refused:
+        l402_evidence.evaluate(evidence, credential)
+    message = str(refused.value)
+    assert message.startswith("evidence.mode_a_report.marketplace_profiles.amazap.checks")
+    assert "fixture-string" not in message
+
+
+def test_a_read_only_report_without_the_amazap_profile_is_refused():
+    evidence, credential = evidence_for("fulfilled-2xx")
+    evidence["mode_a_report"]["marketplace_profiles"] = {}
+    with pytest.raises(l402_evidence.EvidenceError, match="marketplace_profiles"):
+        l402_evidence.evaluate(evidence, credential)
+
+
+def test_a_version_1_read_only_report_is_refused():
+    evidence, credential = evidence_for("fulfilled-2xx")
+    evidence["mode_a_report"]["report_version"] = 1
+    with pytest.raises(l402_evidence.EvidenceError, match="report_version 2"):
+        l402_evidence.evaluate(evidence, credential)
+    # The message never echoes the value it refused.
+    evidence["mode_a_report"]["report_version"] = "fixture-string-version"
+    with pytest.raises(l402_evidence.EvidenceError) as refused:
+        l402_evidence.evaluate(evidence, credential)
+    assert "fixture-string-version" not in str(refused.value)
 
 
 # 8. Paid success then ambiguous fulfillment: INCONCLUSIVE, correlators kept, no repay.
@@ -605,7 +735,7 @@ def test_paid_report_keeps_the_rerun_key_and_fills_the_paid_sections():
 def test_paid_report_says_its_facts_are_agent_recorded():
     evidence, credential = evidence_for("fulfilled-2xx")
     report = l402_evidence.evaluate(evidence, credential)
-    assert report["report_version"] == 1
+    assert report["report_version"] == 2
     assert report["paid_fulfillment"]["evidence_source"] == "agent-recorded access_l402_resource result"
     text = l402_report.to_json(report)
     assert next(iter(json.loads(text))) == "report_version"

@@ -20,9 +20,10 @@ API to sell, and the price. Everything between those decisions is a tool call.
 - **The money lands in a wallet you already control.** The receive wallet is the
   same [NWC](https://nwc.dev) wallet the agent pays from. Lightning Enable does
   not hold funds; the wallet facilitates custody and settlement.
-- **It ends with proof, not a status page.** The last step is a real purchase
-  against the new endpoint: 402, pay, 200. You watch the sale land in
-  `list_challenges` before anyone calls it live.
+- **It proves the sale, not a status page.** Before the hand-off, the agent
+  makes one real purchase against the new endpoint: 402, pay, 200. You watch
+  the sale land in `list_challenges`, and the compatibility report reuses that
+  call as its paid evidence, before anyone calls the endpoint live.
 - **Flat subscription, no cut.** Lightning Enable never takes a percentage of the
   sats. Every satoshi a buyer pays settles to your wallet.
 
@@ -47,7 +48,9 @@ API to sell, and the price. Everything between those decisions is a tool call.
    read.
 6. **Self-test** — `access_l402_resource` against the new endpoint, then
    `list_challenges challenge_status=paid` to see the sale land.
-7. **Hand off** — what to share, what to watch, how to add endpoints and change
+7. **Verify**: `l402-compatibility-report` checks the endpoint and records the
+   self-test call as its paid evidence instead of paying again.
+8. **Hand off**: what to share, what to watch, how to add endpoints and change
    prices, what happens when the 30-day trial ends, and how the agent renews
    the plan in sats with `renew_lightning_enable_subscription` (MCP 2.1.0 or
    later).
@@ -83,23 +86,30 @@ API to sell, and the price. Everything between those decisions is a tool call.
 - One L402 payment at a time, and never a second signup to fix a missing tool
   (that pays twice; the real cause is almost always a missed MCP restart).
 
+## How buyers find you
+
+Publishing lists the endpoint in the Lightning Enable registry. Any agent with
+the Lightning Enable MCP finds it with `discover_api` and pays each call from
+its own wallet over L402, with `access_l402_resource`,
+[`pay-l402-anywhere`](../pay-l402-anywhere/), or any L402 client. No
+marketplace account or credits are involved, and every sat settles to your
+wallet. Before the hand-off, the agent checks the endpoint with
+[`l402-compatibility-report`](../l402-compatibility-report/), the Lightning
+Enable L402 compatibility report, and records the self-test call as its paid
+evidence instead of paying again.
+
 ## Optional: list on Amazap
 
-After the self-test, the agent can offer one more step: a draft listing on
-[Amazap](https://amazap.com/sell), a storefront where agents find and buy L402
-endpoints. It first checks whether Amazap already carries the endpoint
-(imported from 402 Index) and asks whether you want a listing before it spends
-anything on a paid check. It offers the listing as ready only after
-[`l402-compatibility-report`](../l402-compatibility-report/) shows that paid
-delivery worked, then drafts the copy and stops. On `api.lightningenable.com`
-you write the title, description, category, and example parameters yourself.
-You review the draft, the current Amazap seller terms, and the two prices
-(yours and Amazap's all-in price), enter your contact email, and submit it
-yourself; submitting publishes the listing once Amazap's checks pass. After
-any price change, re-run Amazap's checks. The agent never calls the endpoint
-listed until it has read the listing back from
-Amazap. Lightning Enable does not hold funds; the payment provider facilitates
-custody and settlement. Details:
+Your setup is complete without this. For more distribution, the agent can
+offer a draft listing on [Amazap](https://amazap.com/sell), a separate
+marketplace, after the hand-off. It asks first, reuses the compatibility
+report instead of paying again, drafts the copy, and stops. You review the
+draft, the current Amazap seller terms, and both prices, enter your contact
+email, and submit it yourself; submitting publishes the listing once
+Amazap's checks pass. After any price change, re-run Amazap's checks. The
+agent never calls the endpoint listed until it has read the listing back
+from Amazap. Lightning Enable does not hold funds; the payment provider
+facilitates custody and settlement. Details:
 [Amazap marketplace: Seller handoff](https://github.com/refined-element/lightning-enable-skills/blob/main/references/amazap-marketplace.md#seller-handoff).
 
 ## What it doesn't do
@@ -113,9 +123,10 @@ gets you a live endpoint that can charge — buyers are still your problem.
 > budget for setup."
 
 → connects the wallet → pays 100 sats for an account → wires the receive wallet →
-publishes `/forecast` at 10 sats → buys one call from itself → "Live and
-charging. Share this OpenAPI URL. Spent 110 sats. Trial ends in 30 days; without
-billing it drops to the Free Producer Sandbox."
+publishes `/forecast` at 10 sats → buys one call from itself → checks it with
+the compatibility report → "Live and charging, listed in the Lightning Enable
+registry. Share this OpenAPI URL. Spent 110 sats. Trial ends in 30 days;
+without billing it drops to the Free Producer Sandbox."
 
 Pairs with [`sell-this`](../sell-this/) once the account exists (one-off paywalls
 without a proxy). To keep the setup spend visible, ask the agent for

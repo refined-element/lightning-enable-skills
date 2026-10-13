@@ -1,28 +1,35 @@
 ---
 name: l402-compatibility-report
 description: >-
-  Diagnose whether an endpoint correctly implements L402 (HTTP 402 with a
-  Lightning invoice, a macaroon, and a preimage) and whether it is ready for
-  buyers and marketplaces such as Amazap. Inspects the unpaid 402 challenge
-  without spending: every WWW-Authenticate scheme, the invoice amount, payment
-  hash, and expiry, resource binding, and listing readiness. Optionally runs
-  one explicitly approved, capped paid test through HTTP 2xx fulfillment. Use
-  when a developer asks to check, test, debug, or diagnose an L402
-  endpoint ("is my L402 endpoint working", "why won't my endpoint list on
-  Amazap", "check this paywall", "run an L402 compatibility report"), or after
-  producer-setup, create-l402-proxy, or l402-server-integration to check the
-  result. Do NOT use to buy something for its content (use
-  pay-l402-anywhere), to find a paid API (use discover-paid-apis), or to build
-  a paywall (use producer-setup, create-l402-proxy, or l402-server-integration).
+  Run the Lightning Enable L402 compatibility report on an L402 endpoint. It
+  checks, without spending, that an unpaid request gets a valid HTTP 402
+  challenge (every WWW-Authenticate scheme, a priced invoice, its payment hash
+  and expiry, resource binding), then, with one explicitly approved, capped
+  payment, that the paid retry delivers, with the preimage checked against the
+  payment hash. Optional marketplace profiles are reported separately and never
+  change the result. Use when a developer asks to check, test, debug, or
+  diagnose an L402 endpoint ("is my L402 endpoint working", "check this
+  paywall", "run an L402 compatibility report", "check my endpoint before I
+  list it on a marketplace"), or after producer-setup, create-l402-proxy, or
+  l402-server-integration to check the result. Do NOT use to buy something for
+  its content (use pay-l402-anywhere), to find a paid API (use
+  discover-paid-apis), or to build a paywall (use producer-setup,
+  create-l402-proxy, or l402-server-integration).
 ---
 
-# L402 compatibility report
+# Lightning Enable L402 compatibility report
 
-Tell a developer, precisely, how far their endpoint gets through the L402 flow:
-does the unpaid request get a well-formed challenge with a priced invoice, does
-a paid request get the resource, and is it ready for a marketplace listing. The
-check is deterministic: a standard-library Python script makes the unpaid
-request, parses the challenge, decodes the invoice, and writes the report.
+The Lightning Enable L402 compatibility report tells a developer, precisely, how
+far their endpoint gets through the L402 flow: does the unpaid request get a
+well-formed challenge with a priced invoice, and does a paid request get the
+resource. The check works on any L402 endpoint, whoever runs it. It is
+deterministic: a standard-library Python script makes the unpaid request,
+parses the challenge, decodes the invoice, and writes the report.
+
+Marketplace readiness is optional and separate. The report carries it in its
+last section, as optional marketplace profiles (see Optional marketplace
+profiles) that never change the classification: a correct, paid, fulfilled
+endpoint is `FULFILLMENT_VERIFIED` with or without any marketplace's metadata.
 
 The default check never pays. A paid check is a separate step: one payment, at
 an amount the human approved, through the Lightning Enable MCP. Lightning
@@ -32,9 +39,9 @@ settlement.
 ## What is automated, and what is not
 
 **Automated:** the unpaid request, URL safety checks, bounded redirects,
-challenge parsing, invoice decoding, binding analysis, the marketplace checks,
-the preflight verdict for a paid check, evidence validation, and the report in
-Markdown or JSON.
+challenge parsing, invoice decoding, binding analysis, the optional
+marketplace profile, the preflight verdict for a paid check, evidence
+validation, and the report in Markdown or JSON.
 
 **Not automated. The human decides these:**
 
@@ -62,7 +69,7 @@ Argument names below are the Python server's `snake_case`. The .NET server takes
 the same arguments in `camelCase`: `max_sats` → `maxSats`, `confirmation_nonce`
 → `confirmationNonce`.
 
-The six classifications, the redaction rules, and the ambiguous-payment rule
+The five classifications, the redaction rules, and the ambiguous-payment rule
 are shared with the other skills in
 [L402 verification levels](https://github.com/refined-element/lightning-enable-skills/blob/main/references/l402-verification-levels.md).
 This skill states the parts it needs below.
@@ -110,12 +117,13 @@ Use `--output`, not shell redirection: it writes UTF-8 on every platform,
 while Windows PowerShell 5.1 redirects `>` as UTF-16. The script still reads a
 UTF-16 file that starts with a byte order mark.
 
-The script makes one unpaid request, then requests `/openapi.json` and
-`/llms.txt` at the host root (where Amazap's listing prefill looks). It refuses
-localhost, loopback, private, link-local, and cloud metadata addresses,
-non-HTTPS public URLs, and redirects into any of those. `--allow-private` admits
-local targets, and plain HTTP to them, only when the human is deliberately
-testing a local development server on this machine.
+The script makes one unpaid request. It refuses localhost, loopback, private,
+link-local, and cloud metadata addresses, non-HTTPS public URLs, and redirects
+into any of those. `--allow-private` admits local targets, and plain HTTP to
+them, only when the human is deliberately testing a local development server
+on this machine. Add a marketplace profile flag only when the human wants a
+marketplace listing; the Optional marketplace profiles section below names it
+and the extra requests it makes.
 
 ### 2. Read the report back
 
@@ -131,6 +139,11 @@ matter:
   method the endpoint accepts), a `408`, `425`, or `429` (try again later), or
   a cross-origin redirect of a request with a body, which the script doesn't
   resend. Say which; don't guess.
+
+The report's last section, Optional marketplace profiles, is not part of the
+result. Bring it up only when the human wants a marketplace listing; even then,
+an expectation a marketplace adds is that marketplace's requirement, never a
+gap in the endpoint.
 
 A response that offers several schemes (`L402` and `Payment`, `LSAT` and
 `L402`, or `L402`, `Payment`, and `x402`) is normal. The report classifies the
@@ -305,7 +318,8 @@ The report also compares the Mode A invoice's payment hash with the paid
 payment hash, as information only. A mismatch is normal, because a server may
 mint a fresh invoice for each 402, and it is never a finding.
 
-Paid-check finding codes and marketplace checks, as the report prints them:
+Paid-check finding codes, and the checks the paid check adds to the optional
+marketplace profile, as the report prints them:
 
 - **Nothing to evaluate (`INCONCLUSIVE`):** `paid_check_without_challenge` (the
   read-only check wasn't `CHALLENGE_COMPATIBLE`), `awaiting_confirmation` (the
@@ -333,10 +347,10 @@ Paid-check finding codes and marketplace checks, as the report prints them:
   `paid_retry_rejected` (another 4xx), `paid_retry_failed` (a 5xx or another
   non-2xx answer), `unexpected_result` (a 2xx that misses the stated
   expectations).
-- **Marketplace:** `marketplace_gaps` lists the failed listing checks under
-  `FULFILLMENT_VERIFIED`, including `stable_price` (the paid amount equals the
-  read-only quote) and `synchronous_response` (a reported 2xx other than
-  `202 Accepted`).
+- **Optional marketplace profile, never the classification:** the paid check
+  adds `synchronous_response` (a reported 2xx other than `202 Accepted`) and
+  `stable_price` (the paid amount equals the read-only quote) to the profile.
+  Optional marketplace profiles says how they count.
 
 ### 8. Hand off
 
@@ -353,7 +367,6 @@ Paid-check finding codes and marketplace checks, as the report prints them:
 | `CHALLENGE_COMPATIBLE` | A valid unpaid L402 challenge and a priced invoice were observed. Paid fulfillment was not tested. |
 | `PAYMENT_COMPATIBLE` | The payment is confirmed: the wallet reports terminal success and SHA-256 of the preimage from the piped credential equals the payment hash in the macaroon identifier, or, for an opaque token, the receipt's hash, which ties the token to the wallet's recorded payment, not to the invoice. The authorized retry then returned a definitive answer that is not a 2xx meeting the stated expectations, such as a `500`, a `403`, or another `402`. |
 | `FULFILLMENT_VERIFIED` | Request, 402, payment, authorized retry, expected 2xx result: all of it worked, and SHA-256 of the preimage from the piped credential matched the payment hash in the macaroon identifier, or, for an opaque token, the receipt's hash (the report names which). Requires the credential. |
-| `MARKETPLACE_READY` | `FULFILLMENT_VERIFIED`, plus every listing check and a paid amount equal to the quote. |
 | `INCOMPATIBLE` | A deterministic protocol or transport defect prevents the flow. |
 | `INCONCLUSIVE` | The check couldn't decide: the payment is pending or unknown (no terminal wallet result, or no preimage obtained), no credential was piped so the preimage went unchecked (`preimage_unchecked`; a receipt never upgrades this), the authorized retry was ambiguous (a timeout, a dropped connection, or no answer), the unpaid request timed out or hit a server error or a DNS failure, the target was refused, or the behavior was opaque. |
 
@@ -367,10 +380,52 @@ Never call an endpoint "L402 verified", or "verified" in any form, after a
 read-only check.
 
 **The JSON report is the contract.** Tools and gates read `--json`, never the
-Markdown: `report_version` (1), `mode`, `classification`, `evidence`, and
-`marketplace.checks`. After a paid check, `paid_fulfillment` adds
-`hash_source`, `paid_checked_at`, and `evidence_source` ("agent-recorded
-access_l402_resource result": validated, never independently observed).
+Markdown: `report_version` (2), `mode`, `classification`, `evidence`, and
+`marketplace_profiles`, the optional marketplace checks, which never change
+`classification`. After a paid check, `paid_fulfillment` adds `hash_source`,
+`paid_checked_at`, and `evidence_source` ("agent-recorded access_l402_resource
+result": validated, never independently observed). Version 2 dropped the
+version 1 marketplace classification; a reader that gated on it reads the
+profile's status instead (see Optional marketplace profiles).
+
+## Optional marketplace profiles
+
+A marketplace can expect more than L402 does. The report checks those
+expectations in a separate profile, `marketplace_profiles.<name>` in the JSON
+and the last section of the Markdown. A profile never changes the
+classification, never adds a finding or a required fix, and never makes a
+correct endpoint read as deficient.
+
+The one profile today is `amazap`, for an optional listing on
+[Amazap](https://amazap.com/sell). The report always carries it; bring it up
+only when the human wants a marketplace listing. Add `--profile amazap` to the
+read-only check only then: it also requests `/openapi.json` and `/llms.txt` at
+the host root, where Amazap's listing prefill looks. Without it the read-only
+check makes exactly one unpaid request (plus any redirects it follows), the
+Markdown shows the profile as one line, and the JSON keeps it in full with
+`requested: false`. The paid check reuses the read-only report's profile.
+
+Its `status` is `READY` (the classification is `FULFILLMENT_VERIFIED` and
+every required check passed), `NOT_READY` (a required check failed, or the
+classification is `INCOMPATIBLE` or `PAYMENT_COMPATIBLE`), or `NOT_CHECKED`
+(nothing failed, but readiness needs a paid check that reaches
+`FULFILLMENT_VERIFIED`). Required checks: `public_https`, `priced_invoice`,
+`mainnet_invoice`, `probe_without_body` (Amazap's listing probe sends the
+listed method with no body), `within_probe_window` (the 402 within 8 seconds),
+`stable_path` (no redirect), and, after a paid check, `stable_price` (the
+paid amount equals the read-only quote, because Amazap pays a live invoice
+only when it fits the price stored at listing time) and
+`synchronous_response`. One advisory check never decides the status:
+`host_root_metadata` (`openapi.json` or `llms.txt` at the host root, where
+Amazap's prefill looks; probed only with `--profile amazap`, and "Not probed"
+on every host without it). With the flag, on `api.lightningenable.com` the
+host-root files describe the Lightning Enable platform, not the endpoint, so
+the check says to supply the listing fields by hand. Whichever status it
+shows, the profile never changes the classification.
+
+Report version 1 called a `READY` Amazap profile `MARKETPLACE_READY` and
+reported it as a classification. Version 2 has no such classification; read
+`marketplace_profiles.amazap.status` instead.
 
 ## What can go wrong
 
@@ -379,7 +434,7 @@ access_l402_resource result": validated, never independently observed).
 | Unpaid request gets `200` | The resource is served before the paywall | Place the L402 middleware before resource delivery. |
 | Unpaid request gets `401` ("401 before challenge") | Ordinary auth runs first | Let requests reach the L402 check before ordinary authentication where paid access is intended. |
 | `400` or `422` before any 402 | Input validation runs first | Issue the 402 before validating paid-only parameters, or provide a probe-safe route. |
-| `415` on an empty-body POST | Content-type validation runs first | Issue the 402 before body validation, or provide a fixed-price, single-call route for listing. |
+| `415` on an empty-body POST | Content-type validation runs first | Issue the 402 before body validation, or provide a fixed-price, single-call route whose unpaid request with no body gets the 402. |
 | `402` with no `WWW-Authenticate` | The challenge header is missing | Emit `WWW-Authenticate: L402 macaroon="...", invoice="..."`. |
 | Parse error naming an offset | Bad quoting or escaping | Quote values as RFC 7235 quoted-strings and separate parameters with commas. |
 | Only `Payment` or `x402` offered | No L402 challenge | Add an L402 challenge beside the other schemes. |
@@ -418,9 +473,11 @@ access_l402_resource result": validated, never independently observed).
 
 - **Not custody.** Lightning Enable does not hold funds; the payment provider
   facilitates custody and settlement.
-- **Not a load test or a security audit.** It sends one unpaid request (plus two
-  metadata requests) and, at most, one paid call.
-- **Not a marketplace listing.** It reports readiness; it never lists anything.
+- **Not a load test or a security audit.** It sends one unpaid request (plus
+  two host-root requests, only with a marketplace profile flag) and, at most,
+  one paid call.
+- **Not a marketplace listing.** Its optional marketplace profiles report
+  readiness; it never lists anything.
 - **Not a signature check.** It decodes the invoice and reads the macaroon's
   public parts; only the issuer can check a macaroon signature.
 
@@ -428,13 +485,12 @@ access_l402_resource result": validated, never independently observed).
 
 On the .NET server:
 
-> User: "Check my weather endpoint before I list it. If the challenge looks
-> right, test it for real, up to 10 sats."
+> User: "Check my weather endpoint. If the challenge looks right, test it for
+> real, up to 10 sats."
 >
 > 1. `python scripts/l402_check.py "https://api.example.com/forecast?city=paris" --max-sats 10 --json --output mode-a.json`
 >    → `CHALLENGE_COMPATIBLE`: one `L402` challenge plus `Payment`, 3 sats,
->    expires in 24 hours, opaque token, no `llms.txt` or `openapi.json` at the
->    host root. Preflight: allowed.
+>    expires in 24 hours, opaque token. Preflight: allowed.
 > 2. "The unpaid challenge is valid; paid delivery is not tested yet. I will
 >    call `GET https://api.example.com/forecast?city=paris` once. It costs 3
 >    sats; your cap is 10. Go ahead?" The human says yes.
@@ -446,11 +502,12 @@ On the .NET server:
 > 5. `receipts(source="durable")` → one settled 3-sat receipt. Copy its hash,
 >    amount, status, and context into `evidence.json`, then pipe the token with
 >    `printf '%s' '<token>' | python scripts/l402_check.py --evidence evidence.json --mode-a mode-a.json --credential-stdin`
->    → `FULFILLMENT_VERIFIED`, with one gap for listing: publish `llms.txt` or
->    `openapi.json` at the host root. The token is opaque, so the report names
->    the receipt's hash as its source: the token matches the wallet's recorded
->    payment, not the invoice. The Mode A and paid payment hashes differ, which
->    the report notes as information only.
+>    → `FULFILLMENT_VERIFIED`: the whole paid flow worked. The token is opaque,
+>    so the report names the receipt's hash as its source: the token matches
+>    the wallet's recorded payment, not the invoice. The Mode A and paid
+>    payment hashes differ, which the report notes as information only. The
+>    report's optional marketplace profile, in its own section at the end,
+>    stays out of the answer: the developer didn't ask about a listing.
 
 On the Python server, which returns a token only on the `alreadyPaid` path, the
 same run ends `INCONCLUSIVE` with `preimage_unchecked`. The receipt is recorded as supporting evidence and

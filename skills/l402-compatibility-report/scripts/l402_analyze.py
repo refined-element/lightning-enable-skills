@@ -8,7 +8,9 @@ query string as given but lose any userinfo and fragment. ``collect_secrets``
 returns every string that must stay out of output, so the renderer can prove
 none slipped through.
 
-Mode A never pays, so its best classification is CHALLENGE_COMPATIBLE.
+Mode A never pays, so its best classification is CHALLENGE_COMPATIBLE. The
+optional Amazap marketplace profile is computed beside the core sections and
+never changes the classification, the findings, or the required fixes.
 """
 from __future__ import annotations
 
@@ -31,14 +33,19 @@ from l402_levels import (  # noqa: F401
     FULFILLMENT_VERIFIED,
     INCOMPATIBLE,
     INCONCLUSIVE,
-    MARKETPLACE_READY,
+    MARKETPLACE_PROFILES,
     PAYMENT_COMPATIBLE,
+    PROFILE_STATUSES,
     REPORT_VERSION,
     TRANSIENT_STATUSES,
     Finding,
+    profile_note,
+    profile_status,
 )
 
 AMAZAP_PROBE_WINDOW_MS = 8000
+# The host every Lightning Enable proxy shares; its host-root files describe the platform.
+LIGHTNING_ENABLE_HOST = "api.lightningenable.com"
 SHORT_LIVED_SECONDS = 60
 PAID_CHECK_METHODS = ("GET", "HEAD")
 # Reasons l402_netsafety gives for refusing a redirect target in a blocked range.
@@ -247,8 +254,14 @@ def analyze(
     now: datetime,
     root_metadata: dict | None = None,
     max_sats: int | None = None,
+    profiles: tuple[str, ...] = (),
 ) -> dict:
-    """Build the Mode A report for one probe."""
+    """Build the Mode A report for one probe.
+
+    ``profiles`` names the marketplace profiles the caller requested (``--profile``).
+    ``root_metadata`` is None when the host root was not probed: either the amazap
+    profile was not requested, or it was and the probe got no 402.
+    """
     findings: list[Finding] = []
     response = probe_result.response
     target = probe_result.final_target
@@ -284,7 +297,8 @@ def analyze(
     if classification is None:
         classification, invoice = _challenge_and_invoice(report, response, now, findings)
     _security(response, target, findings)
-    report["marketplace"] = _marketplace(request, probe_result, invoice, root_metadata, findings)
+    _manifest_link(response, findings)
+    amazap = _amazap_profile(request, probe_result, invoice, root_metadata, "amazap" in profiles)
     report["classification"] = classification
     report["findings"] = [asdict(f) | {"fix": f.fix} for f in findings]
     report["required_fixes"] = list(dict.fromkeys(f.fix for f in findings if f.fix and f.severity == "error"))
@@ -305,6 +319,9 @@ def analyze(
         "latency_ms": report["transport"]["latency_ms"],
         "classification": classification,
     }
+    amazap["status"] = profile_status(classification, amazap["checks"])
+    amazap["note"] = profile_note(amazap["status"])
+    report["marketplace_profiles"] = {"amazap": amazap}
     return report
 
 
@@ -544,39 +561,85 @@ def _security(response, target, findings: list[Finding]) -> None:
         findings.append(Finding("plain_http", "warning", "security", "The check ran over plain http (local testing only)."))
 
 
-def _marketplace(request: ProbeRequest, probe_result: ProbeResult, invoice, root_metadata: dict | None, findings: list[Finding]) -> dict:
+def _manifest_link(response, findings: list[Finding]) -> None:
+    """A 402 that links an L402 manifest tells agents where its paid routes and prices are."""
+    if response is None or response.status != 402:
+        return
+    if any('rel="l402-manifest"' in link for link in response.header_values("Link")):
+        findings.append(Finding("l402_manifest_link", "info", "challenge",
+                                'The 402 links an L402 manifest (rel="l402-manifest"); agents read it to discover '
+                                "the endpoint's paid routes and prices."))
+
+
+def _check(name: str, ok, detail: str, required: bool = True) -> dict:
+    return {"name": name, "pass": ok, "required": required, "detail": detail}
+
+
+def _host_root_check(target, root_metadata: dict | None, requested: bool) -> dict:
+    """Advisory: Amazap's listing prefill reads openapi.json or llms.txt at the host root.
+
+    ``requested`` is True when --profile amazap asked for the host-root probe;
+    with ``root_metadata`` None it means the probe was skipped because no 402 came.
+    Without the profile the check is "Not probed" on every host, the Lightning
+    Enable host included: a report nobody asked to judge for Amazap never says
+    an endpoint fails an Amazap check.
+    """
+    if not requested:
+        return _check("host_root_metadata", None,
+                      "Not probed: the Amazap profile was not requested.", required=False)
+    if target is not None and target.host == LIGHTNING_ENABLE_HOST:
+        return _check("host_root_metadata", False,
+                      "On api.lightningenable.com the host-root openapi.json and llms.txt describe the Lightning "
+                      "Enable platform, not this endpoint, so Amazap's prefill can't use them; supply the title, "
+                      "description, category, and example parameters by hand.", required=False)
+    if root_metadata is None:
+        return _check("host_root_metadata", None,
+                      "Skipped: --profile amazap was given, but the host root is probed only after the listed URL "
+                      "answers 402, and it did not. Fix the 402 first, then run the check again.",
+                      required=False)
+    found = sorted(path for path, status in root_metadata.items() if status == 200)
+    return _check("host_root_metadata", bool(found),
+                  "openapi.json or llms.txt at the host root, where Amazap's listing prefill looks: "
+                  + (", ".join(found) or "none found; supply the listing fields by hand") + ".",
+                  required=False)
+
+
+def _amazap_profile(request: ProbeRequest, probe_result: ProbeResult, invoice, root_metadata: dict | None,
+                    requested: bool = False) -> dict:
+    """The optional Amazap listing profile. It adds no finding and no required fix.
+
+    ``root_metadata`` is None when the host root was not probed; ``requested``
+    tells "not asked for" (no --profile amazap) from "asked for, but skipped
+    because no 402 came". The caller sets ``status`` and ``note`` once the
+    classification is known.
+    """
     response = probe_result.response
     target = probe_result.final_target
-    root = root_metadata or {}
-    found = sorted(path for path, status in root.items() if status == 200)
+    latency = f" (took {response.elapsed_ms} ms)" if response is not None else ""
     checks = [
-        ("public_https", bool(target and target.scheme == "https" and target.is_public), "Public https endpoint."),
-        ("priced_invoice", bool(invoice and invoice.amount_msat is not None), "The invoice carries an amount."),
-        ("mainnet_invoice", bool(invoice and invoice.network == "mainnet"), "The invoice is for mainnet."),
-        ("probe_without_body", bool(response and response.status == 402 and not request.body),
-         "An unpaid request with no body gets the 402 (Amazap's probe sends no body)."),
-        ("within_probe_window", bool(response and response.elapsed_ms <= AMAZAP_PROBE_WINDOW_MS),
-         "The 402 arrives within 8 seconds."),
-        ("stable_path", not probe_result.hops, "No redirect between the listed URL and the 402."),
-        ("host_root_metadata", bool(found), "openapi.json or llms.txt at the host root: " + (", ".join(found) or "none found") + "."),
+        _check("public_https", bool(target and target.scheme == "https" and target.is_public), "Public https endpoint."),
+        _check("priced_invoice", bool(invoice and invoice.amount_msat is not None), "The invoice carries an amount."),
+        _check("mainnet_invoice", bool(invoice and invoice.network == "mainnet"), "The invoice is for mainnet."),
+        _check("probe_without_body", bool(response and response.status == 402 and not request.body),
+               "An unpaid request with no body gets the 402 (Amazap's listing probe sends the listed method "
+               "with no body)."),
+        _check("within_probe_window", bool(response and response.elapsed_ms <= AMAZAP_PROBE_WINDOW_MS),
+               f"The 402 arrives within 8 seconds, the time Amazap's listing probe waits{latency}."),
+        _check("stable_path", not probe_result.hops, "No redirect between the listed URL and the 402."),
+        _host_root_check(target, root_metadata, requested),
     ]
-    links = response.header_values("Link") if response else []
-    if any('rel="l402-manifest"' in link for link in links):
-        findings.append(Finding("proxy_manifest_link", "info", "marketplace",
-                                "The 402 links an L402 manifest; Amazap's prefill reads only openapi.json or llms.txt at the host root."))
-    if response is not None and response.status == 402 and response.elapsed_ms > AMAZAP_PROBE_WINDOW_MS:
-        findings.append(Finding("slow_challenge", "warning", "marketplace", f"The 402 took {response.elapsed_ms} ms."))
-    if response is not None and response.status == 402 and not found:
-        findings.append(Finding("no_host_root_metadata", "warning", "marketplace", "No openapi.json or llms.txt at the host root."))
     return {
-        "checks": [{"name": n, "pass": ok, "detail": d} for n, ok, d in checks],
+        "status": None,
+        # Whether --profile amazap asked for this profile. The JSON always holds the
+        # full object; the Markdown shows it in full only when it was requested.
+        "requested": requested,
+        "checks": checks,
         "not_checked_by_script": [
             "example parameters for the listing",
             "a synchronous, bounded response",
             "stable price over time (the paid check compares the paid amount with this quote)",
         ],
-        "listing_ready": False,
-        "note": "Marketplace readiness also needs a paid fulfillment check.",
+        "note": None,
     }
 
 

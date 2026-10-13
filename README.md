@@ -30,15 +30,15 @@ default `standard` profile advertises.
 | Skill | What it does |
 |---|---|
 | ⚡ **[pay-l402-anywhere](skills/pay-l402-anywhere/)** | Pay any L402-gated endpoint from a bounded wallet: discover, confirm, pay per call. The general buyer. |
-| 🔭 **[discover-paid-apis](skills/discover-paid-apis/)** | Search the Lightning Enable registry and Amazap, compare labeled results, and try one with a single bounded purchase. |
+| 🔭 **[discover-paid-apis](skills/discover-paid-apis/)** | Search the Lightning Enable registry, with Amazap as an additional source, compare labeled results, and try one with a single bounded purchase. |
 | 📚 **[cited-answer](skills/cited-answer/)** | Answer a question by buying exactly the paid data it needs over L402, cite every figure, show the sats receipt. |
 
 ### Sell
 
 | Skill | What it does |
 |---|---|
-| 🏗️ **[producer-setup](skills/producer-setup/)** | From nothing to a live paid API on your own wallet: connect, sign up over L402, publish, self-test. |
-| 🔁 **[create-l402-proxy](skills/create-l402-proxy/)** | Put an existing API behind a paid L402 proxy on an account you already have: receive wallet, proxy, priced routes, publish, self-test. |
+| 🏗️ **[producer-setup](skills/producer-setup/)** | From nothing to a live paid API on your own wallet: connect, sign up over L402, publish to the Lightning Enable registry, self-test, verify. |
+| 🔁 **[create-l402-proxy](skills/create-l402-proxy/)** | Put an existing API behind a paid L402 proxy on an account you already have: receive wallet, proxy, priced routes, publish to the Lightning Enable registry, self-test, verify. |
 | 🏷️ **[sell-this](skills/sell-this/)** | Charge for one resource: mint an L402 challenge, verify payment, deliver. |
 | 🤝 **[negotiate-and-buy](skills/negotiate-and-buy/)** | Agent-to-agent commerce, buyer side: discover another agent's service over Nostr, vet it, settle over Lightning. |
 | 📣 **[offer-agent-service](skills/offer-agent-service/)** | Agent-to-agent commerce, seller side: publish a service on the agent relay, price it, get paid over Lightning. |
@@ -48,8 +48,8 @@ default `standard` profile advertises.
 | Skill | What it does |
 |---|---|
 | 🧩 **[l402-client-integration](skills/l402-client-integration/)** | Add auto-paying L402 to your own code with `l402-requests` (Python), `L402Requests` (.NET), or `l402-requests` (npm). |
-| 🧱 **[l402-server-integration](skills/l402-server-integration/)** | Charge for your own API in-process with `L402Server.AspNetCore` or `l402-express`, no proxy. |
-| 🩺 **[l402-compatibility-report](skills/l402-compatibility-report/)** | Check how far an endpoint gets through L402 without paying, then, with your yes, test paid delivery with one capped payment through the Lightning Enable MCP. |
+| 🧱 **[l402-server-integration](skills/l402-server-integration/)** | Charge for your own API in-process with `L402Server.AspNetCore` or `l402-express`, no proxy, optionally publish its own L402 manifest for discovery (you approve and deploy it), and verify it. |
+| 🩺 **[l402-compatibility-report](skills/l402-compatibility-report/)** | The Lightning Enable L402 compatibility report: check how far any endpoint gets through L402 without paying, then, with your yes, test paid delivery with one capped payment. |
 
 Each skill folder has a human-facing `README.md` (what it is) and an agent-facing
 `SKILL.md` (the instructions Claude loads).
@@ -57,22 +57,29 @@ Each skill folder has a human-facing `README.md` (what it is) and an agent-facin
 **Buy + sell, end to end:** `agent-wallet-setup` gives an agent a bounded wallet,
 and `lightning-enable-account` keeps a seller's plan paid in sats. On the buy
 side, `pay-l402-anywhere` is the general buyer, `discover-paid-apis` finds
-something worth buying in the Lightning Enable registry and on Amazap, and
-`cited-answer` is a task-specific buyer. On the sell side, `producer-setup` is
-how an agent *becomes* a seller from a standing start, `create-l402-proxy`
-puts a whole API behind a paywall on an existing account, and `sell-this`
-charges for a single resource. `negotiate-and-buy` and `offer-agent-service`
-are the two halves of agents transacting with each other on the Nostr relay.
-The `l402-*-integration` skills move the same protocol into your own code, and
-`l402-compatibility-report` checks the result: the unpaid challenge first,
-then, with your yes, one paid call. Shared rules for those checks live in
+something worth buying in the Lightning Enable registry, and on Amazap as an
+additional source, and `cited-answer` is a task-specific buyer. On the sell
+side, `producer-setup` is how an agent *becomes* a seller from a standing
+start, `create-l402-proxy` puts a whole API behind a paywall on an existing
+account, and `sell-this` charges for a single resource. The first two publish
+to the Lightning Enable registry, where buyers' agents find an endpoint with
+`discover_api` and pay it directly from their own wallets.
+`negotiate-and-buy` and `offer-agent-service` are the two halves of agents
+transacting with each other on the Nostr relay. The `l402-*-integration`
+skills move the same protocol into your own code. `l402-compatibility-report`,
+the Lightning Enable L402 compatibility report, checks any seller's endpoint:
+the unpaid challenge first, then, with your yes, one paid call. The three
+skills that build a paid endpoint, `producer-setup`, `create-l402-proxy`, and
+`l402-server-integration`, run it before their hand-off. Shared rules for
+those checks live in
 [`references/l402-verification-levels.md`](references/l402-verification-levels.md).
-After the self-test, `producer-setup`, `create-l402-proxy`, and
-`l402-server-integration` can draft an optional listing on
-[Amazap](https://amazap.com/sell) that you review and submit yourself; the
-rules are in [`references/amazap-marketplace.md`](references/amazap-marketplace.md).
-Lightning Enable does not hold funds; the wallet or the payment provider
-facilitates custody and settlement.
+After the hand-off, `producer-setup`, `create-l402-proxy`, and
+`l402-server-integration` can also draft an optional listing on
+[Amazap](https://amazap.com/sell), a separate marketplace, that you review and
+submit yourself; the rules are in
+[`references/amazap-marketplace.md`](references/amazap-marketplace.md).
+Lightning Enable does not hold funds; the payment provider facilitates custody
+and settlement.
 
 ## What works where
 
@@ -124,8 +131,8 @@ Every skill here that spends money follows the same rules:
   never run concurrently.
 - **Intent-driven.** The agent never decides *for* you that you need to buy.
 - **No secrets in this repo.** Payment authority lives only in your local MCP
-  wallet and, for an Amazap buy, in your prepaid Amazap credits. Skills report a wallet string or API key as set or not set, never its
-  value.
+  wallet and, for an Amazap buy, in your prepaid Amazap credits. Skills report
+  a wallet string or API key as set or not set, never its value.
 - **Lightning Enable does not hold funds.** The wallet or the payment provider
   facilitates custody and settlement.
 

@@ -83,7 +83,8 @@ def observed(fixture: dict) -> datetime:
 
 
 def run_fixture(fixture: dict, *, max_sats: int | None = None, extra_responses: list[dict] = (),
-                headers: dict | None = None, body: bytes | None = None, log: list | None = None):
+                headers: dict | None = None, body: bytes | None = None, log: list | None = None,
+                profiles: tuple = ()):
     """Run the read-only check against a fixture; return (report, secrets)."""
     import l402_analyze
     import l402_check
@@ -102,6 +103,7 @@ def run_fixture(fixture: dict, *, max_sats: int | None = None, extra_responses: 
         now=observed(fixture),
         resolver=fake_resolver(fixture.get("dns", {})),
         transport=fake_transport(list(fixture["responses"]) + list(extra_responses), log),
+        profiles=profiles,
     )
 
 

@@ -2,30 +2,33 @@
 name: discover-paid-apis
 description: >-
   Use when the user needs to find, compare, and optionally try a paid API or
-  digital service. Search the Lightning Enable registry and Amazap, label each
-  source, show current price and trust signals, then make at most one bounded
-  trial purchase with approval. Use when the user has no URL yet ("find me a
-  weather / finance / health API I can pay for", "what paid APIs are out
-  there", "is there an L402 API for X", "search Amazap for X", "try a paid
-  API"). Do NOT use to pay a URL the user already has (use pay-l402-anywhere),
-  to answer a research question with cited paid data (use cited-answer), to
-  sell or list an API (use producer-setup or create-l402-proxy), or to connect
-  a wallet from nothing (use agent-wallet-setup).
+  digital service. Search the Lightning Enable registry, and Amazap as an
+  additional source; label each source, explain the two ways to buy (direct
+  L402 from the user's wallet, or Amazap credits), show current price and the
+  signals each source reports, then make at most one bounded trial purchase
+  with approval. Use when the user has no URL yet ("find me a weather /
+  finance / health API I can pay for", "what paid APIs are out there", "is
+  there an L402 API for X", "search Amazap for X", "try a paid API"). Do NOT
+  use to pay a URL the user already has (use pay-l402-anywhere), to answer a
+  research question with cited paid data (use cited-answer), to sell or list
+  an API (use producer-setup or create-l402-proxy), or to connect a wallet
+  from nothing (use agent-wallet-setup).
 ---
 
 # Discover paid APIs
 
 Find something worth paying for, see what it costs before spending anything,
-and try it once. You search two sources and label every row with the one it
-came from:
+and try it once. You search the Lightning Enable registry first, and Amazap as
+an additional source, and label every row with the one it came from:
 
 - **The Lightning Enable registry,** searched with `discover_api`. Each
   listing points at an L402 manifest with the endpoints and their prices. A
-  registry result is paid directly from the Lightning Enable MCP wallet.
-- **Amazap** ([amazap.com](https://amazap.com)), a storefront where agents
-  search a catalog of pay-per-call APIs and digital services and buy calls
-  with prepaid Amazap credits. Amazap does not replace the Lightning Enable
-  registry; it is a second source.
+  registry result is paid directly over L402 from the Lightning Enable MCP
+  wallet.
+- **Amazap** ([amazap.com](https://amazap.com)), a separate marketplace where
+  agents search a catalog of pay-per-call APIs and digital services and buy
+  calls with prepaid Amazap credits. Amazap does not replace the Lightning
+  Enable registry; it is an additional source, and the user can leave it out.
 
 You search, the human picks, you read the details for free, and at most one
 paid trial shows whether the service delivers.
@@ -43,6 +46,28 @@ for buying through Amazap are in the
 with its
 [two-wallet rule](https://github.com/refined-element/lightning-enable-skills/blob/main/references/amazap-marketplace.md#two-wallets).
 
+## Two ways to buy
+
+Before any purchase, tell the human how each candidate would be bought. The
+two paths are separate payment systems, and the human makes the final choice.
+
+- **Direct L402, for a Lightning Enable registry result.** It pays from the
+  user's own connected Lightning wallet through the Lightning Enable MCP: the
+  invoice amount goes from that wallet to the API's seller, and any Lightning
+  routing fee is paid by the user's wallet on top. The payment is direct
+  L402: the preimage the payment returns is the proof that unlocks access.
+  Lightning Enable's spending controls apply: the MCP `budget` caps and its
+  confirmation codes. It needs no Amazap account and no Amazap credits.
+- **Amazap, for an Amazap listing.** It buys through Amazap's MCP with
+  prepaid Amazap credits, at Amazap's all-in price, under the current Amazap
+  terms and Amazap's account limits. Amazap adds marketplace discovery, trust
+  indicators such as `trust.label` and a paid track record, and its own
+  purchasing features, such as re-crediting a failed paid call as Amazap
+  credits.
+
+Neither path's limits govern the other: the MCP `budget` never bounds an
+Amazap buy, and Amazap's limits never bound a direct payment.
+
 ## What is automated, and what is not
 
 **Automated:** checking which tools the host lists, reading the MCP budget and
@@ -54,7 +79,7 @@ the receipt.
 
 - **What to look for:** the outcome they need, not just a category.
 - **Which candidate to try,** from the comparison you present.
-- **Whether to pay,** at the moment of payment, with the all-in price and the
+- **Whether to pay,** at the moment of payment, with the quoted price and the
   cap that applies stated.
 - **What input to disclose,** when it holds anything sensitive.
 - **Whether to accept the current Amazap terms,** before an Amazap buy.
@@ -112,8 +137,8 @@ Collect, in one message, what you can't infer:
 1. **The outcome:** the result they need ("tomorrow's forecast for Berlin",
    not just "weather"), how fresh it must be, what input they will supply,
    and what output format they want.
-2. **The user's cap:** the most one trial may cost, all-in, in sats, and
-   whether a paid trial is authorized at all.
+2. **The user's cap:** the most one trial may cost, in sats, checked against
+   the quoted price (step 5), and whether a paid trial is authorized at all.
 3. **Restrictions:** providers to avoid, and any limits on data handling,
    jurisdiction, or content.
 
@@ -123,10 +148,6 @@ spend, so steps 1 to 5 need no yes. Step 6 pays, and needs its own yes.
 
 ### 1. Check the tools and the MCP leash
 
-- **Which tools does the host list?** Note whether Amazap's tools are present.
-  If they aren't, say so plainly: Amazap search uses the public products API,
-  and an Amazap buy needs Amazap's MCP (https://amazap.com/mcp). Never claim
-  Amazap MCP access you don't have.
 - **The MCP leash, for the direct path only:**
 
   ```
@@ -140,15 +161,21 @@ spend, so steps 1 to 5 need no yes. Step 6 pays, and needs its own yes.
   price source recovers; say so. These numbers are for the Lightning Enable
   registry path only. They don't see Amazap credits and never bound an Amazap
   buy.
+- **Which tools does the host list?** Note whether Amazap's tools are present.
+  If they aren't, say so plainly: Amazap search uses the public products API,
+  and an Amazap buy needs Amazap's MCP (https://amazap.com/mcp). Never claim
+  Amazap MCP access you don't have.
 - **Amazap credits, when Amazap's tools are listed:** `balance` or
   `spend_summary` returns the remaining Amazap credits and the account's
   current limits. Read them; don't assume them.
 
 ### 2. Search both sources
 
-Amazap does not replace the Lightning Enable registry, so search both. Put
-the outcome in the search terms. Run at least one refinement when the first
-results are empty, too broad, or mostly irrelevant. Searching never spends.
+Search the Lightning Enable registry first. Amazap does not replace the
+Lightning Enable registry; search it too, as an additional source, unless the
+user asked to leave it out. Put the outcome in the search terms. Run at least
+one refinement when the first results are empty, too broad, or mostly
+irrelevant. Searching never spends.
 
 **The Lightning Enable registry, with `discover_api`.**
 
@@ -183,7 +210,8 @@ The registry is `L402_REGISTRY_URL` if set, otherwise
 
 **Amazap, through its MCP.** When the host lists `search_catalog`, call it
 with the outcome terms. It hides demo and unhealthy listings by default, and
-each result carries an all-in price, a quote, and a ready-to-use buy call.
+each result carries Amazap's all-in price, a quote, and a ready-to-use buy
+call.
 Do not run that buy call; `buy` waits for the trial step and the human's yes.
 
 **Amazap, without its MCP.** Use the read-only public products API:
@@ -220,30 +248,37 @@ For every row:
   it. Never frame a price difference as a reason to bypass Amazap. Never steer
   a buyer away from Amazap's all-in price toward direct payment of a listing
   Amazap surfaced. Amazap's margin funds its failed-call credits. Direct
-  payment through `pay-l402-anywhere` is for a URL the user already has.
+  payment is for a Lightning Enable registry result or a URL the user already
+  has. This rule covers listings Amazap surfaced; it never applies to a result
+  the Lightning Enable registry returned, which is its own candidate with its
+  own price.
 
 ### 3. Compare at most five candidates
 
 Show at most five candidates, one row each:
 
-| Source | Product and provider | Protocol and rail | All-in price | Inputs | Trust and health | Buyable now | Wallet |
+| Source | Product and provider | Protocol and rail | Quoted price | Inputs | Signals | Buyable now | Wallet |
 |---|---|---|---|---|---|---|---|
 
-- **All-in price.** For an Amazap row, show `totalSats`, the all-in figure the
-  buyer pays, with `priceSats` (the seller price) and `feeBps` beside it.
-  Never add `priceSats` and the fee yourself; the all-in total can
-  differ from that sum. For a registry row, show `default_price_sats`, or "see
-  the manifest" when there is none. When neither source gives a fixed price,
-  write "quote required".
+- **Quoted price** (step 5 defines it for each path). For an Amazap row, show
+  `totalSats`, the all-in figure the buyer pays, with `priceSats` (the seller
+  price) and `feeBps` beside it. Never add `priceSats` and the fee yourself;
+  Amazap's all-in total can differ from that sum. For a registry row, show
+  `default_price_sats`, the invoice amount, or "see the manifest" when there
+  is none. When neither source gives a fixed price, write "quote required".
 - **Inputs.** For an Amazap row, list `inputSchema.fields[]` (each field's
   `name`, `type`, `required`, and `in`: `body`, `query`, or `path`) with
   `schemaConfidence`. For a registry row, step 4 reads them from the manifest.
-- **Trust and health, exactly as reported.** For an Amazap row, show
-  `trust.label`, `healthStatus`, and `listingState`, and the paid record
-  (`paidSuccesses`, `paidFailures`, `lastPaidSuccessAt`) when present. Quote
-  `trust.label` as returned. For example, it may start with Verified, Working,
-  Limited track record, or Having trouble, and add detail; those are observed
-  values, not a fixed list. Never upgrade a label.
+- **Signals, exactly as each source reports them.** For a registry row, show
+  `default_price_sats`, `endpoint_count`, the `manifest_url`, the OpenAPI URL
+  when the row is a Lightning Enable proxy (`<proxy_base_url>/openapi.json`),
+  and the affordability below. For an Amazap row, show `trust.label`,
+  `healthStatus`, and `listingState`, and the paid record (`paidSuccesses`,
+  `paidFailures`, `lastPaidSuccessAt`) when present. Quote `trust.label` as
+  returned. For example, it may start with Verified, Working, Limited track
+  record, or Having trouble, and add detail; those are observed values, not a
+  fixed list. Never upgrade a label. A signal one source doesn't report reads
+  "not reported by this source", which is neutral, never a warning.
 - **Buyable now.** For an Amazap row, read `buyable` with `listingState`,
   `healthStatus`, and `hidden`; drop any row with `hidden: true`. Show "no"
   for a paused, degraded, or failing row, even when `buyable` is true. Show
@@ -260,14 +295,20 @@ Show at most five candidates, one row each:
   never as free or unlimited.
 - **Data sharing.** Say who receives the input: for an Amazap row, Amazap and
   the seller behind the listing; for a registry row, the seller's endpoint.
-- **Unknown values.** Leave a cell blank when its source doesn't report it;
-  never fill it with a guess.
+- **Unknown values.** Write "not reported by this source" when a source
+  doesn't report a value; never fill a cell with a guess.
 
-Recommend one candidate, with a one-sentence reason. Prefer a reliable, clearly
-specified service over the cheapest. When the same service is in both sources,
-base the recommendation on reliability and clarity, never on the price
-difference between the rows. Never mention a listing's `endpointUrl` as a way
-to pay the seller directly.
+Before the human picks, say which way each candidate is bought (see
+[Two ways to buy](#two-ways-to-buy)). Recommend one candidate, with a
+one-sentence reason drawn from the rows: fit to the outcome, a clear
+specification, and the signals its own source reports. Prefer a reliable,
+clearly specified service over the cheapest. Never rank a row up or down for
+its source, and never drop a row to favor the other source. When the same
+service is in both sources, show both rows with their own prices and their
+own way to buy; recommend the service, not one of its two rows, and leave the
+choice between the rows to the human. A price difference between the two rows
+is never a reason to pick one of them. Never mention a listing's
+`endpointUrl` as a way to pay the seller directly.
 
 If nothing matched or nothing is affordable, say so plainly instead of
 stretching a weak match. Then let the human pick one.
@@ -329,7 +370,12 @@ Before any payment:
   For a registry result, the manifest price is the quote, and the 402 challenge
   confirms it.
 - **Match it** to the exact listing, parameters, quantity, and account.
-- **Show the exact all-in total in sats.**
+- **Show the quoted price in sats.** The quoted price is the figure the
+  user's cap is checked against, and it differs by path. For an Amazap row, it
+  is Amazap's all-in total (`totalSats`), paid in Amazap credits. For a
+  registry result, it is the invoice amount, which is what the user's cap and
+  the MCP budget count; any Lightning routing fee is paid on top, within the
+  wallet's fee limit.
 - **Say who receives the input,** as in step 3.
 
 State which cap applies to which path before any purchase.
@@ -350,8 +396,8 @@ The Amazap limits are per call, per day, and per session. Above the
 auto-approve amount, the person confirms the buy in Amazap, or `buy` returns
 `approval_required` and charges nothing.
 
-**Over the cap, refuse.** If the all-in total is above the lowest cap that
-applies to its path, refuse and buy nothing; say the total and the cap. A
+**Over the cap, refuse.** If the quoted price is above the lowest cap that
+applies to its path, refuse and buy nothing; say the price and the cap. A
 31-sat quote against a 30-sat cap is a refusal, not a negotiation.
 
 Search, describe, and quote never spend.
@@ -364,7 +410,7 @@ Buy only when every item holds:
 
 - the user authorized a paid trial, or an existing policy explicitly permits
   it;
-- the all-in total is within the lowest cap that applies to its path;
+- the quoted price is within the lowest cap that applies to its path;
 - the input passed the check in step 4;
 - the quote is fresh and matches the final parameters;
 - the service is buyable: `buyable: true` on an Amazap row, which is also
@@ -375,11 +421,17 @@ A paused or degraded row stays unbought this run, even with `buyable: true`,
 and so does a failing one. Step 2 shows such a row; it is not a candidate to
 buy.
 
-State the purchase and **stop for a yes**: "I will buy one call to
-`<listing>` from `<source>` for `<total>` sats all-in, paid from `<wallet>`,
-within your `<cap>`-sat cap. `<who>` receives your input. Go ahead?" Amazap
-auto-approves small buys on its own side; this skill still asks the user
-first.
+State the purchase and **stop for a yes**, in the words of its path:
+
+- **An Amazap buy:** "I will buy one call to `<listing>` from Amazap for
+  `<total>` sats all-in, paid from Amazap credits, within your `<cap>`-sat
+  cap. `<who>` receives your input. Go ahead?" Amazap auto-approves small
+  buys on its own side; this skill still asks the user first.
+- **A direct payment:** "I will buy one call to `<listing>` from the
+  Lightning Enable registry for `<price>` sats, the invoice amount, paid from
+  your MCP wallet. Your `<cap>`-sat cap and the MCP budget count that invoice
+  amount; any Lightning routing fee is paid on top, within the wallet's fee
+  limit. The seller's endpoint receives your input. Go ahead?"
 
 For an Amazap buy, the same yes also covers the current Amazap terms. Add:
 "Buying through Amazap means accepting its current terms
@@ -387,7 +439,10 @@ For an Amazap buy, the same yes also covers the current Amazap terms. Add:
 them and go ahead?" A bare "Go ahead?" is never consent to the terms, so
 it never sets `accept_terms`.
 
-**Through Amazap, with `buy`.**
+**Through Amazap, with `buy`.** These rules hold on every Amazap buy. The
+full mechanics, with retries, baskets, top-ups, and a row for each Amazap
+`buy` error, are in
+[Amazap marketplace: Buying through Amazap](https://github.com/refined-element/lightning-enable-skills/blob/main/references/amazap-marketplace.md#buying-through-amazap).
 
 ```
 buy(<the listing and parameters from the quote>,
@@ -408,35 +463,19 @@ buy(<the listing and parameters from the quote>,
   (https://amazap.com/terms and https://amazap.com/credits) and getting the
   user's agreement in the same yes as the purchase.
 - **A stale quote.** When `buy` reports a stale quote, the stale attempt
-  charged nothing, and the error carries a fresh quote. Show the fresh quote
-  from the error, and check that its total is still within the user's cap.
-  Then state the fresh total, show the current Amazap terms links again
-  (https://amazap.com/terms and https://amazap.com/credits), and get a new
-  yes, for the purchase and the terms, before buying with its `quote_id`, its
-  `total_cost`, and its total as `max_total_sats`. The first yes never covers
-  a different total. Never buy on the fresh quote automatically.
-- **`approval_required`.** The total is above Amazap's auto-approve amount,
-  and the person must confirm it in Amazap. Stop, and ask the person to
-  confirm the exact quote in Amazap; nothing is charged until they do. Never
-  re-quote or split the purchase to get around it. Once they say they
-  approved it, the same `quote_id` can be bought once.
-- **Retries.** When the outcome is unclear (a dropped connection, a
-  timeout), check before any retry: `get_order` or `orders` shows whether the
-  buy went through. Repeating a `quote_id` never charges twice, so a retry
-  with the same `quote_id` is safe once the order shows none. A new quote is
-  a new purchase.
-- **Baskets.** A basket is one buy. Put several listings in one buy only when
-  the user asked for more than one call.
-- **Credits short.** If `balance` shows too few credits, ask before `top_up`.
-  The human chooses the top-up amount. `top_up` returns a Lightning invoice
-  and a QR code for the human to pay; let the host show that result to the
-  human, and never copy the invoice into your own message. Never pay the invoice
-  from the Lightning Enable MCP wallet unless the human explicitly asks. If
-  they do, it is a separate payment with `pay_invoice`, and the human says
-  yes to that exact amount first. The user's cap doesn't cover a top-up: it
-  bounds the trial, not the credits added. The MCP `budget` limits do bound
-  that payment, because it leaves the MCP wallet. Then read `balance` again
-  before buying.
+  charged nothing. Show the fresh quote from the error, and check that its
+  total is still within the user's cap. Show the current Amazap terms links
+  again and get a new yes before buying on it. Never buy on the fresh quote
+  automatically.
+- **`approval_required`.** The total is above Amazap's auto-approve amount.
+  Stop, and ask the person to confirm the exact quote in Amazap; nothing is
+  charged until they do. Never re-quote or split the purchase to get around
+  it. Once they say they approved it, the same `quote_id` can be bought once.
+- **Before any retry,** check `get_order` or `orders` for whether the buy
+  went through. Repeating a `quote_id` never charges twice.
+- **Too few credits:** ask before `top_up`. The human chooses the amount and
+  pays the invoice; a top-up paid from the MCP wallet follows the Safety
+  rules below.
 
 **Directly, for a Lightning Enable registry result, with
 `access_l402_resource`.**
@@ -495,7 +534,9 @@ budget(action="status")
 ```
 
 Pick the receipt written since step 6 for this URL and take its
-`paymentHash`, `amountSats`, and `status`. The MCP stores the payment hash as
+`paymentHash`, `amountSats`, and `status`, and its `feeSats` when the receipt
+reports one. `amountSats` is the invoice amount; `feeSats`, an optional
+field, is the fee the wallet paid on top. The MCP stores the payment hash as
 SHA-256 of the preimage, never the preimage itself, so a receipt holds no
 credential. Read the payment hash only from `receipts(source="durable")`: the
 session receipts carry no payment hash on either port.
@@ -505,7 +546,10 @@ Report:
 - the requested outcome;
 - the delivered result, faithfully: summarize it, quote its key figures, say
   when it was truncated, and never claim data the call did not return;
-- the sats charged, all-in;
+- the sats charged: for an Amazap buy, the all-in `chargedSats` from Amazap's
+  receipt; for a direct payment, the invoice amount (`amountSats`) and, when
+  the receipt reports a fee (`feeSats`), that fee beside it, never one
+  combined figure;
 - the remaining Amazap credits or the remaining MCP budget, whichever wallet
   paid, when available;
 - the source, the provider, and the listing used;
@@ -565,7 +609,7 @@ After a paid failure:
 - **To answer a research question with paid data and citations:**
   [`cited-answer`](../cited-answer/).
 - **To sell an API of their own:** [`producer-setup`](../producer-setup/), which
-  can also draft an optional Amazap listing.
+  publishes to the Lightning Enable registry.
 
 ## What can go wrong
 
@@ -573,6 +617,7 @@ After a paid failure:
 |---|---|---|
 | `discover_api` returns no results | Nothing in the registry matches | Try one broader keyword or a category, then say so. Never invent an API. |
 | Registry returned an error status or a redirect | The registry is down, or `L402_REGISTRY_URL` / `LIGHTNING_ENABLE_API_URL` points somewhere wrong | Report the `registry_url` from the response, and carry on with Amazap. |
+| Amazap's products API or MCP is unreachable or errors | Amazap is down, or the host can't reach it | Report it, and carry on with the Lightning Enable registry. Never claim Amazap results you didn't get. |
 | "Could not find an L402 manifest" with `tried_urls` | The site publishes no L402 manifest at the well-known paths | Show the human the paths tried. Without a manifest, the price is unknown; don't guess it. |
 | `redirect_location` in a `discover_api(url=...)` result | The URL redirects, and the tool doesn't follow redirects | Call `discover_api` again with the redirect target, if the human agrees it is the same site. |
 | A URL refused before any request | It resolves to a private or internal address | Deliberate SSRF (server-side request forgery) protection. Use a public URL. |
@@ -580,23 +625,17 @@ After a paid failure:
 | Amazap's tools aren't listed | Amazap's MCP isn't connected in this host | Search with `GET https://amazap.com/api/products`. For a buy, point the human at https://amazap.com/mcp. Never claim Amazap MCP access. |
 | An Amazap row shows `buyable: false` | The listing isn't payable now | Show it, unless it has `hidden: true`; a hidden row is dropped. Never buy it. |
 | An Amazap row is paused, degraded, or failing | `listingState` or `healthStatus` says so | Show it as not buyable, and never buy it, even with `buyable: true`. |
+| `buy` reports a stale quote, `approval_required`, `terms_required`, `not_yet_supported`, or an Amazap account limit; too few credits; or a paid Amazap call failed | An Amazap buy outcome | Follow the row for that outcome in [Amazap marketplace: Buying through Amazap](https://github.com/refined-element/lightning-enable-skills/blob/main/references/amazap-marketplace.md#buying-through-amazap). Never buy on an old yes, never work around `approval_required`, and never buy a replacement without asking. |
 | The user already has the URL | Nothing to discover | Hand off to `pay-l402-anywhere`. That handoff is for a URL the user already has, never for a listing Amazap surfaced. |
 | The input holds something sensitive | Secrets, a private or logged-in URL, credentials, personal data, or proprietary content | Don't send it unless the user explicitly approved that disclosure. Say what you found, and buy nothing. |
 | No fresh quote, or it doesn't match the parameters | Quote failure | Nothing was charged. Never buy on an old or mismatched quote. Quote again, or pick another candidate with the user. |
-| `buy` reports a stale quote | The quote expired, or the parameters changed | Nothing was charged. Show the fresh quote from the error. If its total is within the user's cap, state that total, show the current Amazap terms links again, and get a new yes before buying, with that total as `max_total_sats`. |
-| The all-in total is above the user's cap | Policy refusal | Refuse and buy nothing; say the total and the cap. Never raise the cap or split the purchase to fit under it. |
-| `buy` refuses on an Amazap account limit | Policy refusal: a per-call, per-day, or per-session Amazap limit | Nothing was charged. Report the limit the error names. Only the account owner changes it, on Amazap. |
+| The quoted price is above the user's cap | Policy refusal | Refuse and buy nothing; say the price and the cap. Never raise the cap or split the purchase to fit under it. |
 | A budget denial on the direct path | Policy refusal: a per-payment or per-session cap on the MCP wallet | Report the limit the error names. Don't retry with a smaller `max_sats` to squeeze under it. Only the human changes the config file. |
 | Payments refused while no BTC price is available | USD limits on the MCP wallet can't be checked during a price outage | Expected on the direct path: USD limits fail closed. When the operator set sats-denominated limits, small payments may keep working during a price outage. |
-| `buy` returns `approval_required` | The total is above Amazap's auto-approve amount | Stop. The person confirms the exact quote in Amazap; nothing is charged until they do. Never re-quote or split the purchase to get around it. Once they say they approved it, the same `quote_id` can be bought once. |
-| `buy` returns `terms_required` | `accept_terms` was missing | Show the current Amazap terms (https://amazap.com/terms and https://amazap.com/credits) and ask again, in one yes for the purchase and the terms. Set `accept_terms` only on that yes. |
-| `buy` returns `not_yet_supported` | A listing payable only in a stablecoin | Not buyable in sats. Pick another candidate with the user. |
-| Too few credits for the trial | The Amazap account needs a top-up | Ask before `top_up`; the human chooses the amount and pays the invoice. Pay it from the MCP wallet only when the human explicitly asks to pay it from the MCP wallet. Then the top-up is its own `pay_invoice` payment, with its own yes on that exact amount: outside the user's cap, and inside the MCP `budget` limits. |
 | `requiresConfirmation: true` | The amount is above the MCP auto-approve tier | Ask the human for the code, then repeat the same call with `confirmation_nonce`. Never guess a code. |
 | The invoice costs more than `max_sats` | The seller raised the price since the listing | Nothing was paid. Tell the human the real price, and ask again only if it is within the user's cap; never above the user's cap. Never guess a price. |
 | The payment didn't go through | Payment failure: a wallet, route, or invoice error | Report it, and check the outcome before any retry. Never retry with a smaller cap or `max_sats` to squeeze under a limit. |
 | The outcome of a buy or a payment is unclear | A dropped connection or a timeout | Check before any retry: `get_order` or `orders` on the Amazap path, `receipts(source="session")` on the direct path. A pending or unclear payment is never replaced by a second one. |
-| A paid Amazap call failed | Provider failure after payment: the service failed or returned nothing | Re-credited as Amazap credits, never cash. Say whether it was automatic; if not, offer `claim_failed_call` within the window the current Amazap credit terms state. Don't buy a replacement without asking. |
 | `alreadyPaid: true` | Provider failure after a direct payment: paid, then the endpoint errored or redirected | Do not pay again or call the URL again. Report the sats paid and the error. |
 | The result doesn't match the listing | A malformed result, after payment | Report it as a malformed result, and quote what came back; never claim data it lacks. On Amazap, offer `report_sku` with the user's approval. Don't buy or pay again without asking. |
 | The user, or the person approving in Amazap, says no | User-declined approval | Stop. Nothing was charged. Report that nothing was bought. |
@@ -607,7 +646,7 @@ After a paid failure:
 
 - **Free reads first, one paid trial last.** Searching, describing, quoting,
   and reading manifests never pay. Pay only after the human picked a
-  candidate and said yes to its all-in price, within the user's cap.
+  candidate and said yes to its quoted price, within the user's cap.
 - **At most one trial purchase per run,** unless the user explicitly asks for
   more. Never fan out paid calls across several services to compare them,
   and never buy a second candidate after a paid failure without asking.
@@ -627,7 +666,9 @@ After a paid failure:
 - **No direct-pay steer.** Never steer a buyer away from Amazap's all-in price
   toward direct payment of a listing Amazap surfaced. Never offer an Amazap
   listing's `endpointUrl` as a cheaper way to pay. Direct payment is for a
-  URL the user already has.
+  Lightning Enable registry result or a URL the user already has. This rule
+  covers listings Amazap surfaced; it never applies to a result the Lightning
+  Enable registry returned.
 - **Sensitive input stays with the user** unless they explicitly approved
   sending it. That covers secrets, private URLs, authenticated pages,
   credentials, personal data, or proprietary content.
@@ -656,45 +697,58 @@ After a paid failure:
 
 ## Example
 
-The names, the trust label, and the sats figures are illustrative, not Amazap
-terms or data.
+The names, the trust label, and the sats figures are illustrative, not
+registry or Amazap data.
 
 > User: "Find me a weather API and try one forecast for Berlin. Spend at most
 > 30 sats."
 >
-> 1. The host lists Amazap's tools. `budget(action="status")` shows 480 sats
->    left this session and `get_balance()` shows 4,700 sats, for the direct
->    path only. Amazap's `balance` shows enough credits and the account's
->    current limits.
+> 1. `budget(action="status")` shows 480 sats left this session and
+>    `get_balance()` shows 4,700 sats, for the direct path only. The host also
+>    lists Amazap's tools; Amazap's `balance` shows enough credits and the
+>    account's current limits.
 > 2. `discover_api(query="weather forecast")` returns two registry results.
 >    `search_catalog` with "weather forecast" returns three Amazap rows.
-> 3. Five candidates, each labeled "Lightning Enable registry" or "Amazap".
->    Recommended: `fixture-string-forecast` from `fixture-string-provider-a`
->    on Amazap, because its `trust.label` reads "Verified: delivered 6 times"
->    with 0 paid failures and a high-confidence schema. The row shows
->    `buyable: true` and is neither paused, degraded, nor failing. The human
->    picks it.
-> 4. Its inputs are `latitude` and `longitude`: nothing sensitive. Amazap and
->    the seller receive them.
-> 5. The quote is 13 sats all-in, paid from Amazap credits, within the 30-sat
->    cap and the Amazap account limits.
-> 6. "I will buy one call to `fixture-string-forecast` from Amazap for 13 sats
->    all-in, paid from Amazap credits, within your 30-sat cap. Amazap and the
->    seller receive your latitude and longitude. Buying through Amazap means
->    accepting its current terms (https://amazap.com/terms and
->    https://amazap.com/credits). Do you accept them and go ahead?" The human
->    says yes. `buy` with the quote's `quote_id` and `total_cost`,
->    `max_total_sats=13`, and `accept_terms` set on that yes delivers the
->    forecast.
-> 7. "You asked for tomorrow's forecast for Berlin: a high of 14 °C and light
->    rain. Charged 13 sats all-in from Amazap credits; the receipt's
->    `balanceAfterSats` shows the credits left. Source: Amazap, listing
->    `fixture-string-forecast` from `fixture-string-provider-a`, the order id
->    `<order id>`. Fulfilled." Then offer `report_outcome`.
+> 3. Five candidates, each labeled "Lightning Enable registry" or "Amazap",
+>    and each with its way to buy: direct L402 from the MCP wallet, or Amazap
+>    credits. Recommended: `example-weather` from the registry, because it
+>    fits the request most directly: its listing describes a forecast by city
+>    name, which matches "Berlin", and the budget covers 48 calls at its
+>    10-sat default price. Its trust label reads "not reported by this
+>    source". The trade-off: picking it gives up the delivery track record
+>    the Amazap row `fixture-string-forecast` reports, "Verified: delivered 6
+>    times", and that row takes latitude and longitude instead of a city.
+>    Either fits; the human picks `example-weather`.
+> 4. `discover_api(url="<manifest_url>")` shows `GET /forecast` at 10 sats,
+>    taking `city`: nothing sensitive. The seller's endpoint receives it.
+> 5. The manifest price is the quote: 10 sats, paid from the MCP wallet,
+>    within the 30-sat cap and the MCP budget.
+> 6. "I will buy one call to `example-weather` from the Lightning Enable
+>    registry for 10 sats, the invoice amount, paid from your MCP wallet. Your
+>    30-sat cap and the MCP budget count that invoice amount; any Lightning
+>    routing fee is paid on top, within the wallet's fee limit. The seller's
+>    endpoint receives your city. Go ahead?" The human says yes.
+>    `access_l402_resource(url="<endpoint url>", max_sats=<the listed price>)`
+>    pays 10 sats and returns the forecast.
+> 7. `receipts(source="durable")` gives the payment's `paymentHash`. "You
+>    asked for tomorrow's forecast for Berlin: a high of 14 °C and light rain.
+>    Charged 10 sats from your MCP wallet; `budget(action="status")` shows
+>    what's left. Source: Lightning Enable registry, listing
+>    `example-weather`, payment hash `<payment hash>`. Fulfilled."
 >
 > Had the quote been 31 sats, step 5 would have refused and bought nothing.
-> Had the human picked a Lightning Enable registry result instead, the direct
-> path would pay it from the MCP wallet, after reading its manifest and
-> confirming a GET endpoint, with
-> `access_l402_resource(url="<endpoint url>", max_sats=<the listed price>)`,
-> within the 30-sat cap and the MCP budget.
+> Had the human picked the Amazap row `fixture-string-forecast` from
+> `fixture-string-provider-a` instead, the Amazap path would run. Its
+> `trust.label` reads "Verified: delivered 6 times". The row shows
+> `buyable: true` and is neither paused, degraded, nor failing. Its inputs are
+> `latitude` and `longitude`, which Amazap and the seller receive. The quote
+> is 13 sats all-in, paid from Amazap credits, within the 30-sat cap and the
+> Amazap account limits. The yes would be: "I will buy one call to
+> `fixture-string-forecast` from Amazap for 13 sats all-in, paid from Amazap
+> credits, within your 30-sat cap. Amazap and the seller receive your
+> latitude and longitude. Buying through Amazap means accepting its current
+> terms (https://amazap.com/terms and https://amazap.com/credits). Do you
+> accept them and go ahead?" On that yes, `buy` with the quote's `quote_id`
+> and `total_cost`, `max_total_sats=13`, and `accept_terms` set on that yes
+> delivers the forecast; the receipt's `balanceAfterSats` shows the credits
+> left, and the order id `<order id>` identifies the purchase.

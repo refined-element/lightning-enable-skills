@@ -24,11 +24,11 @@ SECTIONS = (
     "Authorization and binding",
     "Paid fulfillment",
     "Replay/idempotency",
-    "Marketplace readiness",
     "Security findings",
     "Rerun notes",
     "Required fixes",
     "Evidence retained",
+    "Optional marketplace profiles",
 )
 REDACTED = "[REDACTED]"
 HASH_SOURCE_NOTES = {
@@ -152,7 +152,7 @@ def _value(value) -> str:
 def to_markdown(report: dict, secrets: set[str] | frozenset[str] = frozenset()) -> str:
     target = report["target"]
     lines = [
-        "# L402 Compatibility Report",
+        "# Lightning Enable L402 Compatibility Report",
         "",
         f"- Target: {target['method']} {target['url']}",
         f"- Checked at: {report['checked_at']}",
@@ -167,11 +167,11 @@ def to_markdown(report: dict, secrets: set[str] | frozenset[str] = frozenset()) 
         "Authorization and binding": _binding(report),
         "Paid fulfillment": _paid(report),
         "Replay/idempotency": [report["replay"]["note"]],
-        "Marketplace readiness": _marketplace(report),
         "Security findings": _bullets([_finding(f) for f in report.get("security", [])]),
         "Rerun notes": _bullets(report.get("rerun", [])),
         "Required fixes": _bullets(report.get("required_fixes", [])),
         "Evidence retained": _bullets([f"[{k}] {_value(v)}" for k, v in (report.get("evidence") or {}).items()]),
+        "Optional marketplace profiles": _profiles(report),
     }
     for section in SECTIONS:
         lines += ["", f"## {section}", ""] + body[section]
@@ -308,10 +308,39 @@ def _paid(report: dict) -> list[str]:
     return _bullets(rows)
 
 
-def _marketplace(report: dict) -> list[str]:
-    m = report["marketplace"]
-    rows = [f"[{c['name']}] {'pass' if c['pass'] else 'fail'}. {c['detail']}" for c in m["checks"]]
-    rows += [f"Not checked by the script: {item}" for item in m["not_checked_by_script"]]
-    rows += [_finding(f) for f in report["findings"] if f["section"] == "marketplace"]
-    rows.append(m["note"])
-    return _bullets(rows)
+PROFILE_TITLES = {"amazap": "Amazap"}
+CHECK_VERDICTS = {True: "pass", False: "fail", None: "not checked"}
+# One neutral line for a profile nobody asked for: no checks, no verdicts. The
+# JSON keeps the full object. A paid report never suggests running again, which
+# would mean paying again.
+UNREQUESTED_PROFILE_LINES = {
+    "read-only": "{title} readiness: not requested; run with `--profile {name}` to include it.",
+    "paid": "{title} readiness: not requested; the JSON report holds the profile under "
+            "`marketplace_profiles.{name}`.",
+}
+
+
+def _profiles(report: dict) -> list[str]:
+    profiles = report.get("marketplace_profiles") or {}
+    if not profiles:
+        return ["- None."]
+    # A report written before the "requested" field existed is shown in full.
+    requested = {name: p for name, p in profiles.items() if p.get("requested", True) is not False}
+    unrequested = [name for name in profiles if name not in requested]
+    template = UNREQUESTED_PROFILE_LINES["paid" if report.get("mode") == "paid" else "read-only"]
+    lines = [template.format(title=PROFILE_TITLES.get(name, name), name=name) for name in unrequested]
+    if not requested:
+        return lines
+    if lines:
+        lines.append("")
+    lines.append("Optional. A marketplace profile never changes the classification above.")
+    for name, profile in requested.items():
+        rows = [f"Status: {profile.get('status') or 'not computed'}"]
+        for check in profile.get("checks", []):
+            advisory = "" if check.get("required", True) else " (advisory)"
+            rows.append(f"[{check['name']}] {CHECK_VERDICTS.get(check['pass'], 'fail')}{advisory}. {check['detail']}")
+        rows += [f"Not checked by the script: {item}" for item in profile.get("not_checked_by_script", [])]
+        if profile.get("note"):
+            rows.append(profile["note"])
+        lines += ["", f"### {PROFILE_TITLES.get(name, name)}", ""] + _bullets(rows)
+    return lines

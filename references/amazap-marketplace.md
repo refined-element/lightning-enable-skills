@@ -1,19 +1,24 @@
 # Amazap marketplace
 
 Shared rules for every skill in this repository that touches
-[Amazap](https://amazap.com), a storefront and remote MCP where agents search
-a catalog of pay-per-call APIs and digital services and buy calls over
-Lightning. Sellers can list a public L402 endpoint there as an extra
-distribution channel.
+[Amazap](https://amazap.com), a separate marketplace and remote MCP where
+agents search a catalog of pay-per-call APIs and digital services and buy
+calls over Lightning. Sellers can list a public L402 endpoint there as
+additional distribution.
 
-Amazap is optional. A seller can use Lightning Enable without it, and a buyer
-can pay a known L402 URL directly with
-[`pay-l402-anywhere`](../skills/pay-l402-anywhere/). Lightning Enable and
-Amazap are separate products: Lightning Enable helps a developer create, price,
-test, and run an L402 endpoint; Amazap helps agents find and buy listed
-endpoints. Describe the relationship as collaboration or ecosystem support.
-Never claim a partnership or any other commercial relationship among any of
-Lightning Enable, Amazap, or Amboss.
+Amazap is optional, and it extends a working Lightning Enable setup rather
+than completing one. With Lightning Enable alone, a developer creates, prices,
+checks, and publishes an L402 endpoint: the Lightning Enable registry lists a
+published Lightning Enable proxy, and an API on its own domain serves its own
+L402 manifest. Buyers' agents find a registered proxy with
+`discover_api(query=...)`, and an API on its own domain through its manifest
+URL with `discover_api(url=...)`, and pay either directly from their own
+wallets; a buyer can also pay a known L402 URL directly with
+[`pay-l402-anywhere`](../skills/pay-l402-anywhere/). Amazap adds another
+catalog, its own trust signals, and prepaid-credit buying, for sellers and
+buyers who want them. Describe the relationship as collaboration or ecosystem
+support. Never claim a partnership or any other commercial relationship among
+any of Lightning Enable, Amazap, or Amboss.
 
 ## Amazap facts are external
 
@@ -49,8 +54,9 @@ observations near the end are a snapshot, not a rule.
   `hidden: true`. That detail response wraps the row in `product`.
 - **Purchase spends Amazap credits.** Amazap's own `quote` and `buy` tools buy
   a listing; Lightning Enable's tools don't.
-  [`discover-paid-apis`](../skills/discover-paid-apis/) holds the full buyer
-  flow; the rules below apply to every Amazap buy.
+  [`discover-paid-apis`](../skills/discover-paid-apis/) holds the buyer flow,
+  and [Buying through Amazap](#buying-through-amazap) holds the full mechanics
+  of an Amazap buy; the rules below apply to every Amazap buy.
 - **Name an Amazap tool only when the host lists it.** Amazap's tools
   (`search_catalog`, `list_my_endpoint`, and the rest) exist only when the
   person has connected Amazap's MCP. Without them, use the public pages and API
@@ -59,7 +65,9 @@ observations near the end are a snapshot, not a rule.
 Every Amazap buy follows these rules:
 
 - **Two sources, labeled.** Amazap does not replace the Lightning Enable
-  registry. A buyer skill searches both and labels every row with its source.
+  registry. A buyer skill searches the registry first and Amazap as an
+  additional source, unless the user leaves Amazap out, and labels every row
+  with its source.
 - **Spending.** Search, describe, and quote never spend. `buy` is the only
   call that spends Amazap credits.
 - **The all-in price is the price.** Show `totalSats`, the figure the buyer
@@ -76,8 +84,10 @@ Every Amazap buy follows these rules:
   toward direct payment of a listing Amazap surfaced. Amazap's margin funds
   its failed-call credits, so never present a listing's `endpointUrl` as a
   cheaper way to pay the seller. When the same service appears in both
-  sources, show each row as its source returned it. Direct payment through
-  `pay-l402-anywhere` is for a URL the user already has.
+  sources, show each row as its source returned it. Direct payment is for a
+  Lightning Enable registry result or a URL the user already has. This rule
+  covers listings Amazap surfaced; it never applies to a result the Lightning
+  Enable registry returned, which the buyer may pay directly.
 - **The `buy` contract.** `buy` requires `quote_id`, `total_cost`,
   `max_total_sats`, and `accept_terms`. Check the quoted total against the
   user's cap before the yes, set `max_total_sats` to the quoted total, and
@@ -121,6 +131,54 @@ sats itself. A buy at or under Amazap's auto-approve amount needs no
 confirmation on Amazap's side; a buyer skill still asks the user before its
 one trial.
 
+## Buying through Amazap
+
+This section holds the full mechanics of an Amazap buy, and
+[`discover-paid-apis`](../skills/discover-paid-apis/) points here. The skill
+keeps, in its own trial step, the rules every buy needs: the user's cap
+checked before the yes, one yes that covers the purchase and the current
+Amazap terms, the `buy` call with `max_total_sats` set to the quoted total,
+the stale-quote and `approval_required` stops, and its safety rules. These are
+the rest.
+
+- **A stale quote.** When `buy` reports a stale quote, the stale attempt
+  charged nothing, and the error carries a fresh quote. Show the fresh quote
+  from the error, and check that its total is still within the user's cap.
+  Then state the fresh total, show the current Amazap terms links again
+  (https://amazap.com/terms and https://amazap.com/credits), and get a new
+  yes, for the purchase and the terms, before buying with its `quote_id`, its
+  `total_cost`, and its total as `max_total_sats`. The first yes never covers
+  a different total. Never buy on the fresh quote automatically.
+- **Retries.** When the outcome is unclear (a dropped connection, a
+  timeout), check before any retry: `get_order` or `orders` shows whether the
+  buy went through. Repeating a `quote_id` never charges twice, so a retry
+  with the same `quote_id` is safe once the order shows none. A new quote is
+  a new purchase.
+- **Baskets.** A basket is one buy. Put several listings in one buy only when
+  the user asked for more than one call.
+- **Credits short.** If `balance` shows too few credits, ask before `top_up`.
+  The human chooses the top-up amount. `top_up` returns a Lightning invoice
+  and a QR code for the human to pay; let the host show that result to the
+  human, and never copy the invoice into your own message. Never pay the
+  invoice from the Lightning Enable MCP wallet unless the human explicitly
+  asks. If they do, it is a separate payment with `pay_invoice`, and the
+  human says yes to that exact amount first. The user's cap doesn't cover a
+  top-up: it bounds the trial, not the credits added. The MCP `budget` limits
+  do bound that payment, because it leaves the MCP wallet. Then read
+  `balance` again before buying.
+
+### What can go wrong on an Amazap buy
+
+| Symptom | Likely cause | Do this |
+|---|---|---|
+| `buy` reports a stale quote | The quote expired, or the parameters changed | Nothing was charged. Show the fresh quote from the error. If its total is within the user's cap, state that total, show the current Amazap terms links again, and get a new yes before buying, with that total as `max_total_sats`. |
+| `buy` refuses on an Amazap account limit | Policy refusal: a per-call, per-day, or per-session Amazap limit | Nothing was charged. Report the limit the error names. Only the account owner changes it, on Amazap. |
+| `buy` returns `approval_required` | The total is above Amazap's auto-approve amount | Stop. The person confirms the exact quote in Amazap; nothing is charged until they do. Never re-quote or split the purchase to get around it. Once they say they approved it, the same `quote_id` can be bought once. |
+| `buy` returns `terms_required` | `accept_terms` was missing | Show the current Amazap terms (https://amazap.com/terms and https://amazap.com/credits) and ask again, in one yes for the purchase and the terms. Set `accept_terms` only on that yes. |
+| `buy` returns `not_yet_supported` | A listing payable only in a stablecoin | Not buyable in sats. Pick another candidate with the user. |
+| Too few credits for the trial | The Amazap account needs a top-up | Ask before `top_up`; the human chooses the amount and pays the invoice. Pay it from the MCP wallet only when the human explicitly asks to pay it from the MCP wallet. Then the top-up is its own `pay_invoice` payment, with its own yes on that exact amount: outside the user's cap, and inside the MCP `budget` limits. |
+| A paid Amazap call failed | Provider failure after payment: the service failed or returned nothing | Re-credited as Amazap credits, never cash. Say whether it was automatic; if not, offer `claim_failed_call` within the window the current Amazap credit terms state. Don't buy a replacement without asking. |
+
 ## Merchant of record and the all-in price
 
 Amazap is currently the merchant of record for purchases made through its
@@ -138,16 +196,18 @@ margin, credits, terms, or ranking.
 
 ## Verification terminology
 
-Use the six classifications in
+Use the five classifications in
 [L402 verification levels](l402-verification-levels.md) exactly. For a
 listing:
 
 - `CHALLENGE_COMPATIBLE` means "challenge-compatible, fulfillment unverified".
   A `402` is a quote, not proof that anything gets delivered.
-- `FULFILLMENT_VERIFIED` is the minimum for calling an endpoint ready to list.
-- `MARKETPLACE_READY` is the target only for an endpoint on its own host. A
-  Lightning Enable proxy on `api.lightningenable.com` stops at
-  `FULFILLMENT_VERIFIED` (see Prefill under Seller handoff).
+- `FULFILLMENT_VERIFIED` is the top classification, and the one a listing
+  needs. The seller skill's Verify your endpoint step produces it, under
+  [Verifying your own endpoint](l402-verification-levels.md#verifying-your-own-endpoint).
+  Amazap's own expectations are the report's optional Amazap profile,
+  `marketplace_profiles.amazap.status`, which never changes the
+  classification.
 - **Listed** means Amazap's product page or products API row has been read
   back and shows the listing as visible: the row has `hidden: false`, or the
   product page renders the listing as buyable. Otherwise report the row's
@@ -160,8 +220,11 @@ listing:
 
 The seller skills ([`producer-setup`](../skills/producer-setup/),
 [`create-l402-proxy`](../skills/create-l402-proxy/), and
-[`l402-server-integration`](../skills/l402-server-integration/)) end with an
-optional step that offers an Amazap listing. These are its full rules.
+[`l402-server-integration`](../skills/l402-server-integration/)) finish a
+complete Lightning Enable setup first: an endpoint checked with the Lightning
+Enable L402 compatibility report, and a hand-off that tells the human how
+buyers find it and pay it directly. After that, they may offer an optional
+Amazap listing as an extension. These are its full rules.
 
 ### Readiness gate
 
@@ -188,95 +251,61 @@ Don't offer the listing as ready until every item passes:
 9. Neither errors nor output expose secrets.
 10. The human has chosen the public title, description, category, and price.
 
-Run [`l402-compatibility-report`](../skills/l402-compatibility-report/) for the
-protocol items. Its read-only check
-(`python scripts/l402_check.py <url> --max-sats <cap> --json --output mode-a.json`
-from that skill's folder, with the human's cap in sats, adding
-`--method POST` for a `POST` route) covers items 1 to 5 and saves the report
-its paid check reads; its paid check covers item 7. `--max-sats` is required
-here: the paid check runs only when that report's preflight says `allowed`.
-If `l402-compatibility-report` is not installed, the listing is not ready;
-give the human its GitHub URL,
+The seller skill's Verify your endpoint step has already run
+[`l402-compatibility-report`](../skills/l402-compatibility-report/) under
+[Verifying your own endpoint](l402-verification-levels.md#verifying-your-own-endpoint).
+Reuse that JSON report: never run a second paid check for the listing, and
+never pay again for the gate. It covers items 1 to 5 and 7. If there is no
+such report because `l402-compatibility-report` is not installed, the listing
+is not ready; give the human its GitHub URL,
 https://github.com/refined-element/lightning-enable-skills/tree/main/skills/l402-compatibility-report.
-Take the `classification` field from the JSON report, which is the script's
-contract (`report_version` 1), not from the Markdown:
+Read two fields from the JSON, the script's contract (`report_version` 2),
+never from the Markdown:
 
-- **`INCOMPATIBLE`:** not listing-ready. Give the fix the report names.
-- **`CHALLENGE_COMPATIBLE`:** the most the read-only check can return for a
-  correct endpoint. Say "challenge-compatible, fulfillment unverified", and do
-  not offer the listing as ready until the paid check below lifts it.
-- **`PAYMENT_COMPATIBLE` or `INCONCLUSIVE`:** paid delivery wasn't proven, so
-  the listing isn't ready.
-- **`FULFILLMENT_VERIFIED`:** ready, once items 6, 8, 9, and 10 hold. Pass on
-  the report's `paid_fulfillment.hash_source`: for an opaque token the
+- **`classification`.** Only `FULFILLMENT_VERIFIED` can be ready. At
+  `CHALLENGE_COMPATIBLE`, say "challenge-compatible, fulfillment unverified",
+  and do not offer the listing as ready until the paid check lifts it.
+  `INCOMPATIBLE`, `PAYMENT_COMPATIBLE`, and `INCONCLUSIVE` are not ready. Pass
+  on the report's `paid_fulfillment.hash_source`: for an opaque token the
   preimage was matched against the wallet's recorded payment, not the invoice.
-- **`MARKETPLACE_READY`:** the target for an endpoint on its own host. The
-  same remaining items apply. On `api.lightningenable.com`, the host-root
-  metadata check doesn't count for a proxy (see Prefill below), so report such
-  a proxy as
-  `FULFILLMENT_VERIFIED` at most, never as `MARKETPLACE_READY` on the strength
-  of that check.
+- **`marketplace_profiles.amazap.status`.** `READY` means every required
+  Amazap check passed: public HTTPS, a priced mainnet invoice, a `402` for a
+  request with no body within 8 seconds, no redirect, a synchronous paid
+  response, and a stable price (the paid amount equals the read-only quote).
+  `NOT_READY` means a required check failed, or the classification rules
+  readiness out; the profile's checks name the check that failed. Fix it in
+  the endpoint, never by paying again. `NOT_CHECKED` means the paid evidence
+  has not reached `FULFILLMENT_VERIFIED` and nothing failed. The advisory
+  `host_root_metadata` check never decides the status; `stable_price` does.
 
-Three limits of the paid check:
-
-- It runs on `GET` or `HEAD` only, because `access_l402_resource` sends
-  nothing else. A `POST` route stops at `CHALLENGE_COMPATIBLE` through these
-  skills, so it isn't offered as ready.
-- It needs the credential. `FULFILLMENT_VERIFIED` and `PAYMENT_COMPATIBLE`
-  both require the paid call's token piped to the script on stdin (step 7 of
-  `l402-compatibility-report`). Without it the paid check ends `INCONCLUSIVE`
-  with `preimage_unchecked`, and a wallet receipt never upgrades that. The
-  Python MCP server returns the token only on the `alreadyPaid` path, which is
-  `INCONCLUSIVE` anyway, so a paid check through it doesn't unlock the listing
-  either.
-- Pay once for the gate, never twice. If the self-test made no payment for
-  this endpoint by any means (a testnet invoice doesn't count), run the
-  compatibility report's paid check once,
-  with the human's yes; otherwise the cases below apply and the agent never
-  pays again. The paid check needs a wallet that can pay this
-  endpoint: if the self-test was skipped because the wallet refused to pay its
-  own invoice, do not attempt the paid check with the same wallet, and the
-  listing is not ready. If the self-test already paid this exact public URL,
-  with the same method, through `access_l402_resource`, from either wallet
-  (the seller's own or a second one), record that call as the evidence
-  (steps 6 and 7 of `l402-compatibility-report`, with the
-  read-only report above as `--mode-a` and that call's token piped on stdin)
-  instead of paying again. If that token is gone, the listing is not ready; do
-  not pay again. A self-test payment of a testnet invoice moved no real money
-  for this endpoint, so it is neither reuse evidence nor a payment for the
-  gate: once the endpoint quotes a mainnet invoice at the chosen price, run
-  the paid check once, with the human's yes. A self-test that paid this URL with a different method also
-  counts as paid; the listing is not ready; do not pay again. A payment
-  through `pay_l402_challenge` counts as paid. The agent has no tool that
-  fetches the resource with a token it already holds, and
-  `access_l402_resource` would pay again, so in that run the gate stays at
-  `CHALLENGE_COMPATIBLE`: the listing is not ready, and the agent does not pay
-  again. A self-test payment made by hand, outside both tools, also counts
-  as paid: the listing is not ready in that run, and the agent does not pay
-  again. If the human wants the paid check later, they choose it in a later
-  run, and the skill says plainly that it is a second payment for this
-  endpoint.
+The listing is ready when the classification is `FULFILLMENT_VERIFIED`, the
+Amazap profile is `READY`, and items 6, 8, 9, and 10 hold. Two limits carry
+over from the paid check: it runs on `GET` or `HEAD` only, so a `POST` route
+is not offered as ready, and without the credential it ends `INCONCLUSIVE`
+with `preimage_unchecked`.
 
 ### Handoff flow
 
-1. Finish the seller skill through its self-test and its hand-off.
-2. Check for an existing Amazap row. A published Lightning Enable endpoint can
-   already be in Amazap's catalog, imported from 402 Index. Search by service
-   name, `GET https://amazap.com/api/products?q=<service name>`, and page
-   with `limit` and `offset` until `offset >= total` before you conclude
-   there is no row; a host search returns every Lightning Enable proxy.
-   Every Lightning Enable proxy shares `api.lightningenable.com`, so match
-   the full endpoint URL the row stores (a per-route URL or the proxy's base
-   URL), not the host alone. Search skips hidden rows, so when the human
-   knows a slug, also read
+1. Finish the seller skill: its self-test, its Verify your endpoint step, and
+   its hand-off. The Lightning Enable setup is complete at that point; what
+   follows is optional.
+2. Ask whether the human wants Amazap distribution. No answer means no. Ask
+   before anything else in this flow, so nothing touches Amazap for a listing
+   the human doesn't want.
+3. Only after a yes, check for an existing Amazap row. A published Lightning
+   Enable endpoint can already be in Amazap's catalog, imported from 402
+   Index. Search by service name,
+   `GET https://amazap.com/api/products?q=<service name>`, and page with
+   `limit` and `offset` until `offset >= total` before you conclude there is
+   no row; a host search returns every Lightning Enable proxy. Every Lightning
+   Enable proxy shares `api.lightningenable.com`, so match the full endpoint
+   URL the row stores (a per-route URL or the proxy's base URL), not the host
+   alone. Search skips hidden rows, so when the human knows a slug, also read
    `GET https://amazap.com/api/products/<slug>`, and look for the service in
    https://amazap.com/sitemap.xml. If a row exists, report its `hidden`,
    `listingState`, and `healthStatus`, and let the human decide with Amazap
    whether to refresh it. Never draft a duplicate listing on your own.
-3. Ask whether the human wants Amazap distribution, before any paid gate
-   check, so no sats are spent on a listing they don't want. No answer means
-   no.
-4. If yes, run the readiness gate above.
+4. If the human still wants a listing, run the readiness gate above.
 5. When the gate passes, call Amazap's `list_my_endpoint` tool when the host
    lists it. It probes the endpoint and returns a draft and a link to the
    seller form; it is read-only and publishes nothing. Without the tool, give
@@ -299,10 +328,7 @@ host. Without them, it derives example parameters from parameter names in the
 under `/l402/proxy/{proxyId}/`, which the root lookup doesn't read, and the
 root of `api.lightningenable.com` describes Lightning Enable itself. On
 `api.lightningenable.com`, the host-root `openapi.json` and `llms.txt`
-describe the platform, not the proxy, so the host-root metadata check doesn't
-count for a proxy. The handoff reports such a proxy as `FULFILLMENT_VERIFIED`
-at most, even when the script's report says `MARKETPLACE_READY`, and never as
-`MARKETPLACE_READY` on that basis. Tell the human to supply the title,
+describe the platform, not the proxy. Tell the human to supply the title,
 description, category, and example parameters by hand. For an API on its own
 domain, an `openapi.json` or `llms.txt` at the host root gives the prefill
 something accurate to read.
