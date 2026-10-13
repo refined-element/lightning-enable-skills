@@ -1,6 +1,7 @@
 """Render a compatibility report as JSON or Markdown, and scrub it.
 
-The Markdown follows templates/report.md heading for heading. ``scrub``
+The JSON report is the contract (see l402_levels.REPORT_VERSION); the Markdown
+is for people. The Markdown follows templates/report.md heading for heading. ``scrub``
 replaces every known secret (a 64-hex secret in any letter case), and anything that looks like a credential (a
 BOLT11 invoice, an L402, LSAT, or Payment credential, a macaroon or token
 value, an Authorization header value, a preimage field, or an NWC URI), with
@@ -12,6 +13,8 @@ from __future__ import annotations
 
 import json
 import re
+
+from l402_levels import REPORT_VERSION
 
 SECTIONS = (
     "Summary",
@@ -116,9 +119,12 @@ def _scrub_tree(node, secrets):
 
 
 def to_json(report: dict, secrets: set[str] | frozenset[str] = frozenset()) -> str:
+    """The JSON report, the contract readers rely on, with ``report_version`` as its first key."""
+    ordered = {"report_version": report.get("report_version", REPORT_VERSION)}
+    ordered.update((key, value) for key, value in report.items() if key != "report_version")
     # Each string is scrubbed before serializing, and the serialized text is
     # never rewritten, so a redaction can't break a JSON escape.
-    return json.dumps(_scrub_tree(report, secrets), indent=2, ensure_ascii=False)
+    return json.dumps(_scrub_tree(ordered, secrets), indent=2, ensure_ascii=False)
 
 
 def _yes(value) -> str:

@@ -23,7 +23,7 @@ import hashlib
 import re
 
 import l402_macaroon
-from l402_analyze import (
+from l402_levels import (
     CHALLENGE_COMPATIBLE,
     CLASSIFICATIONS,
     FULFILLMENT_VERIFIED,
@@ -52,7 +52,7 @@ MODE_A_KEYS = ("checked_at", "target", "transport", "challenge", "invoice", "bin
                "marketplace", "findings", "evidence")
 NOT_CHECKED_BY_PAID_CHECK = "a synchronous, bounded response"
 
-# Server fixes for paid-check codes that l402_analyze.FIXES does not hold.
+# Server fixes for paid-check codes that l402_levels.FIXES does not hold.
 PAID_FIXES = {
     "paid_retry_failed": (
         "Fix the paid path's error, keep the payment hash, and add claim or status recovery "

@@ -7,13 +7,16 @@ acceptance tests (section 42); paid-mode acceptance tests live in
 test_l402_evidence.py, output redaction in test_l402_report_render.py, and the
 command line in test_l402_cli.py.
 """
+import ast
 import json
 
 import pytest
 
+import l402_analyze
 import l402_check_support as support
+import l402_levels
 import test_shared_references
-from l402_analyze import CLASSIFICATIONS
+from l402_levels import CLASSIFICATIONS
 
 
 def report_for(name, **kwargs):
@@ -22,6 +25,22 @@ def report_for(name, **kwargs):
 
 def test_script_classifications_match_the_shared_reference():
     assert CLASSIFICATIONS == test_shared_references.CLASSIFICATIONS
+
+
+def test_the_vocabulary_has_one_home():
+    # l402_analyze re-exports the shared names; it never defines its own copies.
+    for name in ("CLASSIFICATIONS", "FIXES", "Finding", "TRANSIENT_STATUSES", "REPORT_VERSION"):
+        assert getattr(l402_analyze, name) is getattr(l402_levels, name)
+
+
+@pytest.mark.parametrize("module", ["l402_evidence", "l402_report", "l402_levels"])
+def test_the_paid_check_and_renderer_never_import_the_analyzer(module):
+    tree = ast.parse((support.SCRIPTS / f"{module}.py").read_text(encoding="utf-8"))
+    imported = {alias.name for node in ast.walk(tree) if isinstance(node, ast.Import) for alias in node.names}
+    imported |= {node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) and node.module}
+    assert "l402_analyze" not in imported
+    if module != "l402_levels":
+        assert "l402_levels" in imported
 
 
 @pytest.mark.parametrize("name", support.fixture_names())
