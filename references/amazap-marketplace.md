@@ -41,9 +41,10 @@ observations near the end are a snapshot, not a rule.
 - **Discovery is read-only.** Amazap's `search_catalog` MCP tool, or
   `GET https://amazap.com/api/products?q=<terms>` paged with `limit` and
   `offset` until `offset >= total`, finds listings and spends nothing. A
-  search result may include paused or degraded rows, so read `listingState`
-  and `buyable` on every row. A row can also be hidden from search and still
-  be returned by `GET https://amazap.com/api/products/<slug>`, with
+  search result may include paused, degraded, or failing rows. Paused,
+  degraded, or failing rows are shown, not bought; read `listingState`,
+  `healthStatus`, and `buyable` on every row. A row can also be hidden from
+  search and still be returned by `GET https://amazap.com/api/products/<slug>`, with
   `hidden: true`. That detail response wraps the row in `product`.
 - **Purchase spends Amazap credits.** Amazap's own `quote` and `buy` tools buy
   a listing; Lightning Enable's tools don't.
@@ -105,8 +106,8 @@ credits, and Amazap's limits don't apply to the MCP wallet.
 
 | Path | Wallet | Caps that apply |
 |---|---|---|
-| Amazap `buy` | Prepaid Amazap credits, added with `top_up` | The user's stated cap, passed as `max_total_sats`, and the Amazap account limits |
-| A Lightning Enable registry result, or a URL the user already has, paid directly (`access_l402_resource`) | The Lightning Enable MCP wallet | The user's stated cap and the MCP `budget` limits |
+| Amazap `buy` | Prepaid Amazap credits, added with `top_up` | The user's cap, passed as `max_total_sats`, and the Amazap account limits |
+| A Lightning Enable registry result, or a URL the user already has, paid directly (`access_l402_resource`) | The Lightning Enable MCP wallet | The user's cap and the MCP `budget` limits |
 
 State which cap applies to which path before any purchase. Never present
 `budget` status or `get_balance` as bounding an Amazap buy. Amazap's own

@@ -397,7 +397,7 @@ def wallets_section() -> str:
     "never add the seller price and the fee yourself",
     "`trust.label`",
     "A hidden row is not a candidate; never fetch one by slug to show or buy it.",
-    "read `listingState` and `buyable` on every row",
+    "read `listingState`, `healthStatus`, and `buyable` on every row",
     "can also be hidden from search and still be returned by",
     "That detail response wraps the row in `product`.",
     NON_GOAL,
@@ -877,3 +877,162 @@ def test_one_name_for_the_cap():
     assert "ceiling" not in text.lower(), "call it the user's cap, never a trial ceiling"
     assert "stated cap" not in text, "call it the user's cap"
     assert "**The user's cap:**" in skill_section("### 0. Ask what the human wants")
+
+
+# --- The skill: what can go wrong, safety rules, example --------------------
+
+
+@pytest.mark.parametrize("symptom", (
+    "Amazap's tools aren't listed",
+    "An Amazap row shows `buyable: false`",
+    "`buy` reports a stale quote",
+    "`buy` returns `approval_required`",
+    "`buy` returns `terms_required`",
+    "`buy` returns `not_yet_supported`",
+    "`buy` refuses on an Amazap account limit",
+    "A paid Amazap call failed",
+))
+def test_what_can_go_wrong_covers_the_amazap_cases(symptom):
+    symptoms = [row[0] for row in table_rows(read(SKILL))]
+    assert symptom in symptoms, f"'What can go wrong' has no row for {symptom!r}"
+
+
+@pytest.mark.parametrize("phrase", (
+    "At most one trial purchase per run,",
+    "The MCP budget never bounds an Amazap buy.",
+    "Never offer an Amazap listing's `endpointUrl` as a cheaper way to pay.",
+    "Direct payment is for a URL the user already has.",
+    "Sensitive input stays with the user",
+    "Never raise a limit.",
+))
+def test_safety_rules_hold_the_trial_wallet_and_steer_rules(phrase):
+    assert phrase in skill_section("## Safety rules"), f"Safety rules is missing {phrase!r}"
+
+
+@pytest.mark.parametrize("doc", GUARDED_DOCS, ids=lambda p: p.name)
+def test_cheaper_appears_only_in_a_prohibition(doc):
+    loose = [s for s in prose_sentences(read(doc)) if "cheaper" in s.lower() and not NEGATION.search(s)]
+    assert not loose, f"{doc.name} frames a lower price as a reason to bypass Amazap: {loose}"
+
+
+def test_what_this_is_not_keeps_amazap_separate():
+    section = skill_section("## What this is NOT")
+    assert "**Not Amazap.**" in section
+    assert CUSTODY in section
+
+
+@pytest.mark.parametrize("phrase", (
+    '"Lightning Enable registry" or "Amazap"',
+    "for the direct path only",
+    "13 sats all-in, paid from Amazap credits",
+    "`max_total_sats=30`",
+    "Had the quote been 31 sats",
+))
+def test_example_shows_labeled_sources_and_the_amazap_wallet(phrase):
+    assert phrase in skill_section("## Example"), f"the example is missing {phrase!r}"
+
+
+# --- Carried into Task 5: custody, reference alignment, every ending --------
+
+
+def what_can_go_wrong() -> dict[str, str]:
+    """Each 'What can go wrong' row, keyed by its symptom: the cause and the
+    action, flattened into one string."""
+    rows_by_symptom = {}
+    text = read(SKILL)
+    start = text.index("\n## What can go wrong\n") + 1
+    for row in table_rows(section_at(text, start)):
+        if len(row) == 3 and row[0] not in ("Symptom", "---"):
+            rows_by_symptom[row[0]] = flat(" ".join(row[1:]))
+    return rows_by_symptom
+
+
+def test_custody_is_the_verbatim_sentence_and_nothing_else():
+    text = flat(read(SKILL))
+    assert "the wallet facilitates" not in text, "the old custody wording is back"
+    bullet = re.search(r"- \*\*Not custody\.\*\* (.*?)(?= - \*\*|$)", skill_section("## What this is NOT"))
+    assert bullet and bullet.group(1).strip() == CUSTODY, "'Not custody' says the custody sentence, verbatim, and nothing else"
+    custody = {s for s in prose_sentences(read(SKILL)) if "custod" in s.lower()}
+    assert custody <= {CUSTODY, "- **Not custody.**"}, f"other custody wording: {custody}"
+
+
+def test_reference_matches_the_skill_on_row_state_and_the_cap_name():
+    assert (
+        "Paused, degraded, or failing rows are shown, not bought; read "
+        "`listingState`, `healthStatus`, and `buyable` on every row."
+    ) in discovery_section()
+    assert "paused or degraded" not in discovery_section()
+    assert "stated cap" not in flat(read(REFERENCE)), "call it the user's cap"
+    assert "The user's cap, passed as `max_total_sats`" in flat(wallets_section())
+
+
+# Every ending step 6 and step 8 distinguish, with what the row must say.
+ENDINGS = {
+    # quote failure
+    "No fresh quote, or it doesn't match the parameters": ("Nothing was charged.", "Never buy on an old or mismatched quote."),
+    # stale quote: a fresh total needs a fresh yes
+    "`buy` reports a stale quote": ("Nothing was charged.", "within the user's cap", "get a new yes"),
+    "`buy` returns `approval_required`": ("Stop.", "Never re-quote or split the purchase"),
+    "`buy` returns `terms_required`": ("Set `accept_terms` only on that yes.",),
+    # policy refusals
+    "The all-in total is above the user's cap": ("Refuse and buy nothing", "Never raise the cap"),
+    "`buy` refuses on an Amazap account limit": ("Nothing was charged.", "Only the account owner changes it"),
+    "A budget denial on the direct path": ("Don't retry with a smaller `max_sats`",),
+    "The input holds something sensitive": ("Don't send it", "buy nothing"),
+    # direct-path stops
+    "The invoice costs more than `max_sats`": ("Nothing was paid.", "never above the user's cap", "Never guess a price."),
+    # payment failure and unclear outcomes
+    "The payment didn't go through": ("before any retry", "Never retry with a smaller cap"),
+    "The outcome of a buy or a payment is unclear": (
+        "`get_order` or `orders`",
+        '`receipts(source="session")`',
+        "never replaced by a second one",
+    ),
+    # provider failure after payment, on each path
+    "A paid Amazap call failed": ("never cash", "`claim_failed_call`", "Don't buy a replacement without asking."),
+    "`alreadyPaid: true`": ("Do not pay again",),
+    "The result doesn't match the listing": ("malformed result", "Don't buy or pay again without asking."),
+    "The user, or the person approving in Amazap, says no": ("Nothing was charged.",),
+    # no Amazap connection, and a URL the user already has
+    "Amazap's tools aren't listed": ("`GET https://amazap.com/api/products`", "Never claim Amazap MCP access."),
+    "The user already has the URL": ("`pay-l402-anywhere`", "never for a listing Amazap surfaced"),
+    "An Amazap row is paused, degraded, or failing": ("never buy it, even with `buyable: true`",),
+    "Too few credits for the trial": ("Ask before `top_up`", "its own `pay_invoice` payment", "outside the user's cap"),
+}
+
+
+@pytest.mark.parametrize("symptom", ENDINGS)
+def test_what_can_go_wrong_covers_every_ending(symptom):
+    rows_by_symptom = what_can_go_wrong()
+    assert symptom in rows_by_symptom, f"'What can go wrong' has no row for {symptom!r}"
+    missing = [phrase for phrase in ENDINGS[symptom] if phrase not in rows_by_symptom[symptom]]
+    assert not missing, f"the {symptom!r} row is missing {missing}"
+
+
+@pytest.mark.parametrize("phrase", (
+    NON_GOAL,
+    SECRETS,
+    "never buy a second candidate after a paid failure without asking",
+    "its own `pay_invoice` payment",
+    "the user's cap doesn't cover it",
+    "Before any retry, check",
+    SENSITIVE,
+))
+def test_safety_rules_restate_the_buyer_rules_in_one_place(phrase):
+    assert phrase in skill_section("## Safety rules"), f"Safety rules is missing {phrase!r}"
+
+
+def test_example_runs_one_amazap_path_and_contrasts_the_direct_path():
+    example = skill_section("## Example")
+    for phrase in (
+        "`fixture-string-forecast`",
+        "Do you accept them and go ahead?",
+        "the order id `<order id>`",
+        "Fulfilled.",
+        "Had the human picked a Lightning Enable registry result",
+        'access_l402_resource(url="<endpoint url>", max_sats=<the listed price>)',
+    ):
+        assert phrase in example, f"the example is missing {phrase!r}"
+    # Placeholder names only: the example never names a real listing.
+    names = set(re.findall(r"`(fixture-string-[a-z0-9-]+)`", example))
+    assert names <= {row[key] for row in rows() for key in ("name", "provider")}, names
