@@ -374,10 +374,9 @@ Offer it only after the self-test, and only as an offer; no answer means no.
   `GET https://amazap.com/api/products?q=<service name>`, and page with
   `limit` and `offset` until `offset >= total` before you conclude there is
   no row; a host search returns every Lightning Enable proxy. Every proxy
-  shares `api.lightningenable.com`, so match a row by its full endpoint URL,
-  not the host: a row stores the per-route URL, such as
-  `https://api.lightningenable.com/l402/proxy/<proxyId>/<path>`. Search skips
-  hidden rows, so when the human knows a slug, also read
+  shares `api.lightningenable.com`, so match the full endpoint URL the row
+  stores (a per-route URL or the proxy's base URL), not the host alone.
+  Search skips hidden rows, so when the human knows a slug, also read
   `GET https://amazap.com/api/products/<slug>`, and look for the service in
   https://amazap.com/sitemap.xml. If a row exists, report its `hidden`,
   `listingState`, and `healthStatus`, and let the human decide with Amazap

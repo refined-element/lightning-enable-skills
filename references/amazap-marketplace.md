@@ -189,11 +189,13 @@ Three limits of the paid check:
 
 1. Finish the seller skill through its self-test and its hand-off.
 2. Check for an existing Amazap row. A published Lightning Enable endpoint can
-   already be in Amazap's catalog, imported from 402 Index. Search
-   `GET https://amazap.com/api/products?q=<service name or host>`. Every
-   Lightning Enable proxy shares `api.lightningenable.com`, so match a row
-   by its full endpoint URL, not the host: a row stores the per-route URL,
-   never the proxy's base URL. Search skips hidden rows, so when the human
+   already be in Amazap's catalog, imported from 402 Index. Search by service
+   name, `GET https://amazap.com/api/products?q=<service name>`, and page
+   with `limit` and `offset` until `offset >= total` before you conclude
+   there is no row; a host search returns every Lightning Enable proxy.
+   Every Lightning Enable proxy shares `api.lightningenable.com`, so match
+   the full endpoint URL the row stores (a per-route URL or the proxy's base
+   URL), not the host alone. Search skips hidden rows, so when the human
    knows a slug, also read
    `GET https://amazap.com/api/products/<slug>`, and look for the service in
    https://amazap.com/sitemap.xml. If a row exists, report its `hidden`,

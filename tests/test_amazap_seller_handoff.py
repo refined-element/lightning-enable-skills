@@ -360,6 +360,17 @@ def test_handoff_counts_a_pay_l402_challenge_payment_as_paid(target):
 
 
 @pytest.mark.parametrize("target", HANDOFF_TARGETS)
+@pytest.mark.parametrize("phrase", (
+    "either wallet",
+    # "by hand" alone also matches "example parameters by hand".
+    "made by hand, outside both tools",
+    "not the host alone",
+))
+def test_handoff_states_the_mirrored_payment_and_row_rules(target, phrase):
+    assert phrase in handoff_text(target), f"{target} is missing {phrase!r}"
+
+
+@pytest.mark.parametrize("target", HANDOFF_TARGETS)
 def test_handoff_has_no_em_dashes(target):
     assert EM_DASH not in raw_handoff_text(target), f"{target} uses an em-dash"
 
@@ -429,7 +440,7 @@ def test_step_checks_the_row_asks_first_and_reads_back_visibility(skill, phrase)
 @pytest.mark.parametrize("phrase", (
     "`FULFILLMENT_VERIFIED` at most",
     "`FULFILLMENT_VERIFIED` is the ceiling",
-    "endpoint URL, not the host",
+    "match the full endpoint URL the row stores",
 ))
 def test_proxy_steps_cap_readiness_and_match_rows_by_endpoint_url(skill, phrase):
     assert phrase in flat(amazap_step(skill)), f"{skill} is missing {phrase!r}"
