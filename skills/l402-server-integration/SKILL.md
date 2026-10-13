@@ -561,20 +561,28 @@ public HTTPS URL, and only as an offer; no answer means no.
 - **Ask first.** Ask whether the human wants an Amazap listing before any paid
   gate check, so no sats are spent on a listing they don't want. No answer
   means no.
-- **Gate.** Run [`l402-compatibility-report`](../l402-compatibility-report/)
+- **Gate.** First set the route's chosen price in the code, shown to the human
+  as a diff, so the read-only check below quotes the price you would list.
+  Then run [`l402-compatibility-report`](../l402-compatibility-report/)
   on the route's public URL with the method you would list:
   `python scripts/l402_check.py <url> --json --max-sats <cap> --output mode-a.json`
   from that skill's folder, with the human's cap in sats (add
   `--method POST` for a `POST` route). Its paid check reads that saved report.
   Take the `classification` field from the JSON. Offer the listing as ready
   only at `FULFILLMENT_VERIFIED` or `MARKETPLACE_READY`. On the API's own
-  domain, `MARKETPLACE_READY` is the target: it also needs an `openapi.json`
-  or `llms.txt` at the host root (see Fields). At `CHALLENGE_COMPATIBLE`, say
-  "challenge-compatible, fulfillment unverified" and stop. A private,
-  loopback, link-local, or non-HTTPS URL, a `200` to an unpaid request, or a
-  `400`, `415`, or `422` to a request with no body is not listing-ready; that
-  last case means the 402 must come before body validation (step 2's pipeline
-  order).
+  domain, `MARKETPLACE_READY` is the target: beyond `FULFILLMENT_VERIFIED` it
+  needs a mainnet invoice, a 402 to a bodyless request within 8 seconds, no
+  redirect between the listed URL and the 402, an `openapi.json` or
+  `llms.txt` at the host root (see Fields), and a paid amount equal to the
+  read-only quote. At `CHALLENGE_COMPATIBLE`, say "challenge-compatible,
+  fulfillment unverified" and stop. A private, loopback, link-local, or
+  non-HTTPS URL, a non-mainnet invoice or a 402 slower than 8 seconds, a `200`
+  to an unpaid request, or a `400`, `415`, or `422` to a request with no body
+  is not listing-ready. Step 10's testnet key and a slow cold start are the
+  usual causes of the middle two; fix them in the deployment, never by paying
+  again. The last case means the 402 must come before body validation: in
+  ASP.NET Core, step 2's pipeline order; in Express, mount the `l402`
+  middleware before any body validator on the route.
 - **Pay once.** Pay for the gate once, never twice. A test against `localhost`
   doesn't count. The paid check runs on `GET` or `HEAD` only, so a `POST`,
   `PUT`, or `DELETE` route stays at `CHALLENGE_COMPATIBLE` here and is never
@@ -616,7 +624,11 @@ public HTTPS URL, and only as an offer; no answer means no.
   the all-in figure comes from Amazap's draft or page. Amazap locks the price
   at listing time, so list the route at the human's chosen price, not step
   10's staging price, and after any price change in the code the seller must
-  re-run Amazap's checks.
+  re-run Amazap's checks. The order matters: the chosen price goes in before
+  the gate's read-only check (see Gate). A 1-sat token from step 10 then fails
+  the report's `stable_price` check against the new quote, so its result is
+  `FULFILLMENT_VERIFIED`, which is ready; the agent never pays again to reach
+  `MARKETPLACE_READY`.
 - **The human decides.** Without the human's explicit approval, never submit
   the listing, accept seller terms, provide or infer a contact email, opt into
   announcements, publish a Nostr handle, change the endpoint's price, or claim

@@ -65,8 +65,8 @@ or wallet.
 Once the API is deployed at a public HTTPS URL and the self-test is done, the
 agent can offer one more step: a draft listing on
 [Amazap](https://amazap.com/sell), a storefront where agents find and buy L402
-endpoints. It first checks whether Amazap already carries the API (imported
-from 402 Index) and asks whether you want a listing before it spends anything
+endpoints. It first checks whether Amazap already carries the API (possibly
+imported from 402 Index) and asks whether you want a listing before it spends anything
 on a paid check. It offers the listing as ready only after
 [`l402-compatibility-report`](../l402-compatibility-report/) shows that paid
 delivery worked on the public URL (a test against `localhost` doesn't count),

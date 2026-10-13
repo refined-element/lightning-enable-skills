@@ -421,10 +421,11 @@ Offer it only after the self-test, and only as an offer; no answer means no.
   MCP server is never offered as ready. The paid check runs on `GET` or `HEAD`
   only, so a `POST` route stays at `CHALLENGE_COMPATIBLE` here and is never
   offered as ready.
-- **Draft, never publish.** Call Amazap's read-only `list_my_endpoint` tool
-  when the host lists it; otherwise give the human https://amazap.com/sell and
-  a draft built from the reference's listing-copy template. Show the draft
-  beside the current Amazap seller terms, linked live.
+- **Draft, never publish.** Only once the gate passes, call Amazap's read-only
+  `list_my_endpoint` tool when the host lists it; otherwise give the human
+  https://amazap.com/sell and a draft built from the reference's listing-copy
+  template. Show the draft beside the current Amazap seller terms, linked
+  live.
 - **Fields by hand.** On `api.lightningenable.com`, the human supplies the
   title, description, category, and example parameters by hand: Amazap's
   prefill reads the host root, which describes Lightning Enable, not this

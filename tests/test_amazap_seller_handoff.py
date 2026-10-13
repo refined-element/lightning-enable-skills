@@ -481,6 +481,18 @@ def test_step_reuses_a_self_test_payment_instead_of_paying_again(skill, phrase):
     assert phrase in flat(amazap_step(skill)), f"{skill} is missing {phrase!r}"
 
 
+@pytest.mark.parametrize("skill", SELLER_SKILLS)
+def test_step_runs_the_gate_before_list_my_endpoint(skill):
+    step = flat(amazap_step(skill))
+    tool = step.find("`list_my_endpoint`")
+    assert tool >= 0, f"{skill} never names `list_my_endpoint`"
+    for gate_text in ("**Gate.**", "python scripts/l402_check.py"):
+        gate = step.find(gate_text)
+        assert 0 <= gate < tool, f"{skill}: {gate_text!r} must come before `list_my_endpoint`"
+    draft = step.find("**Draft, never publish.** Only once the gate passes")
+    assert draft >= 0 and draft < tool, f"{skill}: the draft bullet must open with 'Only once the gate passes'"
+
+
 def test_native_step_points_the_prefill_at_the_apis_own_host_root():
     step = flat(amazap_step("l402-server-integration"))
     assert "at the root of the API's own host" in step
