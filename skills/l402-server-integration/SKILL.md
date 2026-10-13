@@ -561,21 +561,30 @@ public HTTPS URL, and only as an offer; no answer means no.
 - **Ask first.** Ask whether the human wants an Amazap listing before any paid
   gate check, so no sats are spent on a listing they don't want. No answer
   means no.
-- **Gate.** First set the route's chosen price in the code, shown to the human
-  as a diff, so the read-only check below quotes the price you would list.
-  Then run [`l402-compatibility-report`](../l402-compatibility-report/)
+- **Gate.** First, with the human's explicit yes, set the route's chosen price
+  in the code (shown as a diff) and have it deployed, so the read-only check
+  below quotes the price you would list. Then run
+  [`l402-compatibility-report`](../l402-compatibility-report/)
   on the route's public URL with the method you would list:
   `python scripts/l402_check.py <url> --json --max-sats <cap> --output mode-a.json`
   from that skill's folder, with the human's cap in sats (add
   `--method POST` for a `POST` route). Its paid check reads that saved report.
+  Continue only when the read-only report's invoice amount equals the chosen
+  price. If `l402-compatibility-report` is not installed, the listing is not
+  ready; give the human its GitHub URL,
+  https://github.com/refined-element/lightning-enable-skills/tree/main/skills/l402-compatibility-report.
   Take the `classification` field from the JSON. Offer the listing as ready
-  only at `FULFILLMENT_VERIFIED` or `MARKETPLACE_READY`. On the API's own
-  domain, `MARKETPLACE_READY` is the target: beyond `FULFILLMENT_VERIFIED` it
-  needs a mainnet invoice, a 402 to a bodyless request within 8 seconds, no
-  redirect between the listed URL and the 402, an `openapi.json` or
-  `llms.txt` at the host root (see Fields), and a paid amount equal to the
-  read-only quote. At `CHALLENGE_COMPATIBLE`, say "challenge-compatible,
-  fulfillment unverified" and stop. A private, loopback, link-local, or
+  only at `FULFILLMENT_VERIFIED` or `MARKETPLACE_READY`, and only once example
+  parameters are known, replay behavior is understood, no error or output
+  exposes a secret, and the human has chosen title, description, category,
+  and price. On the API's own domain, `MARKETPLACE_READY` is the target:
+  beyond `FULFILLMENT_VERIFIED` it needs a mainnet invoice, a 402 to a
+  bodyless request within 8 seconds, no redirect between the listed URL and
+  the 402, an `openapi.json` or `llms.txt` at the host root (see Fields), and
+  a paid amount equal to the read-only quote. `CHALLENGE_COMPATIBLE` is the
+  most the read-only check can return for a correct endpoint: say
+  "challenge-compatible, fulfillment unverified", and do not offer the listing
+  as ready until the paid check below lifts it. A private, loopback, link-local, or
   non-HTTPS URL, a non-mainnet invoice or a 402 slower than 8 seconds, a `200`
   to an unpaid request, or a `400`, `415`, or `422` to a request with no body
   is not listing-ready. Step 10's testnet key and a slow cold start are the
@@ -586,8 +595,10 @@ public HTTPS URL, and only as an offer; no answer means no.
 - **Pay once.** Pay for the gate once, never twice. A test against `localhost`
   doesn't count. The paid check runs on `GET` or `HEAD` only, so a `POST`,
   `PUT`, or `DELETE` route stays at `CHALLENGE_COMPATIBLE` here and is never
-  offered as ready. If step 10 did not pay this exact public URL, run the
-  report's paid check once, with the human's yes. The paid check needs a
+  offered as ready. If the self-test (step 10) made no payment for this
+  endpoint by any means, run the report's paid check once, with the human's
+  yes; otherwise the cases below apply and the agent never pays again. The
+  paid check needs a
   wallet that can pay this endpoint: if step 10 stopped at the free 402
   because the wallet refused to pay its own invoice, do not attempt the paid
   check with the same wallet, and the listing is not ready. If step 10 paid
@@ -596,7 +607,9 @@ public HTTPS URL, and only as an offer; no answer means no.
   the evidence (steps 6 and 7 of `l402-compatibility-report`, with
   `--mode-a mode-a.json` and that call's token piped on stdin) instead of
   paying again. If that token is gone, the listing is not ready; do not pay
-  again. A step 10 payment of this URL with a different method also counts as
+  again. A self-test payment of a testnet invoice, such as one made with step
+  10's testnet key, is not reuse evidence: the listing is not ready in that
+  run, and the agent does not pay again. A step 10 payment of this URL with a different method also counts as
   paid: the listing is not ready; do not pay again. A payment through
   `pay_l402_challenge` counts as paid. The agent has no tool that fetches the
   resource with a token it already holds, and `access_l402_resource` would pay

@@ -84,7 +84,9 @@ listing:
 - `CHALLENGE_COMPATIBLE` means "challenge-compatible, fulfillment unverified".
   A `402` is a quote, not proof that anything gets delivered.
 - `FULFILLMENT_VERIFIED` is the minimum for calling an endpoint ready to list.
-- `MARKETPLACE_READY` is the target.
+- `MARKETPLACE_READY` is the target only for an endpoint on its own host. A
+  Lightning Enable proxy on `api.lightningenable.com` stops at
+  `FULFILLMENT_VERIFIED` (see Prefill under Seller handoff).
 - **Listed** means Amazap's product page or products API row has been read
   back and shows the listing as visible: the row has `hidden: false`, or the
   product page renders the listing as buyable. Otherwise report the row's
@@ -132,12 +134,16 @@ from that skill's folder, with the human's cap in sats, adding
 `--method POST` for a `POST` route) covers items 1 to 5 and saves the report
 its paid check reads; its paid check covers item 7. `--max-sats` is required
 here: the paid check runs only when that report's preflight says `allowed`.
+If `l402-compatibility-report` is not installed, the listing is not ready;
+give the human its GitHub URL,
+https://github.com/refined-element/lightning-enable-skills/tree/main/skills/l402-compatibility-report.
 Take the `classification` field from the JSON report, which is the script's
 contract (`report_version` 1), not from the Markdown:
 
 - **`INCOMPATIBLE`:** not listing-ready. Give the fix the report names.
-- **`CHALLENGE_COMPATIBLE`:** say "challenge-compatible, fulfillment
-  unverified" and don't offer the listing as ready.
+- **`CHALLENGE_COMPATIBLE`:** the most the read-only check can return for a
+  correct endpoint. Say "challenge-compatible, fulfillment unverified", and do
+  not offer the listing as ready until the paid check below lifts it.
 - **`PAYMENT_COMPATIBLE` or `INCONCLUSIVE`:** paid delivery wasn't proven, so
   the listing isn't ready.
 - **`FULFILLMENT_VERIFIED`:** ready, once items 6, 8, 9, and 10 hold. Pass on
@@ -162,9 +168,10 @@ Three limits of the paid check:
   Python MCP server returns the token only on the `alreadyPaid` path, which is
   `INCONCLUSIVE` anyway, so a paid check through it doesn't unlock the listing
   either.
-- Pay once for the gate, never twice. If the skill's own self-test did not
-  already pay this exact URL, run the compatibility report's paid check once,
-  with the human's yes. The paid check needs a wallet that can pay this
+- Pay once for the gate, never twice. If the self-test made no payment for
+  this endpoint by any means, run the compatibility report's paid check once,
+  with the human's yes; otherwise the cases below apply and the agent never
+  pays again. The paid check needs a wallet that can pay this
   endpoint: if the self-test was skipped because the wallet refused to pay its
   own invoice, do not attempt the paid check with the same wallet, and the
   listing is not ready. If the self-test already paid this exact public URL,
@@ -173,7 +180,9 @@ Three limits of the paid check:
   (steps 6 and 7 of `l402-compatibility-report`, with the
   read-only report above as `--mode-a` and that call's token piped on stdin)
   instead of paying again. If that token is gone, the listing is not ready; do
-  not pay again. A self-test that paid this URL with a different method also
+  not pay again. A self-test payment of a testnet invoice is not reuse
+  evidence: the listing is not ready in that run, and the agent does not pay
+  again. A self-test that paid this URL with a different method also
   counts as paid; the listing is not ready; do not pay again. A payment
   through `pay_l402_challenge` counts as paid. The agent has no tool that
   fetches the resource with a token it already holds, and

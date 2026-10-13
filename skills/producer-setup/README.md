@@ -95,8 +95,9 @@ delivery worked, then drafts the copy and stops. On `api.lightningenable.com`
 you write the title, description, category, and example parameters yourself.
 You review the draft, the current Amazap seller terms, and the two prices
 (yours and Amazap's all-in price), enter your contact email, and submit it
-yourself; submitting publishes the listing once Amazap's checks pass. The
-agent never calls the endpoint listed until it has read the listing back from
+yourself; submitting publishes the listing once Amazap's checks pass. After
+any price change, re-run Amazap's checks. The agent never calls the endpoint
+listed until it has read the listing back from
 Amazap. Lightning Enable does not hold funds; the payment provider facilitates
 custody and settlement. Details:
 [Amazap marketplace: Seller handoff](https://github.com/refined-element/lightning-enable-skills/blob/main/references/amazap-marketplace.md#seller-handoff).

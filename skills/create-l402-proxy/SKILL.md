@@ -337,19 +337,28 @@ Offer it only after the self-test, and only as an offer; no answer means no.
   `python scripts/l402_check.py <url> --json --max-sats <cap> --output mode-a.json`
   from that skill's folder, with the human's cap in sats (add
   `--method POST` for a `POST` route). Its paid check reads that saved report.
+  If `l402-compatibility-report` is not installed, the listing is not ready;
+  give the human its GitHub URL,
+  https://github.com/refined-element/lightning-enable-skills/tree/main/skills/l402-compatibility-report.
   Take the `classification` field from the JSON. Offer the listing as ready
-  only at `FULFILLMENT_VERIFIED` or `MARKETPLACE_READY`. For a Lightning
-  Enable proxy, `FULFILLMENT_VERIFIED` is the ceiling: `MARKETPLACE_READY`
-  is not reachable, because the host-root metadata check doesn't count (see
-  Fields by hand). At `CHALLENGE_COMPATIBLE`, say "challenge-compatible,
-  fulfillment unverified" and stop. A private, loopback, link-local, or
-  non-HTTPS URL, a `200` to an unpaid request, or a `400`, `415`, or `422` to a
-  request with no body is not listing-ready.
+  only at `FULFILLMENT_VERIFIED` or `MARKETPLACE_READY`, and only once example
+  parameters are known, replay behavior is understood, no error or output
+  exposes a secret, and the human has chosen title, description, category,
+  and price. For a Lightning Enable proxy, `FULFILLMENT_VERIFIED` is the
+  ceiling: `MARKETPLACE_READY` is not reachable, because the host-root
+  metadata check doesn't count (see Fields by hand). `CHALLENGE_COMPATIBLE` is
+  the most the read-only check can return for a correct endpoint: say
+  "challenge-compatible, fulfillment unverified", and do not offer the listing
+  as ready until the paid check below lifts it. A private, loopback,
+  link-local, or non-HTTPS URL, a `200` to an unpaid request, or a `400`,
+  `415`, or `422` to a request with no body is not listing-ready.
 - **Pay once.** Pay for the gate once, never twice. The paid check runs on
   `GET` or `HEAD` only, so a `POST`, `PUT`, or `DELETE` route stays at
   `CHALLENGE_COMPATIBLE` here and is never offered as ready. Step 4 buys the
-  first `GET` route. If step 4 did not pay this exact URL, run that skill's
-  paid check once, with the human's yes. The paid check needs a wallet that
+  first `GET` route. If the self-test (step 4) made no payment for this
+  endpoint by any means, run that skill's paid check once, with the human's
+  yes; otherwise the cases below apply and the agent never pays again. The
+  paid check needs a wallet that
   can pay this endpoint: if step 4 stopped at the 402 because the wallet
   refused to pay its own invoice, do not attempt the paid check with the same
   wallet, and the listing is not ready. If step 4 paid this exact URL with the
@@ -357,7 +366,9 @@ Offer it only after the self-test, and only as an offer; no answer means no.
   call as the evidence (steps 6 and 7 of `l402-compatibility-report`, with
   `--mode-a mode-a.json` and that call's token piped on stdin) instead of
   paying again. If that token is gone, the listing is not ready; do not pay
-  again. A step 4 payment of this URL with a different method also counts as
+  again. A self-test payment of a testnet invoice is not reuse evidence: the
+  listing is not ready in that run, and the agent does not pay again. A step 4
+  payment of this URL with a different method also counts as
   paid: the listing is not ready; do not pay again. A payment through
   `pay_l402_challenge` (step 4's captured-402 path) counts as paid. The agent
   has no tool that fetches the resource with a token it already holds, and
