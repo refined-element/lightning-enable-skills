@@ -1,0 +1,167 @@
+{
+  "products": [
+    {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "slug": "fixture-string-forecast-0000aaaa",
+      "name": "fixture-string-forecast",
+      "description": "fixture-string-description: a forecast for one location",
+      "provider": "fixture-string-provider-a",
+      "category": "data/weather",
+      "endpointUrl": "https://fixture-string-seller-a.example/forecast",
+      "httpMethod": "GET",
+      "protocol": "L402",
+      "priceSats": 10,
+      "paymentAsset": "BTC",
+      "paymentNetwork": "Lightning",
+      "healthStatus": "healthy",
+      "listingSource": "imported",
+      "origin": "402index",
+      "inputSchema": {
+        "fields": [
+          {"name": "latitude", "type": "number", "required": true, "in": "query"},
+          {"name": "longitude", "type": "number", "required": true, "in": "query"}
+        ],
+        "presentation": "form"
+      },
+      "buyable": true,
+      "lastPaidSuccessAt": "2026-10-10T13:47:26.887Z",
+      "hidden": false,
+      "listingState": "healthy",
+      "paidSuccesses": 6,
+      "paidFailures": 0,
+      "schemaConfidence": "high",
+      "trust": {
+        "level": "verified",
+        "label": "Verified: delivered 6 times",
+        "short": "Verified",
+        "facts": "Delivery health: healthy. Paid successes: 6. Paid failures: 0. Schema confidence: high."
+      },
+      "feeBps": 2000,
+      "feeMinSats": 3,
+      "feeSats": 3,
+      "totalSats": 13
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "slug": "fixture-string-package-facts-0000bbbb",
+      "name": "fixture-string-package-facts",
+      "description": "fixture-string-description: facts about one package",
+      "provider": "fixture-string-provider-b",
+      "category": "dev/packages",
+      "endpointUrl": "https://fixture-string-seller-b.example/package-facts",
+      "httpMethod": "GET",
+      "protocol": "L402",
+      "priceSats": 20,
+      "paymentAsset": "BTC",
+      "paymentNetwork": "Lightning",
+      "healthStatus": "healthy",
+      "listingSource": "basics",
+      "origin": "amazap-basics",
+      "inputSchema": {
+        "fields": [
+          {"name": "package", "type": "string", "required": true, "in": "query"},
+          {"name": "ecosystem", "type": "string", "required": false, "in": "query"}
+        ],
+        "presentation": "form"
+      },
+      "buyable": true,
+      "lastPaidSuccessAt": null,
+      "hidden": false,
+      "listingState": "healthy",
+      "paidSuccesses": 0,
+      "paidFailures": 0,
+      "schemaConfidence": "high",
+      "trust": {
+        "level": "working",
+        "label": "Working, not yet verified by a paid buy",
+        "short": "Working",
+        "facts": "Delivery health: healthy. Paid successes: 0. Paid failures: 0. Schema confidence: high."
+      },
+      "feeBps": 0,
+      "feeMinSats": 0,
+      "feeSats": 0,
+      "totalSats": 20
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "slug": "fixture-string-doi-lookup-0000cccc",
+      "name": "fixture-string-doi-lookup",
+      "description": "fixture-string-description: metadata for one DOI",
+      "provider": "fixture-string-provider-c",
+      "category": "data/research",
+      "endpointUrl": "https://fixture-string-seller-c.example/doi",
+      "httpMethod": "GET",
+      "protocol": "L402",
+      "priceSats": 2,
+      "paymentAsset": "BTC",
+      "paymentNetwork": "Lightning",
+      "healthStatus": "degraded",
+      "listingSource": "imported",
+      "origin": "402index",
+      "inputSchema": {
+        "fields": [
+          {"name": "doi", "type": "string", "required": true, "in": "query"}
+        ],
+        "presentation": "form"
+      },
+      "buyable": false,
+      "lastPaidSuccessAt": null,
+      "hidden": false,
+      "listingState": "paused",
+      "paidSuccesses": 0,
+      "paidFailures": 1,
+      "schemaConfidence": "high",
+      "trust": {
+        "level": "trouble",
+        "label": "Having trouble",
+        "short": "Having trouble",
+        "facts": "Delivery health: degraded. Paid successes: 0. Paid failures: 1. Schema confidence: high."
+      },
+      "feeBps": 2000,
+      "feeMinSats": 3,
+      "feeSats": 3,
+      "totalSats": 7
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "slug": "fixture-string-summarize-0000dddd",
+      "name": "fixture-string-summarize",
+      "description": "fixture-string-description: a summary of one public page",
+      "provider": "fixture-string-provider-d",
+      "category": "ai/text",
+      "endpointUrl": "https://fixture-string-seller-d.example/summarize",
+      "httpMethod": "POST",
+      "protocol": "L402",
+      "priceSats": 50,
+      "paymentAsset": "BTC",
+      "paymentNetwork": "Lightning",
+      "healthStatus": "untested",
+      "listingSource": "imported",
+      "origin": "402index",
+      "inputSchema": {
+        "fields": [],
+        "presentation": "form"
+      },
+      "buyable": true,
+      "lastPaidSuccessAt": null,
+      "hidden": false,
+      "listingState": "healthy",
+      "paidSuccesses": 0,
+      "paidFailures": 0,
+      "schemaConfidence": "none",
+      "trust": {
+        "level": "limited",
+        "label": "Limited track record",
+        "short": "Limited record",
+        "facts": "Delivery health: untested. Paid successes: 0. Paid failures: 0. Schema confidence: none."
+      },
+      "feeBps": 2000,
+      "feeMinSats": 3,
+      "feeSats": 10,
+      "totalSats": 60
+    }
+  ],
+  "total": 4,
+  "limit": 50,
+  "offset": 0
+}
