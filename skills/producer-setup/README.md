@@ -20,9 +20,10 @@ API to sell, and the price. Everything between those decisions is a tool call.
 - **The money lands in a wallet you already control.** The receive wallet is the
   same [NWC](https://nwc.dev) wallet the agent pays from. Lightning Enable does
   not hold funds; the wallet facilitates custody and settlement.
-- **It ends with proof, not a status page.** The last step is a real purchase
-  against the new endpoint: 402, pay, 200. You watch the sale land in
-  `list_challenges` before anyone calls it live.
+- **It proves the sale, not a status page.** Before the hand-off, the agent
+  makes one real purchase against the new endpoint: 402, pay, 200. You watch
+  the sale land in `list_challenges`, and the compatibility report reuses that
+  call as its paid evidence, before anyone calls the endpoint live.
 - **Flat subscription, no cut.** Lightning Enable never takes a percentage of the
   sats. Every satoshi a buyer pays settles to your wallet.
 
@@ -49,7 +50,7 @@ API to sell, and the price. Everything between those decisions is a tool call.
    `list_challenges challenge_status=paid` to see the sale land.
 7. **Verify**: `l402-compatibility-report` checks the endpoint and records the
    self-test call as its paid evidence instead of paying again.
-8. **Hand off** — what to share, what to watch, how to add endpoints and change
+8. **Hand off**: what to share, what to watch, how to add endpoints and change
    prices, what happens when the 30-day trial ends, and how the agent renews
    the plan in sats with `renew_lightning_enable_subscription` (MCP 2.1.0 or
    later).

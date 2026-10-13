@@ -133,12 +133,13 @@ one trial.
 
 ## Buying through Amazap
 
-The full mechanics of an Amazap buy in
-[`discover-paid-apis`](../skills/discover-paid-apis/). The skill keeps, in its
-own trial step, the rules every buy needs: the user's cap checked before the
-yes, one yes that covers the purchase and the current Amazap terms, the `buy`
-call with `max_total_sats` set to the quoted total, the stale-quote and
-`approval_required` stops, and its safety rules. These are the rest.
+This section holds the full mechanics of an Amazap buy, and
+[`discover-paid-apis`](../skills/discover-paid-apis/) points here. The skill
+keeps, in its own trial step, the rules every buy needs: the user's cap
+checked before the yes, one yes that covers the purchase and the current
+Amazap terms, the `buy` call with `max_total_sats` set to the quoted total,
+the stale-quote and `approval_required` stops, and its safety rules. These are
+the rest.
 
 - **A stale quote.** When `buy` reports a stale quote, the stale attempt
   charged nothing, and the error carries a fresh quote. Show the fresh quote

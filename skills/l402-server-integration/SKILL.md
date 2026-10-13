@@ -507,9 +507,9 @@ The SDK options (`L402ServerOptions`, set in `AddL402AspNetCore`) are `ApiKey`,
 
 If the paying wallet is the same one the merchant receives into, some wallets
 refuse to pay their own invoice. That is wallet policy, not a broken route: pay
-from a second wallet, or stop at step 3. The docs also describe testing with an
-OpenNode dev (testnet) key on the merchant, where no real money moves; see
-"Testing your integration" on the Native Integration page.
+from a second wallet, or stop at the free 402 (item 3). The docs also describe
+testing with an OpenNode dev (testnet) key on the merchant, where no real money
+moves; see "Testing your integration" on the Native Integration page.
 
 If the MCP has the merchant key, `l402_producer(action="list_challenges",
 challenge_status="paid")` lists challenges that have been paid, where the
