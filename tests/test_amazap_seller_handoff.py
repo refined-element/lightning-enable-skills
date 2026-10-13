@@ -77,7 +77,7 @@ HANDOFF_TARGETS = ("reference", *SELLER_SKILLS)
 # Amazap step to a core "Verify your endpoint" step. Tasks 5 to 7 of the
 # rebalance plan add one each; test_seller_verification.py reads the rules
 # from whichever step holds them.
-VERIFIED_SELLERS: tuple[str, ...] = ()
+VERIFIED_SELLERS: tuple[str, ...] = ("producer-setup",)
 
 STEP_HEADING = re.compile(r"^### (\d+)\. Optional: list on Amazap[ \t]*$", re.MULTILINE)
 HAND_OFF_HEADING = re.compile(r"^### (\d+)\. Hand off[ \t]*$", re.MULTILINE)
@@ -444,8 +444,7 @@ def test_proxy_steps_match_rows_by_endpoint_url(skill):
 def test_readme_describes_the_optional_step(skill):
     raw = readme_step(skill)
     text = flat(raw)
-    for phrase in (REFERENCE_URL, CUSTODY, "contact email", "submit it yourself",
-                   "(../l402-compatibility-report/)"):
+    for phrase in (REFERENCE_URL, CUSTODY, "contact email", "submit it yourself"):
         assert phrase in text, f"{skill}/README.md is missing {phrase!r}"
     assert EM_DASH not in raw
     assert not EMAIL.findall(raw)

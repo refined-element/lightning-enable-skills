@@ -19,14 +19,18 @@ import pytest
 from test_amazap_seller_handoff import (
     CLASSIFICATION_NAME,
     EM_DASH,
+    HAND_OFF_HEADING,
     LOOSE_VERIFIED,
+    PROXY_SKILLS,
     REPO_ROOT,
     SELLER_SKILLS,
     SKILLS_DIR,
+    STEP_HEADING,
     VERIFIED_SELLERS,
     amazap_step,
     flat,
     read,
+    readme_step,
     section_at,
 )
 from test_shared_references import CLASSIFICATIONS
@@ -231,3 +235,95 @@ def test_pay_once_text_has_no_em_dash_or_loose_verified(target):
     assert EM_DASH not in raw, f"{target} uses an em-dash"
     if migrated(target):
         assert not LOOSE_VERIFIED.findall(flat(raw)), f"{target}: 'verified' only inside a classification"
+
+
+# The longest Amazap step before the rebalance ran 125 lines; each now runs
+# about a third of that and stays shorter than its skill's hand-off.
+MAX_AMAZAP_STEP_LINES = 42
+MAX_README_AMAZAP_LINES = 16
+
+
+def hand_off(skill: str) -> str:
+    text = read(SKILLS_DIR / skill / "SKILL.md")
+    match = HAND_OFF_HEADING.search(text)
+    assert match, f"skills/{skill}/SKILL.md has no '### N. Hand off' step"
+    return section_at(text, match.start())
+
+
+@pytest.mark.parametrize("skill", VERIFIED_SELLERS)
+def test_verify_step_comes_right_before_the_hand_off_and_the_amazap_step_after_it(skill):
+    text = read(SKILLS_DIR / skill / "SKILL.md")
+    verify = VERIFY_HEADING.search(text)
+    handoff = HAND_OFF_HEADING.search(text)
+    amazap = STEP_HEADING.search(text)
+    assert verify and handoff and amazap
+    assert int(handoff.group(1)) == int(verify.group(1)) + 1
+    assert int(amazap.group(1)) == int(handoff.group(1)) + 1
+
+
+@pytest.mark.parametrize("skill", VERIFIED_SELLERS)
+def test_verify_step_names_the_lightning_enable_report(skill):
+    step = verify_step(skill)
+    assert "(../l402-compatibility-report/)" in step
+    assert "Lightning Enable L402 compatibility report" in flat(step)
+
+
+@pytest.mark.parametrize("skill", VERIFIED_SELLERS)
+def test_hand_off_says_how_buyers_find_and_pay_you(skill):
+    text = flat(hand_off(skill))
+    common = ("**How buyers find and pay you:**", "`discover_api(url=", "`access_l402_resource`",
+              "(../pay-l402-anywhere/)", 'list_challenges", challenge_status="paid")',
+              "No marketplace account or credits")
+    if skill in PROXY_SKILLS:
+        wanted = common + ("Lightning Enable registry", "`discover_api(query=")
+    else:
+        wanted = common + ("/.well-known/l402-manifest.json", "(../offer-agent-service/)",
+                           "The Lightning Enable registry lists Lightning Enable proxies")
+    missing = [phrase for phrase in wanted if phrase not in text]
+    assert not missing, f"{skill} hand-off is missing {missing}"
+    assert "amazap" not in text.lower(), f"{skill}: the hand-off is the Lightning Enable outcome"
+
+
+@pytest.mark.parametrize("skill", VERIFIED_SELLERS)
+def test_amazap_step_is_shorter_than_the_hand_off(skill):
+    step, handoff = amazap_step(skill), hand_off(skill)
+    assert lines(step) < lines(handoff), f"{skill}: Amazap {lines(step)} lines, hand-off {lines(handoff)}"
+    assert lines(step) <= MAX_AMAZAP_STEP_LINES, f"{skill}: Amazap step runs {lines(step)} lines"
+
+
+@pytest.mark.parametrize("skill", VERIFIED_SELLERS)
+def test_amazap_step_extends_the_setup_and_reuses_the_report(skill):
+    step = flat(amazap_step(skill))
+    for phrase in ("The setup is complete at step", "Reuse the step", "never pay again",
+                   "`marketplace_profiles.amazap.status`"):
+        assert phrase in step, f"{skill} Amazap step is missing {phrase!r}"
+    for gone in ("l402_check.py", "**Pay once.**", "**Existing row first.**", "MARKETPLACE_READY"):
+        assert gone not in step, f"{skill} Amazap step still carries {gone!r}"
+
+
+@pytest.mark.parametrize("skill", VERIFIED_SELLERS)
+def test_amazap_step_asks_before_looking_for_a_row(skill):
+    step = flat(amazap_step(skill))
+    ask = step.find("Ask whether the human wants an Amazap listing")
+    row = step.find("existing row")
+    assert 0 <= ask < row, f"{skill}: ask before searching Amazap's catalog"
+
+
+@pytest.mark.parametrize("skill", VERIFIED_SELLERS)
+def test_readme_says_how_buyers_find_you_before_the_amazap_section(skill):
+    text = read(SKILLS_DIR / skill / "README.md")
+    find = text.find("\n## How buyers find you\n")
+    amazap = text.find("\n## Optional: list on Amazap\n")
+    assert 0 <= find < amazap, f"{skill}/README.md: 'How buyers find you' comes before the Amazap section"
+    section = flat(section_at(text, find + 1))
+    wanted = ["(../pay-l402-anywhere/)", "(../l402-compatibility-report/)", "No marketplace account or credits"]
+    wanted.append("Lightning Enable registry" if skill in PROXY_SKILLS else "l402-manifest.json")
+    missing = [phrase for phrase in wanted if phrase not in section]
+    assert not missing, f"{skill}/README.md is missing {missing}"
+
+
+@pytest.mark.parametrize("skill", VERIFIED_SELLERS)
+def test_readme_amazap_section_is_short_and_optional(skill):
+    section = readme_step(skill)
+    assert "Your setup is complete without this." in flat(section)
+    assert lines(section) <= MAX_README_AMAZAP_LINES, f"{skill}/README.md Amazap section runs {lines(section)} lines"
