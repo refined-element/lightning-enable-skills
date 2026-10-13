@@ -370,11 +370,14 @@ L402 endpoints. Listing there is optional distribution, and the human decides.
 Offer it only after the self-test, and only as an offer; no answer means no.
 
 - **Existing row first.** A published endpoint can already be in Amazap's
-  catalog, imported from 402 Index. Search
-  `GET https://amazap.com/api/products?q=<service name or host>`. Every
-  proxy shares `api.lightningenable.com`, so match a row by its full
-  endpoint URL, not the host. Search skips hidden rows, so when the human
-  knows a slug, also read
+  catalog, imported from 402 Index. Search by service name,
+  `GET https://amazap.com/api/products?q=<service name>`, and page with
+  `limit` and `offset` until `offset >= total` before you conclude there is
+  no row; a host search returns every Lightning Enable proxy. Every proxy
+  shares `api.lightningenable.com`, so match a row by its full endpoint URL,
+  not the host: a row stores the per-route URL, such as
+  `https://api.lightningenable.com/l402/proxy/<proxyId>/<path>`. Search skips
+  hidden rows, so when the human knows a slug, also read
   `GET https://amazap.com/api/products/<slug>`, and look for the service in
   https://amazap.com/sitemap.xml. If a row exists, report its `hidden`,
   `listingState`, and `healthStatus`, and let the human decide with Amazap
@@ -403,9 +406,10 @@ Offer it only after the self-test, and only as an offer; no answer means no.
   paid this exact URL with the same method through `access_l402_resource`,
   from either wallet, record that call as the evidence (steps 6 and 7 of
   `l402-compatibility-report`, with `--mode-a mode-a.json` and that call's
-  token piped on stdin) instead of paying again. If that token is gone, or
-  step 5 paid this URL with a different method, the listing is not ready; do
-  not pay again. A payment through `pay_l402_challenge` counts as paid. The
+  token piped on stdin) instead of paying again. If that token is gone, the
+  listing is not ready; do not pay again. A step 5 payment of this URL with a
+  different method also counts as paid: the listing is not ready; do not pay
+  again. A payment through `pay_l402_challenge` counts as paid. The
   agent has no tool that fetches the resource with a token it already holds,
   and `access_l402_resource` would pay again, so in that run the gate stays at
   `CHALLENGE_COMPATIBLE`: the listing is not ready, and the agent does not pay
