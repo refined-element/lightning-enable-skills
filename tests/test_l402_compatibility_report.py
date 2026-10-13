@@ -146,7 +146,7 @@ def test_415_on_empty_body_post():
 
 @pytest.mark.parametrize(
     "name, fix_start",
-    [("ppq-200-unpaid", "Place the L402 middleware before resource delivery"),
+    [("synthetic-200-unpaid", "Place the L402 middleware before resource delivery"),
      ("synthetic-401-unpaid", "Let requests reach the L402 check before ordinary authentication"),
      ("synthetic-400-before-402", "Issue the 402 before validating paid-only parameters"),
      ("synthetic-missing-header", "Emit the canonical challenge header"),
@@ -203,7 +203,7 @@ def test_host_root_metadata_is_probed_and_reported():
 
 def test_metadata_is_not_probed_when_there_is_no_402():
     log = []
-    report_for("ppq-200-unpaid", log=log)
+    report_for("synthetic-200-unpaid", log=log)
     assert len(log) == 1
 
 

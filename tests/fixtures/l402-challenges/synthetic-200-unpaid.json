@@ -1,15 +1,15 @@
 {
-  "name": "ppq-200-unpaid",
-  "origin": "captured 2026-10-12T20:37:35.622052Z; macaroon and token values replaced with fixture-string placeholders",
+  "name": "synthetic-200-unpaid",
+  "origin": "synthetic",
   "observed_at": "2026-10-12T20:37:45Z",
   "dns": {},
   "request": {
     "method": "GET",
-    "url": "https://api.ppq.ai/v1/images/generations?model=gpt-image-1"
+    "url": "https://api.example.com/forecast?city=paris"
   },
   "responses": [
     {
-      "url": "https://api.ppq.ai/v1/images/generations?model=gpt-image-1",
+      "url": "https://api.example.com/forecast?city=paris",
       "status": 200,
       "headers": [
         [
@@ -17,7 +17,7 @@
           "application/json; charset=utf-8"
         ]
       ],
-      "body": "{\"message\":\"OOPS! - 404 Not Found\"}",
+      "body": "{\"city\":\"paris\",\"forecast\":\"sunny\"}",
       "latency_ms": 150
     }
   ],

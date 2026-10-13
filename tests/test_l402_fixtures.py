@@ -15,13 +15,30 @@ EXPECTED_KEYS = {"classification", "schemes", "classified_by", "amount_sats", "p
 CAPTURED = {
     "le-proxy-weather", "le-content-guide", "le-test-ping", "amazap-basics-feed", "toon-extract-single-l402",
     "l402kit-worldstate-single-l402", "major-miners-lsat-plus-l402", "parsebit-lsat-plus-l402",
-    "taskhawk-l402-payment-x402", "store-checkout-empty-post-415", "ppq-200-unpaid",
+    "taskhawk-l402-payment-x402", "store-checkout-empty-post-415",
 }
 SYNTHETIC = {
     "synthetic-missing-header", "synthetic-malformed-quoting", "synthetic-amountless-invoice",
     "synthetic-expired-invoice", "synthetic-payment-only", "synthetic-400-before-402",
-    "synthetic-401-unpaid", "synthetic-redirect-private",
+    "synthetic-401-unpaid", "synthetic-200-unpaid", "synthetic-redirect-private",
 }
+
+
+def test_fixture_counts():
+    assert (len(CAPTURED), len(SYNTHETIC)) == (10, 9)
+
+
+@pytest.mark.parametrize("name", sorted(SYNTHETIC))
+def test_synthetic_fixtures_say_so(name):
+    assert support.load_fixture(name)["origin"].startswith("synthetic")
+
+
+def test_unpaid_2xx_fixture_is_synthetic_on_an_example_host():
+    # A 200 for an unpaid request is a verdict about a server, so it is never pinned on a real third party.
+    fixture = support.load_fixture("synthetic-200-unpaid")
+    assert fixture["origin"] == "synthetic"
+    for url in [fixture["request"]["url"]] + [r["url"] for r in fixture["responses"]]:
+        assert url.startswith("https://api.example.com/"), url
 
 
 def test_every_expected_fixture_exists():
