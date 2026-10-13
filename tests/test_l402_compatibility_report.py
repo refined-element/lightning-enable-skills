@@ -251,8 +251,23 @@ def test_on_the_lightning_enable_host_the_host_root_files_describe_the_platform(
 
 def test_metadata_is_not_probed_when_there_is_no_402():
     log = []
-    report_for("synthetic-200-unpaid", log=log, profiles=("amazap",))
+    report, _ = report_for("synthetic-200-unpaid", log=log, profiles=("amazap",))
     assert len(log) == 1
+    # Requested but skipped reads differently from "not requested".
+    check = amazap_checks(report)["host_root_metadata"]
+    assert check["pass"] is None
+    assert check["detail"].startswith("Skipped:")
+    assert "only after the listed URL answers 402" in check["detail"]
+    assert "add --profile amazap" not in check["detail"]
+    unrequested, _ = report_for("synthetic-200-unpaid")
+    assert "add --profile amazap" in amazap_checks(unrequested)["host_root_metadata"]["detail"]
+
+
+def test_the_not_ready_note_covers_the_classification_case():
+    note = l402_levels.profile_note("NOT_READY")
+    assert "A required check failed, or the classification rules readiness out" in note
+    assert "see the checks and the classification" in note
+    assert "verified" not in " ".join(l402_levels.PROFILE_NOTES[s] for s in ("NOT_READY", "NOT_CHECKED")).lower()
 
 
 def test_a_linked_l402_manifest_is_a_core_discovery_note():

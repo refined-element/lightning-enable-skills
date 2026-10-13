@@ -526,6 +526,52 @@ def test_the_amazap_profile_follows_the_paid_classification(name, status):
     assert amazap(report)["status"] == status
 
 
+def _tamper_checks(checks: list, how: str) -> list:
+    if how == "empty":
+        return []
+    if how == "empty-object":
+        return [{}]
+    if how == "missing-required":
+        return [c for c in checks if c["name"] != "priced_invoice"]
+    if how == "required-made-advisory":
+        return [dict(c, required=False) if c["name"] == "priced_invoice" else c for c in checks]
+    if how == "pass-not-bool":
+        return [dict(c, **{"pass": "fixture-string-yes"}) if c["name"] == "public_https" else c for c in checks]
+    if how == "missing-pass":
+        return [{k: v for k, v in c.items() if k != "pass"} if c["name"] == "stable_path" else c for c in checks]
+    if how == "detail-not-str":
+        return [dict(c, detail=5) if c["name"] == "stable_path" else c for c in checks]
+    if how == "duplicate":
+        return checks + [checks[0]]
+    if how == "paid-name":
+        return checks + [{"name": "stable_price", "pass": True, "required": True, "detail": "fixture-string-x"}]
+    if how == "unknown-name":
+        return checks + [{"name": "fixture-string-name", "pass": True, "required": False, "detail": "x"}]
+    raise AssertionError(how)
+
+
+# An emptied or edited read-only checks list can never reach READY, and never raises a traceback.
+@pytest.mark.parametrize("how", ["empty", "empty-object", "missing-required", "required-made-advisory",
+                                 "pass-not-bool", "missing-pass", "detail-not-str", "duplicate", "paid-name",
+                                 "unknown-name"])
+def test_a_tampered_read_only_checks_list_is_refused(how):
+    evidence, credential = evidence_for("fulfilled-2xx")
+    profile = evidence["mode_a_report"]["marketplace_profiles"]["amazap"]
+    profile["checks"] = _tamper_checks(profile["checks"], how)
+    with pytest.raises(l402_evidence.EvidenceError) as refused:
+        l402_evidence.evaluate(evidence, credential)
+    message = str(refused.value)
+    assert message.startswith("evidence.mode_a_report.marketplace_profiles.amazap.checks")
+    assert "fixture-string" not in message
+
+
+def test_a_read_only_report_without_the_amazap_profile_is_refused():
+    evidence, credential = evidence_for("fulfilled-2xx")
+    evidence["mode_a_report"]["marketplace_profiles"] = {}
+    with pytest.raises(l402_evidence.EvidenceError, match="marketplace_profiles"):
+        l402_evidence.evaluate(evidence, credential)
+
+
 def test_a_version_1_read_only_report_is_refused():
     evidence, credential = evidence_for("fulfilled-2xx")
     evidence["mode_a_report"]["report_version"] = 1

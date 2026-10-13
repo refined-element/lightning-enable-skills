@@ -54,6 +54,15 @@ MIN_SECRET_LENGTH = 8
 MODE_A_KEYS = ("checked_at", "target", "transport", "challenge", "invoice", "binding",
                "marketplace_profiles", "findings", "evidence")
 NOT_CHECKED_BY_PAID_CHECK = "a synchronous, bounded response"
+# The required checks every read-only report's profile carries, by profile. A
+# read-only report missing one, or carrying one as advisory, is refused, so an
+# emptied or edited checks list can never reach READY.
+READ_ONLY_REQUIRED_CHECKS = {
+    "amazap": ("public_https", "priced_invoice", "mainnet_invoice", "probe_without_body",
+               "within_probe_window", "stable_path"),
+}
+# Advisory checks a read-only profile may also carry.
+READ_ONLY_ADVISORY_CHECKS = {"amazap": ("host_root_metadata",)}
 # Where the paid section's facts come from, so no downstream gate reads them as independently observed.
 EVIDENCE_SOURCE = "agent-recorded access_l402_resource result"
 
@@ -208,6 +217,38 @@ def _optional(container: dict, key: str, path: str, check, wanted: str) -> None:
         raise EvidenceError(f"{path}.{key} must be {wanted}")
 
 
+def _is_check(check) -> bool:
+    """A check object as the read-only check writes it. ``pass`` is True, False, or None (not judged)."""
+    return (isinstance(check, dict)
+            and isinstance(check.get("name"), str)
+            and "pass" in check and (check["pass"] is None or isinstance(check["pass"], bool))
+            and isinstance(check.get("required"), bool)
+            and isinstance(check.get("detail"), str))
+
+
+def _require_read_only_checks(checks, profile: str, where: str) -> None:
+    """Refuse a profile's read-only checks unless they are exactly what the read-only check writes.
+
+    Every check has a string name, a pass of true, false, or null, a boolean
+    required, and a string detail. Every required read-only check is present,
+    once, and still required; no other name appears (a paid-check name in a
+    read-only report is refused too). Fixed text: no value is echoed.
+    """
+    again = "; produce the read-only report again with --json"
+    if not isinstance(checks, list) or not all(_is_check(c) for c in checks):
+        raise EvidenceError(f"{where} must be a list of check objects, each with a string name, a pass of "
+                            f"true, false, or null, a boolean required, and a string detail{again}")
+    required = READ_ONLY_REQUIRED_CHECKS[profile]
+    known = set(required) | set(READ_ONLY_ADVISORY_CHECKS.get(profile, ()))
+    names = [c["name"] for c in checks]
+    if len(names) != len(set(names)) or not set(names) <= known:
+        raise EvidenceError(f"{where} holds a repeated check or one the read-only check does not write{again}")
+    by_name = {c["name"]: c for c in checks}
+    if any(name not in by_name or by_name[name]["required"] is not True for name in required):
+        raise EvidenceError(f"{where} must hold every required read-only check as required ("
+                            + ", ".join(required) + f"){again}")
+
+
 def _require_mode_a_shapes(mode_a: dict) -> None:
     """Refuse a read-only report whose fields this module or the renderer read with the wrong type."""
     path = "evidence.mode_a_report"
@@ -225,16 +266,15 @@ def _require_mode_a_shapes(mode_a: dict) -> None:
         raise EvidenceError(f"{path}.findings and security must hold finding objects")
     if not all(isinstance(mode_a["target"].get(k), str) for k in ("url", "method")):
         raise EvidenceError(f"{path}.target.url and target.method must be strings")
-    for name, profile in mode_a["marketplace_profiles"].items():
-        where = f"{path}.marketplace_profiles"
-        if name not in MARKETPLACE_PROFILES:
-            raise EvidenceError(f"{where} holds a profile this script does not know; produce the read-only "
-                                "report again with --json")
+    profiles = mode_a["marketplace_profiles"]
+    where = f"{path}.marketplace_profiles"
+    if set(profiles) != set(MARKETPLACE_PROFILES):
+        raise EvidenceError(f"{where} must hold exactly the profiles this script writes ("
+                            + ", ".join(MARKETPLACE_PROFILES) + "); produce the read-only report again with --json")
+    for name, profile in profiles.items():
         if not isinstance(profile, dict):
             raise EvidenceError(f"{where}.{name} must be an object")
-        if not isinstance(profile.get("checks", []), list) or not all(
-                isinstance(c, dict) for c in profile.get("checks", [])):
-            raise EvidenceError(f"{where}.{name}.checks must be a list of check objects")
+        _require_read_only_checks(profile.get("checks"), name, f"{where}.{name}.checks")
         if not isinstance(profile.get("not_checked_by_script", []), list):
             raise EvidenceError(f"{where}.{name}.not_checked_by_script must be a list")
     if not isinstance(mode_a["evidence"].get("statuses", []), list):

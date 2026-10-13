@@ -437,6 +437,10 @@ def test_a_terminal_stdin_is_fine_without_credential_stdin(tmp_path):
 @pytest.mark.parametrize("key, value", [
     ("target", []), ("target", {"url": "x"}), ("transport", []), ("challenge", "fixture-string-x"),
     ("invoice", []), ("binding", 5), ("marketplace_profiles", []), ("marketplace_profiles", {"amazap": {"checks": 5}}), ("marketplace_profiles", {"amazap": {"checks": [1]}}), ("marketplace_profiles", {"fixture-string-x": {}}),
+    ("marketplace_profiles", {}), ("marketplace_profiles", {"amazap": {"checks": []}}),
+    ("marketplace_profiles", {"amazap": {"checks": [{}]}}), ("marketplace_profiles", {"amazap": {}}),
+    ("marketplace_profiles", {"amazap": {"checks": [{"name": "fixture-string-x", "pass": True, "required": True,
+                                                     "detail": "fixture-string-x"}]}}),
     ("findings", 5), ("findings", ["fixture-string-x"]), ("evidence", []), ("rerun", "x"),
 ])
 def test_a_malformed_read_only_report_is_an_evidence_error_not_a_traceback(tmp_path, capsys, key, value):

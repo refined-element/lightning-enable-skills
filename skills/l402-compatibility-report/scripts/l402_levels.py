@@ -46,7 +46,8 @@ PROFILE_STATUSES = (PROFILE_READY, PROFILE_NOT_READY, PROFILE_NOT_CHECKED)
 MARKETPLACE_PROFILES = ("amazap",)
 PROFILE_NOTES = {
     PROFILE_READY: "Every required check passed and the paid check reached FULFILLMENT_VERIFIED.",
-    PROFILE_NOT_READY: "A required check failed, or the paid check did not deliver; see the checks.",
+    PROFILE_NOT_READY: ("A required check failed, or the classification rules readiness out; see the checks "
+                        "and the classification."),
     # Never names the top classification: a read-only report carries this note,
     # and read-only output never says "verified" in any form.
     PROFILE_NOT_CHECKED: "Readiness needs a paid check that confirms delivery of the paid resource.",

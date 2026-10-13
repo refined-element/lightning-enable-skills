@@ -254,8 +254,14 @@ def analyze(
     now: datetime,
     root_metadata: dict | None = None,
     max_sats: int | None = None,
+    profiles: tuple[str, ...] = (),
 ) -> dict:
-    """Build the Mode A report for one probe."""
+    """Build the Mode A report for one probe.
+
+    ``profiles`` names the marketplace profiles the caller requested (``--profile``).
+    ``root_metadata`` is None when the host root was not probed: either the amazap
+    profile was not requested, or it was and the probe got no 402.
+    """
     findings: list[Finding] = []
     response = probe_result.response
     target = probe_result.final_target
@@ -292,7 +298,7 @@ def analyze(
         classification, invoice = _challenge_and_invoice(report, response, now, findings)
     _security(response, target, findings)
     _manifest_link(response, findings)
-    amazap = _amazap_profile(request, probe_result, invoice, root_metadata)
+    amazap = _amazap_profile(request, probe_result, invoice, root_metadata, "amazap" in profiles)
     report["classification"] = classification
     report["findings"] = [asdict(f) | {"fix": f.fix} for f in findings]
     report["required_fixes"] = list(dict.fromkeys(f.fix for f in findings if f.fix and f.severity == "error"))
@@ -569,13 +575,22 @@ def _check(name: str, ok, detail: str, required: bool = True) -> dict:
     return {"name": name, "pass": ok, "required": required, "detail": detail}
 
 
-def _host_root_check(target, root_metadata: dict | None) -> dict:
-    """Advisory: Amazap's listing prefill reads openapi.json or llms.txt at the host root."""
+def _host_root_check(target, root_metadata: dict | None, requested: bool) -> dict:
+    """Advisory: Amazap's listing prefill reads openapi.json or llms.txt at the host root.
+
+    ``requested`` is True when --profile amazap asked for the host-root probe;
+    with ``root_metadata`` None it means the probe was skipped because no 402 came.
+    """
     if target is not None and target.host == LIGHTNING_ENABLE_HOST:
         return _check("host_root_metadata", False,
                       "On api.lightningenable.com the host-root openapi.json and llms.txt describe the Lightning "
                       "Enable platform, not this endpoint, so Amazap's prefill can't use them; supply the title, "
                       "description, category, and example parameters by hand.", required=False)
+    if root_metadata is None and requested:
+        return _check("host_root_metadata", None,
+                      "Skipped: --profile amazap was given, but the host root is probed only after the listed URL "
+                      "answers 402, and it did not. Fix the 402 first, then run the check again.",
+                      required=False)
     if root_metadata is None:
         return _check("host_root_metadata", None,
                       "Not probed: add --profile amazap to look for openapi.json or llms.txt at the host root, "
@@ -588,11 +603,14 @@ def _host_root_check(target, root_metadata: dict | None) -> dict:
                   required=False)
 
 
-def _amazap_profile(request: ProbeRequest, probe_result: ProbeResult, invoice, root_metadata: dict | None) -> dict:
+def _amazap_profile(request: ProbeRequest, probe_result: ProbeResult, invoice, root_metadata: dict | None,
+                    requested: bool = False) -> dict:
     """The optional Amazap listing profile. It adds no finding and no required fix.
 
-    ``root_metadata`` is None when the host root was not probed (no --profile amazap).
-    The caller sets ``status`` and ``note`` once the classification is known.
+    ``root_metadata`` is None when the host root was not probed; ``requested``
+    tells "not asked for" (no --profile amazap) from "asked for, but skipped
+    because no 402 came". The caller sets ``status`` and ``note`` once the
+    classification is known.
     """
     response = probe_result.response
     target = probe_result.final_target
@@ -607,7 +625,7 @@ def _amazap_profile(request: ProbeRequest, probe_result: ProbeResult, invoice, r
         _check("within_probe_window", bool(response and response.elapsed_ms <= AMAZAP_PROBE_WINDOW_MS),
                f"The 402 arrives within 8 seconds, the time Amazap's listing probe waits{latency}."),
         _check("stable_path", not probe_result.hops, "No redirect between the listed URL and the 402."),
-        _host_root_check(target, root_metadata),
+        _host_root_check(target, root_metadata, requested),
     ]
     return {
         "status": None,

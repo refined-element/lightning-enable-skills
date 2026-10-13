@@ -203,7 +203,8 @@ def run_mode_a(
             extra = l402_http.probe(result.final_target.origin + path, timeout=timeout,
                                     allow_private=allow_private, resolver=resolver, transport=transport)
             root_metadata[path] = extra.response.status if extra.response is not None and not extra.hops else None
-    report = l402_analyze.analyze(request, result, now=now, root_metadata=root_metadata, max_sats=max_sats)
+    report = l402_analyze.analyze(request, result, now=now, root_metadata=root_metadata, max_sats=max_sats,
+                                  profiles=profiles)
     return report, l402_analyze.collect_secrets(request, result)
 
 
