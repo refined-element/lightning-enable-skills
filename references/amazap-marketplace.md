@@ -79,11 +79,11 @@ Every Amazap buy follows these rules:
 - **The `buy` contract.** `buy` requires `quote_id`, `total_cost`,
   `max_total_sats`, and `accept_terms`. Set `max_total_sats` to the user's
   cap, and set `accept_terms` only after the user has agreed to the current
-  Amazap terms (https://amazap.com/terms). A stale quote returns a fresh quote in the error and charges
-  nothing; show the fresh quote and confirm before buying. Repeating a
-  `quote_id` never charges twice. A basket is one buy. Above Amazap's
-  auto-approve amount the person confirms, or `buy` returns
-  `approval_required`; stop there and never work around it.
+  Amazap terms (https://amazap.com/terms). A stale quote returns a fresh
+  quote in the error and charges nothing; show the fresh quote and confirm
+  before buying. Repeating a `quote_id` never charges twice. A basket is one
+  buy. Above Amazap's auto-approve amount the person confirms, or `buy`
+  returns `approval_required`; stop there and never work around it.
 - **Failed paid calls.** Amazap re-credits a failed paid call as Amazap
   credits, never cash: automatically, or through `claim_failed_call` within
   the window Amazap states (see https://amazap.com/credits). After a
