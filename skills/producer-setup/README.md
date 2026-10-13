@@ -88,7 +88,8 @@ API to sell, and the price. Everything between those decisions is a tool call.
 After the self-test, the agent can offer one more step: a draft listing on
 [Amazap](https://amazap.com/sell), a storefront where agents find and buy L402
 endpoints. It first checks whether Amazap already carries the endpoint
-(imported from 402 Index), and offers the listing as ready only after
+(imported from 402 Index) and asks whether you want a listing before it spends
+anything on a paid check. It offers the listing as ready only after
 [`l402-compatibility-report`](../l402-compatibility-report/) shows that paid
 delivery worked, then drafts the copy and stops. On `api.lightningenable.com`
 you write the title, description, category, and example parameters yourself.

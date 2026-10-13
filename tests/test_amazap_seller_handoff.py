@@ -353,6 +353,13 @@ def test_handoff_hard_codes_no_amazap_figures(target):
 
 
 @pytest.mark.parametrize("target", HANDOFF_TARGETS)
+def test_handoff_counts_a_pay_l402_challenge_payment_as_paid(target):
+    text = handoff_text(target)
+    for phrase in ("pay_l402_challenge", "counts as paid", "does not pay again"):
+        assert phrase in text, f"{target} is missing {phrase!r}"
+
+
+@pytest.mark.parametrize("target", HANDOFF_TARGETS)
 def test_handoff_has_no_em_dashes(target):
     assert EM_DASH not in raw_handoff_text(target), f"{target} uses an em-dash"
 

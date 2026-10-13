@@ -163,19 +163,28 @@ Three limits of the paid check:
   either.
 - Pay once for the gate, never twice. If the skill's own self-test did not
   already pay this exact URL, run the compatibility report's paid check once,
-  with the human's yes. If the self-test already paid this exact public URL,
+  with the human's yes. The paid check needs a wallet that can pay this
+  endpoint: if the self-test was skipped because the wallet refused to pay its
+  own invoice, do not attempt the paid check with the same wallet, and the
+  listing is not ready. If the self-test already paid this exact public URL,
   with the same method, through `access_l402_resource`, record that call as
   the evidence (steps 6 and 7 of `l402-compatibility-report`, with the
   read-only report above as `--mode-a` and that call's token piped on stdin)
   instead of paying again. If that token is gone, the listing is not ready; do
   not pay again. A self-test that paid this URL with a different method also
-  counts as paid; the listing is not ready; do not pay again.
+  counts as paid; the listing is not ready; do not pay again. A payment
+  through `pay_l402_challenge` counts as paid. The agent has no tool that
+  fetches the resource with a token it already holds, and
+  `access_l402_resource` would pay again, so in that run the gate stays at
+  `CHALLENGE_COMPATIBLE`: the listing is not ready, and the agent does not pay
+  again. If the human wants the paid check later, they choose it in a later
+  run, and the skill says plainly that it is a second payment for this
+  endpoint.
 
 ### Handoff flow
 
 1. Finish the seller skill through its self-test and its hand-off.
-2. Run the readiness gate above.
-3. Check for an existing Amazap row. A published Lightning Enable endpoint can
+2. Check for an existing Amazap row. A published Lightning Enable endpoint can
    already be in Amazap's catalog, imported from 402 Index. Search
    `GET https://amazap.com/api/products?q=<service name or host>`. Search
    skips hidden rows, so when the human knows a slug, also read
@@ -183,12 +192,15 @@ Three limits of the paid check:
    https://amazap.com/sitemap.xml. If a row exists, report its `hidden`,
    `listingState`, and `healthStatus`, and let the human decide with Amazap
    whether to refresh it. Never draft a duplicate listing on your own.
-4. Ask whether the human wants Amazap distribution. No answer means no.
-5. If yes, call Amazap's `list_my_endpoint` tool when the host lists it. It
-   probes the endpoint and returns a draft and a link to the seller form; it
-   is read-only and publishes nothing. Without the tool, give the human
-   https://amazap.com/sell and a draft built from the listing-copy template
-   below.
+3. Ask whether the human wants Amazap distribution, before any paid gate
+   check, so no sats are spent on a listing they don't want. No answer means
+   no.
+4. If yes, run the readiness gate above.
+5. When the gate passes, call Amazap's `list_my_endpoint` tool when the host
+   lists it. It probes the endpoint and returns a draft and a link to the
+   seller form; it is read-only and publishes nothing. Without the tool, give
+   the human https://amazap.com/sell and a draft built from the listing-copy
+   template below.
 6. Present the draft beside the current Amazap seller terms, linked live, and
    the all-in shopper price from Amazap's own draft or page.
 7. The human reviews the contact email, the listing copy, the current margin
@@ -258,7 +270,9 @@ Never call an endpoint listed or live until you have read it back:
 1. Read the product page (`https://amazap.com/p/<slug>`) or the public API row
    (`GET https://amazap.com/api/products/<slug>`).
 2. Confirm the product name, provider, endpoint, displayed price, protocol,
-   and `buyable`.
+   and `buyable`. Before you say "listed", the row's endpoint URL and
+   displayed seller price must match this endpoint; otherwise report the row's
+   state and that it may be an imported row, not this listing.
 3. Check `hidden`, `listingState`, and `healthStatus`. A hidden or paused row
    isn't live, even though the single-product API still returns it.
 4. Record the public URL for the human.
