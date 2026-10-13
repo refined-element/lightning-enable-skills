@@ -210,6 +210,21 @@ def test_native_check_runs_on_the_public_url_at_the_chosen_price():
     assert "Continue only when the read-only report's invoice amount equals the chosen price" in text
 
 
+def test_native_skill_adds_the_manifest_before_it_claims_discovery():
+    # Neither middleware serves a manifest, so the skill adds one in its own
+    # approved step, and the hand-off says buyers need a URL until it ships.
+    text = read(SKILLS_DIR / "l402-server-integration" / "SKILL.md")
+    manifest = re.search(r"^### (\d+)\. Publish an L402 manifest[ \t]*$", text, re.MULTILINE)
+    verify = VERIFY_HEADING.search(text)
+    assert manifest and verify and int(verify.group(1)) == int(manifest.group(1)) + 1
+    step = flat(section_at(text, manifest.start()))
+    for phrase in ("`/.well-known/l402-manifest.json`", "`pricing.base_price_sats`", "as a diff",
+                   "human's explicit yes", "`discover_api(url="):
+        assert phrase in step, f"the manifest step is missing {phrase!r}"
+    assert "until it is deployed, buyers reach the API only by a URL the human shares" in flat(
+        hand_off("l402-server-integration"))
+
+
 @pytest.mark.parametrize("target", PAY_ONCE_TARGETS)
 def test_pay_once_text_names_only_core_classifications(target):
     named = set(CLASSIFICATION_NAME.findall(pay_once_text(target)))

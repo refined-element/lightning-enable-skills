@@ -31,7 +31,9 @@ or wallet.
    configuration your app reads.
 7. Runs your tests, shows you the diff, proves the 402 for free, and, with your
    yes, pays one 1-sat test call.
-8. Checks the deployed route with `l402-compatibility-report` at the price you
+8. Offers to add an L402 manifest at `/.well-known/l402-manifest.json`, shown
+   as a diff for your yes, so agents can find the API with `discover_api`.
+9. Checks the deployed route with `l402-compatibility-report` at the price you
    chose, reusing a qualifying test payment instead of paying again, then tells
    you how buyers find and pay the API.
 
@@ -68,10 +70,13 @@ or wallet.
 Buyers' agents call your API's own URLs and pay each call from their own
 wallets over L402, with `access_l402_resource`,
 [`pay-l402-anywhere`](../pay-l402-anywhere/), or any L402 client. No
-marketplace account or credits are involved. To be found, your API publishes
-an L402 manifest at `/.well-known/l402-manifest.json`, which the Lightning
-Enable MCP's `discover_api` reads. The agent can also list the service on the
-agent relay with [`offer-agent-service`](../offer-agent-service/). Before the
+marketplace account or credits are involved. Neither middleware serves an
+L402 manifest, so the agent offers to add one at
+`/.well-known/l402-manifest.json`, which the Lightning Enable MCP's
+`discover_api` reads; you approve the diff and deploy it. Until it is
+deployed, buyers reach the API only by a URL you share. The agent can also
+list the service on the agent relay with
+[`offer-agent-service`](../offer-agent-service/). Before the
 hand-off it checks the deployed route with
 [`l402-compatibility-report`](../l402-compatibility-report/), the Lightning
 Enable L402 compatibility report.

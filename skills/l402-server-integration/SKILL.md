@@ -53,7 +53,7 @@ troubleshooting checks, and the self-test plan.
 - The merchant API key, set by the human as an environment variable or in the
   app's secret store. You never read it back or print it.
 - The ability to run the project's tests.
-- The [`l402-compatibility-report`](../l402-compatibility-report/) skill, for step 11.
+- The [`l402-compatibility-report`](../l402-compatibility-report/) skill, for step 12.
 
 Versions this skill was checked against: `l402-express` 0.2.0 and `l402-server`
 0.2.0 (npm), `L402Server.AspNetCore` 0.2.0 and `L402Server` 0.2.0 (NuGet). Step 4
@@ -515,7 +515,29 @@ If the MCP has the merchant key, `l402_producer(action="list_challenges",
 challenge_status="paid")` lists challenges that have been paid, where the
 deployment supports that route.
 
-### 11. Verify your endpoint
+### 11. Publish an L402 manifest
+
+Neither middleware serves a manifest, so until the API serves one, buyers'
+agents reach it only by a URL the human shares (`access_l402_resource` on that
+URL). Offer to add one; no answer means no, and the hand-off says so.
+
+- **Write it.** A JSON file at `/.well-known/l402-manifest.json` on the API's
+  own host, with only fields `discover_api` reads: `service` (`name`,
+  `description`, and optionally `base_url`, `documentation_url`, and
+  `categories`), `l402` (`default_price_sats`), and `endpoints`, one per paid
+  route, each with `path`, `method`, `summary`, and `pricing.base_price_sats`
+  set to the route's chosen price, not step 10's staging price. All of it is
+  public: nothing private in a path or summary.
+- **Serve it free.** Serve it from a route of its own, outside the `l402`
+  mount in Express, and in ASP.NET Core without `[L402]` or a
+  `DefaultPriceSats` that covers it, and outside the app's own auth. Show the
+  file and the route as a diff; with the human's explicit yes, it ships in
+  step 12's deploy.
+- **Check it.** After that deploy, `discover_api(url="https://<api host>")`
+  returns the service and its endpoints and pays nothing. "Could not find an
+  L402 manifest" means the file is not served at that path.
+
+### 12. Verify your endpoint
 
 Once the API is deployed at a public HTTPS URL, check one paid route the way
 a buyer's agent meets it, with the Lightning Enable L402 compatibility report,
@@ -527,8 +549,9 @@ URL,
 https://github.com/refined-element/lightning-enable-skills/tree/main/skills/l402-compatibility-report.
 
 - **Price first.** First, with the human's explicit yes, set the route's
-  chosen price in the code (shown as a diff) and have it deployed, so the
-  check below quotes the price buyers will pay, not step 10's staging price.
+  chosen price in the code (shown as a diff) and have it deployed, with
+  step 11's manifest if the human approved one, so the check below quotes
+  the price buyers will pay, not step 10's staging price.
 - **Read-only check.** From that skill's folder, run it on the route's public
   URL, with the HTTP method the route's code maps and the human's cap in sats:
   `python scripts/l402_check.py <url> --json --max-sats <cap> --output mode-a.json`
@@ -543,7 +566,9 @@ https://github.com/refined-element/lightning-enable-skills/tree/main/skills/l402
   is the most the read-only check can return for a correct endpoint: say
   "challenge-compatible, fulfillment unverified", and do not report paid
   delivery as proven until the paid evidence below lifts it.
-- **Pay once, never twice.** A test against `localhost` doesn't count. The
+- **Pay once, never twice.** A test against `localhost` doesn't count. After
+  a `localhost`-only payment in step 10, the one paid check on the public URL
+  is still allowed, with the human's yes. The
   paid check runs on `GET` or `HEAD` only, so a `POST`, `PUT`, or `DELETE`
   route stays at `CHALLENGE_COMPATIBLE`. If the self-test (step 10) made no
   payment for this endpoint by any means (a testnet invoice doesn't count),
@@ -583,10 +608,10 @@ https://github.com/refined-element/lightning-enable-skills/tree/main/skills/l402
   the preimage matched to the payment hash. Pass on the report's
   `paid_fulfillment.hash_source`: for an opaque token the preimage was matched
   against the wallet's recorded payment, not the invoice. The report's
-  optional Amazap profile matters only for step 13 and never changes this
+  optional Amazap profile matters only for step 14 and never changes this
   result.
 
-### 12. Hand off
+### 13. Hand off
 
 Tell the human, plainly:
 
@@ -598,22 +623,19 @@ Tell the human, plainly:
 - **How buyers find and pay you:** buyers' agents call the API's own URLs and
   pay each call from their own wallets over L402: `access_l402_resource`, the
   [`pay-l402-anywhere`](../pay-l402-anywhere/) skill, or any L402 client. No
-  marketplace account or credits are involved. To be found, the API
-  publishes an L402 manifest at `/.well-known/l402-manifest.json` on its own
-  host (a code change: show the diff first). Model it on the manifest a
-  Lightning Enable proxy serves, with `service`, `l402`, and `endpoints`, each
-  endpoint carrying `path`, `method`, `summary`, and
-  `pricing.base_price_sats`; `discover_api(url="https://<api host>")` reads it
-  there. The Lightning Enable registry lists Lightning Enable proxies, so a
-  native API is found by its manifest, or through Agent Service Agreements:
-  the [`offer-agent-service`](../offer-agent-service/) skill lists a service
-  on the Lightning Enable agent relay, charging through its own Lightning
-  Enable proxy in front of the service, so point it at a route this
-  middleware does not already charge for. Each paid call shows up in
+  marketplace account or credits are involved. If step 11's manifest is
+  deployed, `discover_api(url="https://<api host>")` finds the API at
+  `/.well-known/l402-manifest.json`; until it is deployed, buyers reach the
+  API only by a URL the human shares. The Lightning Enable registry lists
+  Lightning Enable proxies, not a native API. Through Agent Service
+  Agreements, the [`offer-agent-service`](../offer-agent-service/) skill
+  lists a service on the Lightning Enable agent relay, charging through its
+  own Lightning Enable proxy in front of the service, so point it at a route
+  this middleware does not already charge for. Each paid call shows up in
   `l402_producer(action="list_challenges", challenge_status="paid")`; the
   dashboard's Endpoints page shows challenges minted per endpoint, not
   payments.
-- **What step 11 showed:** the report's classification, the payment hash, and
+- **What step 12 showed:** the report's classification, the payment hash, and
   the amount, never a credential. `FULFILLMENT_VERIFIED` is the complete
   result.
 - **What changed:** packages added, files edited, routes priced and at what
@@ -634,9 +656,9 @@ Tell the human, plainly:
   [l402-example-node](https://github.com/refined-element/l402-example-node) and
   [l402-example-aspnet](https://github.com/refined-element/l402-example-aspnet).
 
-### 13. Optional: list on Amazap
+### 14. Optional: list on Amazap
 
-The setup is complete at step 12. [Amazap](https://amazap.com/sell), a
+The setup is complete at step 13. [Amazap](https://amazap.com/sell), a
 separate marketplace, can extend it with more distribution. Offer it once,
 after the hand-off, as an option; no answer means no.
 
@@ -644,7 +666,7 @@ after the hand-off, as an option; no answer means no.
   means no. Only after a yes, look for an existing row, possibly imported
   from 402 Index: match the full endpoint URL the row stores against this
   API. Never draft a duplicate listing.
-- **Gate.** Reuse the step 11 report; never pay again for a listing. Offer
+- **Gate.** Reuse the step 12 report; never pay again for a listing. Offer
   the listing as ready only when its `classification` is
   `FULFILLMENT_VERIFIED` and its `marketplace_profiles.amazap.status` is
   `READY`, and only once example parameters are known, replay behavior is
@@ -718,14 +740,19 @@ and settlement. Full rules:
 > 5. `IdempotencyKeySelector` built from the caller, the resource, and the price.
 > 6. Tests pass; show the diff. Request the route with no credential: 402 with
 >    `WWW-Authenticate: L402`.
-> 7. With a yes, set staging to 1 sat and pay it once from code with a 10-sat cap:
->    402, 1 sat, 200.
-> 8. With a yes, deploy the route at 25 sats and run
+> 7. With a yes, deploy the route at 1 sat and pay its public URL once from
+>    code with a 10-sat cap: 402, 1 sat, 200.
+> 8. Show `/.well-known/l402-manifest.json` as a diff: `service`, `l402`, and
+>    one endpoint, `GET` `/api/reports/{id}` at `pricing.base_price_sats` 25,
+>    served by its own unpaid route. The human says yes.
+> 9. With a yes, deploy the route at 25 sats with the manifest.
+>    `discover_api(url="https://<api host>")` returns the report endpoint. Run
 >    `python scripts/l402_check.py <public route URL> --json --max-sats 30 --output mode-a.json`:
 >    `CHALLENGE_COMPATIBLE` at 25 sats. Item 7's self-test payment came from
 >    code, so it counts as paid; paid delivery stays unverified this run, and
 >    the agent does not pay again.
-> 9. Hand off: "Reports cost 25 sats, settled to your Strike account. Lightning
->    Enable mints and verifies; your API and auth are unchanged. Buyers'
->    agents find the route through the L402 manifest at
->    `/.well-known/l402-manifest.json` and pay it from their own wallets."
+> 10. Hand off: "Reports cost 25 sats, settled to your Strike account.
+>    Lightning Enable mints and verifies; your API and auth are unchanged.
+>    Buyers' agents find the route with `discover_api` through the manifest at
+>    `/.well-known/l402-manifest.json` and pay it from their own wallets. The
+>    check reads challenge-compatible, fulfillment unverified."
