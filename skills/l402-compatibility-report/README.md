@@ -39,11 +39,13 @@ fails and how to fix it.
    of the preimage equals the payment hash in the token's macaroon (when it is
    in Lightning Labs format) and in the wallet receipt (when you supplied its
    `paymentHash`), that the paid retry returned the expected 2xx, and that
-   exactly one payment happened. `FULFILLMENT_VERIFIED` and
-   `PAYMENT_COMPATIBLE` both require that token.
-   Without it (the Python MCP server returns none), the result is
-   `INCONCLUSIVE` with `preimage_unchecked`; the receipt is supporting
-   evidence and never upgrades it.
+   exactly one payment happened. The macaroon's hash ties the preimage to the
+   server's challenge; for an opaque token the receipt's hash ties the token
+   to the wallet's recorded payment, not to the invoice, and the report names
+   which source it used. `FULFILLMENT_VERIFIED` and `PAYMENT_COMPATIBLE` both
+   require that token. Without it (the Python MCP server usually returns
+   none), the result is `INCONCLUSIVE` with `preimage_unchecked`; the receipt
+   is supporting evidence and never upgrades it.
 4. **Report:** Markdown or JSON, from `templates/report.md`, with one precise
    fix per defect.
 

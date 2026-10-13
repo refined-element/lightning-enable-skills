@@ -268,7 +268,11 @@ from a terminal.
 Pipe the whole token, `<macaroon>:<preimage>`; the script refuses a bare
 preimage. It checks that SHA-256 of the preimage equals the payment hash inside
 the token's macaroon identifier (Lightning Labs format) when it can read one,
-and equals the receipt's `paymentHash` when you supplied it. It also requires
+and equals the receipt's `paymentHash` when you supplied it. The macaroon's
+hash ties the preimage to the server's own challenge. For an opaque token the
+receipt's hash is the only comparison, and it ties the token to the wallet's
+recorded payment, not to the invoice. The report names the source it used in
+`paid_fulfillment.hash_source` and in its summary. It also requires
 an authorized retry with a reported 2xx status that meets the stated
 expectations, and exactly one payment recorded at or under the cap, with the
 tool's `paid_sats` and the receipts agreeing. It prints the payment hash and
@@ -336,8 +340,8 @@ Paid-check finding codes and marketplace checks, as the report prints them:
 | Classification | Means |
 |---|---|
 | `CHALLENGE_COMPATIBLE` | A valid unpaid L402 challenge and a priced invoice were observed. Paid fulfillment was not tested. |
-| `PAYMENT_COMPATIBLE` | The payment is confirmed: the wallet reports terminal success and SHA-256 of the preimage from the piped credential equals the invoice payment hash. The authorized retry then returned a definitive answer that is not a 2xx meeting the stated expectations, such as a `500`, a `403`, or another `402`. |
-| `FULFILLMENT_VERIFIED` | Request, 402, payment, authorized retry, expected 2xx result: all of it worked, and SHA-256 of the preimage from the piped credential matched the payment hash. Requires the credential. |
+| `PAYMENT_COMPATIBLE` | The payment is confirmed: the wallet reports terminal success and SHA-256 of the preimage from the piped credential equals the payment hash in the macaroon identifier, or, for an opaque token, the receipt's hash, which ties the token to the wallet's recorded payment, not to the invoice. The authorized retry then returned a definitive answer that is not a 2xx meeting the stated expectations, such as a `500`, a `403`, or another `402`. |
+| `FULFILLMENT_VERIFIED` | Request, 402, payment, authorized retry, expected 2xx result: all of it worked, and SHA-256 of the preimage from the piped credential matched the payment hash in the macaroon identifier, or, for an opaque token, the receipt's hash (the report names which). Requires the credential. |
 | `MARKETPLACE_READY` | `FULFILLMENT_VERIFIED`, plus every listing check and a paid amount equal to the quote. |
 | `INCOMPATIBLE` | A deterministic protocol or transport defect prevents the flow. |
 | `INCONCLUSIVE` | The check couldn't decide: the payment is pending or unknown (no terminal wallet result, or no preimage obtained), no credential was piped so the preimage went unchecked (`preimage_unchecked`; a receipt never upgrades this), the authorized retry was ambiguous (a timeout, a dropped connection, or no answer), the unpaid request timed out or hit a server error or a DNS failure, the target was refused, or the behavior was opaque. |
@@ -426,8 +430,10 @@ On the .NET server:
 >    amount, status, and context into `evidence.json`, then pipe the token with
 >    `printf '%s' '<token>' | python scripts/l402_check.py --evidence evidence.json --mode-a mode-a.json --credential-stdin`
 >    → `FULFILLMENT_VERIFIED`, with one gap for listing: publish `llms.txt` or
->    `openapi.json` at the host root. The Mode A and paid payment hashes
->    differ, which the report notes as information only.
+>    `openapi.json` at the host root. The token is opaque, so the report names
+>    the receipt's hash as its source: the token matches the wallet's recorded
+>    payment, not the invoice. The Mode A and paid payment hashes differ, which
+>    the report notes as information only.
 
 On the Python server, which returns no token, the same run ends `INCONCLUSIVE`
 with `preimage_unchecked`. The receipt is recorded as supporting evidence and

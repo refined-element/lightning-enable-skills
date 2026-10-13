@@ -8,6 +8,10 @@ one, on stdin. This module checks that SHA-256(preimage) equals every payment
 hash it can compare (the one inside a Lightning Labs macaroon identifier and
 the receipt's), that the authorized retry returned a 2xx meeting the stated
 expectations, and that exactly one payment was recorded at or under the cap.
+The macaroon identifier's hash, when the token is readable, ties the preimage
+to the server's own challenge; for an opaque token the receipt's hash is the
+only comparison, and it ties the token to the wallet's recorded payment, not
+to the invoice. The report names the source it used (``hash_source``).
 A receipt without the credential is supporting evidence only and never
 upgrades the classification. Nothing here pays, and no output suggests
 paying again.
@@ -337,6 +341,10 @@ def evaluate(evidence: dict, credential: str | None = None) -> dict:
             for p in payments
         ],
         "preimage_check": preimage_result,
+        # The hash that decided the preimage check: "macaroon identifier" (the server's own
+        # challenge) or "wallet receipt" (opaque token: ties the token to the wallet's
+        # recorded payment, not to the invoice). None when nothing was compared.
+        "hash_source": sources[0]["source"] if sources else None,
         "hash_sources": sources,
         "tool_paid_sats": tool.get("paid_sats"),
         "receipt_sats": receipt_sats,
@@ -365,7 +373,8 @@ def evaluate(evidence: dict, credential: str | None = None) -> dict:
         list(report.get("rerun", [])) + [PAID_RERUN_NOTES[f.code] for f in findings if f.code in PAID_RERUN_NOTES]
     ))
     report["classification"] = classification
-    report["summary"] = _summary(classification, total_paid, status, bool(payments) or paid_sats > 0)
+    report["summary"] = _summary(classification, total_paid, status, bool(payments) or paid_sats > 0,
+                                 sources[0]["source"] if sources else None)
     marketplace["listing_ready"] = classification == MARKETPLACE_READY
     marketplace["note"] = (
         "Every listing check passed and the paid amount matched the quote."
@@ -566,14 +575,25 @@ def _classify(mode_a, cap, tool, payments, paid_sats, receipt_sats, total_paid, 
     return MARKETPLACE_READY
 
 
-def _summary(classification: str, paid: int, status, payment_recorded: bool) -> str:
+MATCHED_BY = {
+    "macaroon identifier": "SHA-256 of the preimage matched the payment hash in the macaroon identifier",
+    "wallet receipt": (
+        "SHA-256 of the preimage matched the wallet receipt's payment hash (the token is opaque, so this ties "
+        "the token to the wallet's recorded payment, not to the invoice)"
+    ),
+}
+
+
+def _summary(classification: str, paid: int, status, payment_recorded: bool, hash_source: str | None = None) -> str:
+    matched = MATCHED_BY.get(hash_source, "SHA-256 of the preimage matched the payment hash")
     if classification == MARKETPLACE_READY:
-        return f"Paid {paid} sats; the authorized retry returned {status} and every listing check passed."
+        return (f"Paid {paid} sats; {matched}; the authorized retry returned {status} and every listing "
+                "check passed.")
     if classification == FULFILLMENT_VERIFIED:
-        return (f"Paid {paid} sats; SHA-256 of the preimage matched the payment hash and the authorized retry "
-                f"returned {status}, meeting the stated expectations.")
+        return (f"Paid {paid} sats; {matched}; the authorized retry returned {status}, meeting the stated "
+                "expectations.")
     if classification == PAYMENT_COMPATIBLE:
-        return (f"Paid {paid} sats and the preimage matched, but the authorized retry ({status}) was not a 2xx "
+        return (f"Paid {paid} sats and {matched}, but the authorized retry ({status}) was not a 2xx "
                 "meeting the stated expectations. Keep the payment hash; do not pay again.")
     if classification == INCOMPATIBLE:
         return "A protocol defect showed up in the paid flow. See Required fixes. Do not pay again."

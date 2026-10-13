@@ -28,6 +28,11 @@ SECTIONS = (
     "Evidence retained",
 )
 REDACTED = "[REDACTED]"
+HASH_SOURCE_NOTES = {
+    "macaroon identifier": "the macaroon identifier's payment hash (the server's own challenge)",
+    "wallet receipt": ("the wallet receipt's payment hash (the token is opaque: this ties the token to the "
+                       "wallet's recorded payment, not to the invoice)"),
+}
 # Values left as they are: already redacted (safe_url writes REDACTED), or the
 # "..." placeholder in fix text such as macaroon="...".
 _KEEP_VALUES = frozenset({"REDACTED", REDACTED, "..."})
@@ -282,6 +287,7 @@ def _paid(report: dict) -> list[str]:
         f"Preimage check: {p['preimage_check']}"
         + ("" if not p["hash_sources"]
            else " (" + "; ".join(f"[{s['source']}] {_yes(s['match'])}" for s in p["hash_sources"]) + ")"),
+        "Hash source: " + HASH_SOURCE_NOTES.get(p.get("hash_source"), "none compared"),
         "Authorized retry status: " + (str(p["status"]) if p["status"] is not None else "not reported"),
         f"Content type: {p['content_type'] or 'not reported'}; body length: "
         + (str(p["body_length"]) if p["body_length"] is not None else "not reported"),

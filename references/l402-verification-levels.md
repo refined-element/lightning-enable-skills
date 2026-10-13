@@ -13,8 +13,8 @@ Use these names exactly, in capitals, as written.
 | Classification | Means | Needs |
 |---|---|---|
 | `CHALLENGE_COMPATIBLE` | A valid unpaid L402 challenge and a priced invoice were observed. Paid fulfillment was not tested. | One unpaid request. |
-| `PAYMENT_COMPATIBLE` | The payment is confirmed: the wallet reports terminal success and the SHA-256 hash of the preimage from the credential equals the invoice payment hash. The authorized retry then returned a definitive answer that is not a 2xx meeting the stated expectations, such as a `500`, a `403`, or another `402`, so delivery of the resource was not proven. | One paid call, the credential from it (its preimage must hash to the payment hash), and a definitive retry answer that is not a 2xx meeting the stated expectations. A wallet receipt alone never suffices. |
-| `FULFILLMENT_VERIFIED` | The whole flow worked: request, 402, payment, authorized retry, expected 2xx result. | One paid call, the credential from it (its preimage must hash to the payment hash), and a 2xx result that meets the stated expectations. A wallet receipt alone never suffices. |
+| `PAYMENT_COMPATIBLE` | The payment is confirmed: the wallet reports terminal success and the SHA-256 hash of the preimage from the credential equals the payment hash from the source the report names (see [Which payment hash](#which-payment-hash)). The authorized retry then returned a definitive answer that is not a 2xx meeting the stated expectations, such as a `500`, a `403`, or another `402`, so delivery of the resource was not proven. | One paid call, the credential from it (its preimage must hash to the payment hash), and a definitive retry answer that is not a 2xx meeting the stated expectations. A wallet receipt alone never suffices. |
+| `FULFILLMENT_VERIFIED` | The whole flow worked: request, 402, payment, authorized retry, expected 2xx result, with the preimage matched against the payment hash from the source the report names. | One paid call, the credential from it (its preimage must hash to the payment hash), and a 2xx result that meets the stated expectations. A wallet receipt alone never suffices. |
 | `MARKETPLACE_READY` | `FULFILLMENT_VERIFIED`, plus public https, a priced mainnet invoice, a 402 for a bodyless request within 8 seconds, a stable URL, `openapi.json` or `llms.txt` at the host root, and a paid amount equal to the quote. | Everything above. |
 | `INCOMPATIBLE` | A deterministic protocol or transport defect prevents the flow. | Any check. |
 | `INCONCLUSIVE` | The check couldn't decide: the payment is pending or unknown (no terminal wallet result, or no preimage obtained), the preimage went unchecked because no credential was available (`preimage_unchecked`; a wallet receipt never upgrades this), the authorized retry was ambiguous (a timeout, a dropped connection, or no answer), a server error, a DNS failure, an opaque behavior, or a refused target. | Any check. |
@@ -22,6 +22,18 @@ Use these names exactly, in capitals, as written.
 A read-only check stops at `CHALLENGE_COMPATIBLE`. Never call an endpoint
 "L402 verified", or "verified" in any form, when only the unpaid challenge was
 checked. A `402` is a quote, not proof that anything gets delivered.
+
+### Which payment hash
+
+The preimage is compared with one of two hashes, and a report names the one it
+used:
+
+- **The macaroon identifier's payment hash,** when the token is readable
+  (Lightning Labs format). The identifier is the server's own challenge, so a
+  match ties the preimage to the invoice the server issued.
+- **The wallet receipt's payment hash,** for an opaque token. The wallet
+  records it as SHA-256 of the same preimage, so a match ties the token to the
+  wallet's recorded payment, not to the invoice.
 
 ## Classic L402 and other 402 schemes
 
@@ -68,10 +80,10 @@ what you know:
 
 - **Payment confirmed, definitive answer.** The wallet reports terminal
   success, the SHA-256 hash of the preimage from the credential equals the
-  invoice payment hash,
-  and the authorized retry returned a definitive answer that is not a 2xx
-  meeting the stated expectations, such as a `500`, a `403`, or another
-  `402`. Classify the check `PAYMENT_COMPATIBLE`.
+  payment hash from the named source (see Which payment hash), and the
+  authorized retry returned a definitive answer that is not a 2xx meeting the
+  stated expectations, such as a `500`, a `403`, or another `402`. Classify
+  the check `PAYMENT_COMPATIBLE`.
 - **Payment or retry ambiguous.** The payment is pending or unknown (no
   terminal wallet result, or no preimage obtained), the preimage went
   unchecked because no credential was available, or the retry outcome is

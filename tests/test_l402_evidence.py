@@ -110,6 +110,44 @@ def test_lightning_labs_macaroon_hash_is_compared_alongside_the_receipt():
     ]
 
 
+def test_an_opaque_token_names_the_receipt_as_the_hash_source_and_never_claims_the_invoice():
+    evidence, credential = evidence_for("fulfilled-2xx")
+    report = l402_evidence.evaluate(evidence, credential)
+    assert report["classification"] == "FULFILLMENT_VERIFIED"
+    assert report["paid_fulfillment"]["hash_source"] == "wallet receipt"
+    assert "wallet receipt's payment hash" in report["summary"]
+    assert "not to the invoice" in report["summary"]
+    markdown = l402_report.to_markdown(report)
+    assert "Hash source: the wallet receipt's payment hash" in markdown
+    assert "not to the invoice" in markdown
+
+
+def test_a_readable_macaroon_names_the_macaroon_identifier_as_the_hash_source():
+    evidence, credential = evidence_for("fulfilled-2xx")
+    macaroon = build_v2(lightning_labs_identifier(SEED_1_HASH), [])
+    report = l402_evidence.evaluate(evidence, f"L402 {macaroon}:{SEED_1_PREIMAGE}")
+    assert report["paid_fulfillment"]["hash_source"] == "macaroon identifier"
+    assert "payment hash in the macaroon identifier" in report["summary"]
+    assert "wallet receipt" not in report["summary"]
+    assert "Hash source: the macaroon identifier's payment hash" in l402_report.to_markdown(report)
+
+
+@pytest.mark.parametrize("status, classification", [(200, "MARKETPLACE_READY"), (500, "PAYMENT_COMPATIBLE")])
+def test_every_confirmed_summary_names_the_hash_source(status, classification):
+    evidence, credential = evidence_for("fulfilled-2xx", root_metadata_ok=True)
+    evidence["tool_result"]["status_code"] = status
+    report = l402_evidence.evaluate(evidence, credential)
+    assert report["classification"] == classification
+    assert "wallet receipt's payment hash" in report["summary"]
+
+
+def test_without_a_credential_there_is_no_hash_source():
+    evidence, _ = evidence_for("fulfilled-2xx")
+    report = l402_evidence.evaluate(evidence, None)
+    assert report["paid_fulfillment"]["hash_source"] is None
+    assert "Hash source: none compared" in l402_report.to_markdown(report)
+
+
 def test_lightning_labs_macaroon_alone_is_a_comparable_hash():
     evidence, credential = evidence_for("credential-present-no-comparable-hash")
     macaroon = build_v2(lightning_labs_identifier(SEED_1_HASH), [])
