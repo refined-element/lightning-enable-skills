@@ -627,8 +627,9 @@ public HTTPS URL, and only as an offer; no answer means no.
   re-run Amazap's checks. The order matters: the chosen price goes in before
   the gate's read-only check (see Gate). A 1-sat token from step 10 then fails
   the report's `stable_price` check against the new quote, so its result is
-  `FULFILLMENT_VERIFIED`, which is ready; the agent never pays again to reach
-  `MARKETPLACE_READY`.
+  at most `FULFILLMENT_VERIFIED`, which is ready; if the token no longer
+  verifies after the price change, the result is lower and not ready. Either
+  way the agent never pays again to reach `MARKETPLACE_READY`.
 - **The human decides.** Without the human's explicit approval, never submit
   the listing, accept seller terms, provide or infer a contact email, opt into
   announcements, publish a Nostr handle, change the endpoint's price, or claim
