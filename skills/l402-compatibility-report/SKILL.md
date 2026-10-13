@@ -305,7 +305,8 @@ The report also compares the Mode A invoice's payment hash with the paid
 payment hash, as information only. A mismatch is normal, because a server may
 mint a fresh invoice for each 402, and it is never a finding.
 
-Paid-check finding codes, and the listing checks the paid check adds, as the report prints them:
+Paid-check finding codes, and the listing checks the paid check adds, as the
+report prints them:
 
 - **Nothing to evaluate (`INCONCLUSIVE`):** `paid_check_without_challenge` (the
   read-only check wasn't `CHALLENGE_COMPATIBLE`), `awaiting_confirmation` (the

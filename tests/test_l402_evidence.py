@@ -465,8 +465,12 @@ def test_a_fulfilled_endpoint_tops_out_at_fulfillment_verified():
         assert report["classification"] == "FULFILLMENT_VERIFIED"
         assert "marketplace_gaps" not in paid_codes(report)
         assert "marketplace" not in report["summary"].lower()
+        # Listing readiness still needs every listing check, host-root metadata included.
+        assert report["marketplace"]["listing_ready"] is metadata
     unproven, _ = evidence_for("preimage-not-surfaced", root_metadata_ok=True)
-    assert l402_evidence.evaluate(unproven, None)["classification"] == "INCONCLUSIVE"
+    unproven_report = l402_evidence.evaluate(unproven, None)
+    assert unproven_report["classification"] == "INCONCLUSIVE"
+    assert unproven_report["marketplace"]["listing_ready"] is False
 
 
 @pytest.mark.parametrize("change", ["price", "deferred"])
@@ -481,6 +485,8 @@ def test_listing_checks_never_lower_a_fulfilled_endpoint(change):
     report = l402_evidence.evaluate(evidence, credential)
     assert report["classification"] == "FULFILLMENT_VERIFIED"
     assert "marketplace_gaps" not in paid_codes(report)
+    # The failed listing check still blocks listing readiness.
+    assert report["marketplace"]["listing_ready"] is False
 
 
 # 8. Paid success then ambiguous fulfillment: INCONCLUSIVE, correlators kept, no repay.
