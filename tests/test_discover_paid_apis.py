@@ -997,7 +997,15 @@ ENDINGS = {
     "Amazap's tools aren't listed": ("`GET https://amazap.com/api/products`", "Never claim Amazap MCP access."),
     "The user already has the URL": ("`pay-l402-anywhere`", "never for a listing Amazap surfaced"),
     "An Amazap row is paused, degraded, or failing": ("never buy it, even with `buyable: true`",),
-    "Too few credits for the trial": ("Ask before `top_up`", "its own `pay_invoice` payment", "outside the user's cap"),
+    "Too few credits for the trial": (
+        "Ask before `top_up`",
+        "only when the human explicitly asks to pay it from the MCP wallet",
+        "its own `pay_invoice` payment",
+        "outside the user's cap",
+    ),
+    "An Amazap row shows `buyable: false`": ("unless it has `hidden: true`; a hidden row is dropped.", "Never buy it."),
+    # Sats limits may keep small payments working; never promise that they do.
+    "Payments refused while no BTC price is available": ("USD limits fail closed.", "may keep working"),
 }
 
 
@@ -1014,6 +1022,8 @@ def test_what_can_go_wrong_covers_every_ending(symptom):
     SECRETS,
     "never buy a second candidate after a paid failure without asking",
     "its own `pay_invoice` payment",
+    # Step 6: the MCP wallet pays a top-up only on the human's explicit ask.
+    "Pay a top-up from the MCP wallet only when the human explicitly asks to pay it from the MCP wallet.",
     "the user's cap doesn't cover it",
     "Before any retry, check",
     SENSITIVE,
@@ -1029,7 +1039,10 @@ def test_example_runs_one_amazap_path_and_contrasts_the_direct_path():
         "Do you accept them and go ahead?",
         "the order id `<order id>`",
         "Fulfilled.",
+        "The names, the trust label, and the sats figures are illustrative, not Amazap terms or data.",
+        "The row shows `buyable: true` and is neither paused, degraded, nor failing.",
         "Had the human picked a Lightning Enable registry result",
+        "after reading its manifest and confirming a GET endpoint",
         'access_l402_resource(url="<endpoint url>", max_sats=<the listed price>)',
     ):
         assert phrase in example, f"the example is missing {phrase!r}"

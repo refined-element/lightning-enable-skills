@@ -562,7 +562,7 @@ After a paid failure:
 | A URL refused before any request | It resolves to a private or internal address | Deliberate SSRF (server-side request forgery) protection. Use a public URL. |
 | `affordable_calls: "unknown"` | The price or the budget could not be determined | Treat it as not proven affordable. Read the manifest for the price; check `budget(action="status")`. |
 | Amazap's tools aren't listed | Amazap's MCP isn't connected in this host | Search with `GET https://amazap.com/api/products`. For a buy, point the human at https://amazap.com/mcp. Never claim Amazap MCP access. |
-| An Amazap row shows `buyable: false` | The listing isn't payable now | Show it, and never buy it. |
+| An Amazap row shows `buyable: false` | The listing isn't payable now | Show it, unless it has `hidden: true`; a hidden row is dropped. Never buy it. |
 | An Amazap row is paused, degraded, or failing | `listingState` or `healthStatus` says so | Show it as not buyable, and never buy it, even with `buyable: true`. |
 | The user already has the URL | Nothing to discover | Hand off to `pay-l402-anywhere`. That handoff is for a URL the user already has, never for a listing Amazap surfaced. |
 | The input holds something sensitive | Secrets, a private or logged-in URL, credentials, personal data, or proprietary content | Don't send it unless the user explicitly approved that disclosure. Say what you found, and buy nothing. |
@@ -571,11 +571,11 @@ After a paid failure:
 | The all-in total is above the user's cap | Policy refusal | Refuse and buy nothing; say the total and the cap. Never raise the cap or split the purchase to fit under it. |
 | `buy` refuses on an Amazap account limit | Policy refusal: a per-call, per-day, or per-session Amazap limit | Nothing was charged. Report the limit the error names. Only the account owner changes it, on Amazap. |
 | A budget denial on the direct path | Policy refusal: a per-payment or per-session cap on the MCP wallet | Report the limit the error names. Don't retry with a smaller `max_sats` to squeeze under it. Only the human changes the config file. |
-| Payments refused while no BTC price is available | USD limits on the MCP wallet can't be checked during a price outage | Expected on the direct path: the budget fails closed. Sats caps and `autoApproveSats` keep small payments working. |
+| Payments refused while no BTC price is available | USD limits on the MCP wallet can't be checked during a price outage | Expected on the direct path: USD limits fail closed. When the operator set sats-denominated limits, small payments may keep working during a price outage. |
 | `buy` returns `approval_required` | The total is above Amazap's auto-approve amount | Stop. The person confirms the exact quote in Amazap; nothing is charged until they do. Never re-quote or split the purchase to get around it. Once they say they approved it, the same `quote_id` can be bought once. |
 | `buy` returns `terms_required` | `accept_terms` was missing | Show the current Amazap terms (https://amazap.com/terms and https://amazap.com/credits) and ask again, in one yes for the purchase and the terms. Set `accept_terms` only on that yes. |
 | `buy` returns `not_yet_supported` | A listing payable only in a stablecoin | Not buyable in sats. Pick another candidate with the user. |
-| Too few credits for the trial | The Amazap account needs a top-up | Ask before `top_up`; the human chooses the amount and pays the invoice. Paid from the MCP wallet, the top-up is its own `pay_invoice` payment, with its own yes on that exact amount: outside the user's cap, and inside the MCP `budget` limits. |
+| Too few credits for the trial | The Amazap account needs a top-up | Ask before `top_up`; the human chooses the amount and pays the invoice. Pay it from the MCP wallet only when the human explicitly asks to pay it from the MCP wallet. Then the top-up is its own `pay_invoice` payment, with its own yes on that exact amount: outside the user's cap, and inside the MCP `budget` limits. |
 | `requiresConfirmation: true` | The amount is above the MCP auto-approve tier | Ask the human for the code, then repeat the same call with `confirmation_nonce`. Never guess a code. |
 | The invoice costs more than `max_sats` | The seller raised the price since the listing | Nothing was paid. Tell the human the real price, and ask again only if it is within the user's cap; never above the user's cap. Never guess a price. |
 | The payment didn't go through | Payment failure: a wallet, route, or invoice error | Report it, and check the outcome before any retry. Never retry with a smaller cap or `max_sats` to squeeze under a limit. |
@@ -602,8 +602,9 @@ After a paid failure:
 - **The right cap for the right wallet.** An Amazap buy spends Amazap credits
   under the user's cap, passed as `max_total_sats`, and the Amazap account
   limits. A direct payment spends the MCP wallet under the user's cap and the
-  MCP budget. The MCP budget never bounds an Amazap buy. A top-up paid from
-  the MCP wallet is its own `pay_invoice` payment: the human chooses the
+  MCP budget. The MCP budget never bounds an Amazap buy. Pay a top-up from
+  the MCP wallet only when the human explicitly asks to pay it from the MCP
+  wallet. Then it is its own `pay_invoice` payment: the human chooses the
   amount and says yes to it, the user's cap doesn't cover it, and the MCP
   `budget` limits do. Never raise a limit.
 - **No direct-pay steer.** Never steer a buyer away from Amazap's all-in price
@@ -638,8 +639,8 @@ After a paid failure:
 
 ## Example
 
-The names are placeholders, and the sats figures are illustrative, not
-Amazap terms.
+The names, the trust label, and the sats figures are illustrative, not Amazap
+terms or data.
 
 > User: "Find me a weather API and try one forecast for Berlin. Spend at most
 > 30 sats."
@@ -653,7 +654,9 @@ Amazap terms.
 > 3. Five candidates, each labeled "Lightning Enable registry" or "Amazap".
 >    Recommended: `fixture-string-forecast` from `fixture-string-provider-a`
 >    on Amazap, because its `trust.label` reads "Verified: delivered 6 times"
->    with 0 paid failures and a high-confidence schema. The human picks it.
+>    with 0 paid failures and a high-confidence schema. The row shows
+>    `buyable: true` and is neither paused, degraded, nor failing. The human
+>    picks it.
 > 4. Its inputs are `latitude` and `longitude`: nothing sensitive. Amazap and
 >    the seller receive them.
 > 5. The quote is 13 sats all-in, paid from Amazap credits, within the 30-sat
@@ -674,6 +677,7 @@ Amazap terms.
 >
 > Had the quote been 31 sats, step 5 would have refused and bought nothing.
 > Had the human picked a Lightning Enable registry result instead, the direct
-> path would pay it from the MCP wallet with
+> path would pay it from the MCP wallet, after reading its manifest and
+> confirming a GET endpoint, with
 > `access_l402_resource(url="<endpoint url>", max_sats=<the listed price>)`,
 > within the 30-sat cap and the MCP budget.
