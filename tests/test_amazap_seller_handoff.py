@@ -67,9 +67,9 @@ REFERENCE_SECTIONS = (
 )
 
 # The seller skills whose Amazap step is guarded; Tasks 2 to 4 add one each.
-SELLER_SKILLS: tuple[str, ...] = ()
+SELLER_SKILLS: tuple[str, ...] = ("producer-setup",)
 # The seller skills whose endpoint is a proxy on api.lightningenable.com.
-PROXY_SKILLS: tuple[str, ...] = ()
+PROXY_SKILLS: tuple[str, ...] = ("producer-setup",)
 HANDOFF_TARGETS = ("reference", *SELLER_SKILLS)
 
 STEP_HEADING = re.compile(r"^### (\d+)\. Optional: list on Amazap[ \t]*$", re.MULTILINE)
@@ -355,3 +355,67 @@ def test_handoff_hard_codes_no_amazap_figures(target):
 @pytest.mark.parametrize("target", HANDOFF_TARGETS)
 def test_handoff_has_no_em_dashes(target):
     assert EM_DASH not in raw_handoff_text(target), f"{target} uses an em-dash"
+
+
+# --- Each seller skill's step and README -----------------------------------
+
+
+@pytest.mark.parametrize("skill", SELLER_SKILLS)
+def test_step_comes_right_after_the_hand_off(skill):
+    text = read(SKILLS_DIR / skill / "SKILL.md")
+    hand_off = HAND_OFF_HEADING.search(text)
+    step = STEP_HEADING.search(text)
+    assert hand_off and step, f"{skill} needs both a Hand off step and the Amazap step"
+    assert hand_off.start() < step.start()
+    assert int(step.group(1)) == int(hand_off.group(1)) + 1, (
+        f"{skill}: the Amazap step should be numbered right after Hand off"
+    )
+
+
+@pytest.mark.parametrize("skill", SELLER_SKILLS)
+def test_step_links_the_reference_the_seller_page_and_the_report(skill):
+    step = amazap_step(skill)
+    assert REFERENCE_URL in step, "link the reference by its GitHub URL; skills install one folder"
+    assert "https://amazap.com/sell" in step
+    assert "(../l402-compatibility-report/)" in step
+
+
+@pytest.mark.parametrize("skill", SELLER_SKILLS)
+def test_step_runs_the_read_only_check_and_pays_at_most_once(skill):
+    step = flat(amazap_step(skill))
+    assert "python scripts/l402_check.py <url> --json" in step
+    assert "never twice" in step
+    assert "`GET` or `HEAD` only" in step
+
+
+@pytest.mark.parametrize("skill", SELLER_SKILLS)
+def test_step_names_amazap_tools_only_when_the_host_lists_them(skill):
+    step = flat(amazap_step(skill))
+    assert "`list_my_endpoint`" in step and "when the host lists it" in step
+
+
+@pytest.mark.parametrize("skill", SELLER_SKILLS)
+def test_step_has_no_hype_words(skill):
+    hits = HYPE.findall(amazap_step(skill))
+    assert not hits, f"{skill} uses {hits}"
+
+
+@pytest.mark.parametrize("skill", PROXY_SKILLS)
+def test_proxy_steps_send_the_seller_to_fill_the_fields_by_hand(skill):
+    step = flat(amazap_step(skill))
+    assert "`api.lightningenable.com`" in step
+    assert "title, description, category, and example parameters by hand" in step
+
+
+@pytest.mark.parametrize("skill", SELLER_SKILLS)
+def test_readme_describes_the_optional_step(skill):
+    raw = readme_step(skill)
+    text = flat(raw)
+    for phrase in (REFERENCE_URL, CUSTODY, "contact email", "submit it yourself",
+                   "(../l402-compatibility-report/)"):
+        assert phrase in text, f"{skill}/README.md is missing {phrase!r}"
+    assert EM_DASH not in raw
+    assert not EMAIL.findall(raw)
+    for match in LISTING_CLAIM.finditer(text):
+        before = text[max(0, match.start() - 80):match.start()].lower()
+        assert any(word in before for word in NEGATIONS), match.group(0)

@@ -363,6 +363,72 @@ Tell the human, in this order:
 State this as fact, not as a sales pitch, and do not quote plan prices from
 memory — point at [lightningenable.com](https://www.lightningenable.com) instead.
 
+### 7. Optional: list on Amazap
+
+[Amazap](https://amazap.com/sell) is a storefront where agents find and buy
+L402 endpoints. Listing there is optional distribution, and the human decides.
+Offer it only after the self-test, and only as an offer; no answer means no.
+
+- **Existing row first.** A published endpoint can already be in Amazap's
+  catalog, imported from 402 Index. Search
+  `GET https://amazap.com/api/products?q=<service name or host>`. Search skips
+  hidden rows, so when the human knows a slug, also read
+  `GET https://amazap.com/api/products/<slug>`, and look for the service in
+  https://amazap.com/sitemap.xml. If a row exists, report its `hidden`,
+  `listingState`, and `healthStatus`, and let the human decide with Amazap
+  whether to refresh it. Never draft a duplicate listing.
+- **Gate.** Run [`l402-compatibility-report`](../l402-compatibility-report/)
+  on the endpoint URL with the method you would list:
+  `python scripts/l402_check.py <url> --json --max-sats <cap> --output mode-a.json`
+  from that skill's folder, with the human's cap in sats (add
+  `--method POST` for a `POST` route). Its paid check reads that saved report.
+  Take the `classification` field from the JSON. Offer the listing as ready
+  only at `FULFILLMENT_VERIFIED` or `MARKETPLACE_READY`; `MARKETPLACE_READY`
+  is the target. At `CHALLENGE_COMPATIBLE`, say "challenge-compatible,
+  fulfillment unverified" and stop. A private, loopback, link-local, or
+  non-HTTPS URL, a `200` to an unpaid request, or a `400`, `415`, or `422` to a
+  request with no body is not listing-ready.
+- **Pay once.** Pay for the gate once, never twice. If step 5 did not pay this
+  exact URL, run that skill's paid check once, with the human's yes. If step 5
+  paid this exact URL with the same method through `access_l402_resource`,
+  record that call as the evidence, its token piped on stdin, instead of
+  paying again. If that token is gone, or step 5 paid this URL with a
+  different method, the listing is not ready; do not pay again. Without the
+  token the paid check ends `INCONCLUSIVE`, so a paid check through the Python
+  MCP server is never offered as ready. The paid check runs on `GET` or `HEAD`
+  only, so a `POST` route stays at `CHALLENGE_COMPATIBLE` here and is never
+  offered as ready.
+- **Draft, never publish.** Call Amazap's read-only `list_my_endpoint` tool
+  when the host lists it; otherwise give the human https://amazap.com/sell and
+  a draft built from the reference's listing-copy template. Show the draft
+  beside the current Amazap seller terms, linked live.
+- **Fields by hand.** On `api.lightningenable.com`, the human supplies the
+  title, description, category, and example parameters by hand: Amazap's
+  prefill reads the host root, which describes Lightning Enable, not this
+  proxy. For the same reason the host-root metadata check doesn't count for a
+  proxy there, so report it as `FULFILLMENT_VERIFIED` at most, even when the
+  report says `MARKETPLACE_READY`.
+- **Two prices.** Show the seller price (the invoice amount) and Amazap's
+  all-in shopper price separately, never added together; the all-in figure
+  comes from Amazap's draft or page. Amazap locks the price at listing time,
+  so after any price change the seller must re-run Amazap's checks.
+- **The human decides.** Without the human's explicit approval, never submit
+  the listing, accept seller terms, provide or infer a contact email, opt into
+  announcements, publish a Nostr handle, change the endpoint's price, or claim
+  a commercial relationship among any of Lightning Enable, Amazap, or Amboss.
+  The human enters the contact email and submits. Submitting publishes the
+  listing automatically once Amazap's checks pass, so the human reviews the
+  email, the copy, both prices, and the terms first.
+- **Read back.** Never call the endpoint listed or live until you have read
+  its product page or `GET https://amazap.com/api/products/<slug>` and checked
+  `hidden`, `listingState`, and `healthStatus`. Call it listed only when the
+  row has `hidden: false` or the page shows the listing as buyable; otherwise
+  report those three fields. Listed is not verified paid delivery.
+
+Lightning Enable does not hold funds; the payment provider facilitates custody
+and settlement. Full rules, including the listing-copy template:
+[Amazap marketplace: Seller handoff](https://github.com/refined-element/lightning-enable-skills/blob/main/references/amazap-marketplace.md#seller-handoff).
+
 ## What can go wrong
 
 ### How a producer error arrives
