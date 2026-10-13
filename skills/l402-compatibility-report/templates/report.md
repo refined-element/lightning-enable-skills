@@ -1,4 +1,4 @@
-# L402 Compatibility Report
+# Lightning Enable L402 Compatibility Report
 
 - Target: <METHOD> <redacted-safe URL>
 - Checked at: <UTC timestamp, YYYY-MM-DDTHH:MM:SSZ>

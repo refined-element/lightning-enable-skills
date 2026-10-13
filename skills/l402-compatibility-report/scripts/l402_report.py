@@ -152,7 +152,7 @@ def _value(value) -> str:
 def to_markdown(report: dict, secrets: set[str] | frozenset[str] = frozenset()) -> str:
     target = report["target"]
     lines = [
-        "# L402 Compatibility Report",
+        "# Lightning Enable L402 Compatibility Report",
         "",
         f"- Target: {target['method']} {target['url']}",
         f"- Checked at: {report['checked_at']}",

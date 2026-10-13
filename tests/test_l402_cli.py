@@ -28,7 +28,7 @@ def test_markdown_is_the_default_and_json_is_available():
     fixture = support.load_fixture("le-test-ping")
     code, markdown = run([fixture["request"]["url"]], fixture)
     assert code == 0
-    assert markdown.startswith("# L402 Compatibility Report\n")
+    assert markdown.startswith("# Lightning Enable L402 Compatibility Report\n")
     code, text = run([fixture["request"]["url"], "--json"], fixture)
     assert code == 0
     assert json.loads(text)["classification"] == "CHALLENGE_COMPATIBLE"

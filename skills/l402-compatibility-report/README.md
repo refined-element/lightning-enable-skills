@@ -1,6 +1,6 @@
 # l402-compatibility-report
 
-**Find out exactly how far an endpoint gets through L402, without spending a sat, then test paid delivery with one approved payment.**
+**The Lightning Enable L402 compatibility report: find out exactly how far an endpoint gets through L402, without spending a sat, then test paid delivery with one approved payment.**
 
 An [L402](https://github.com/lightninglabs/L402) endpoint answers an unpaid
 request with `402 Payment Required`, a Lightning invoice, and a macaroon, and
@@ -21,11 +21,14 @@ fails and how to fix it.
 - **Multi-scheme aware.** Servers that offer `L402` beside `Payment`, `LSAT`, or
   `x402` are normal; the report classifies the L402 challenge and lists the
   rest, and never treats `Payment` as L402.
-- **Marketplace-minded.** It checks what a listing probe such as Amazap's needs:
-  a 402 for a bodyless request within 8 seconds, a priced mainnet invoice, and
-  `openapi.json` or `llms.txt` at the host root.
+- **Proof of payment, not a receipt.** The paid check matches SHA-256 of the
+  preimage to the payment hash, from the server's own macaroon when it can
+  read one; a wallet receipt alone never upgrades the result.
 - **Secret-safe output.** The report holds the payment hash and the amount,
   never an invoice string, macaroon, preimage, or authorization header.
+- **Optional marketplace profiles.** What a marketplace expects beyond L402,
+  such as Amazap's listing probe (a 402 for a bodyless request within 8
+  seconds), is reported in a separate profile that never changes the result.
 
 ## How it works
 
@@ -62,8 +65,8 @@ fails and how to fix it.
 > "Run an L402 compatibility report on https://api.example.com/forecast. Don't
 > pay anything."
 
-> "Check my endpoint before I list it on Amazap, and if the challenge is good,
-> test it for real for up to 10 sats."
+> "Check my endpoint, and if the challenge is good, test it for real for up to
+> 10 sats."
 
 ## Safety
 

@@ -20,7 +20,7 @@ def both(report, secrets):
 
 
 def test_template_lists_the_spec_sections_in_order():
-    assert headings(TEMPLATE.read_text(encoding="utf-8")) == ["L402 Compatibility Report", *l402_report.SECTIONS]
+    assert headings(TEMPLATE.read_text(encoding="utf-8")) == ["Lightning Enable L402 Compatibility Report", *l402_report.SECTIONS]
 
 
 def test_template_classification_line_names_the_five_classifications():
