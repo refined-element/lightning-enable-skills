@@ -56,9 +56,9 @@
       "priceSats": 5,
       "paymentAsset": "BTC",
       "paymentNetwork": "Lightning",
-      "healthStatus": "untested",
-      "listingSource": "self-registered",
-      "origin": "amazap-seller",
+      "healthStatus": "failing",
+      "listingSource": "imported",
+      "origin": "402index",
       "inputSchema": {
         "fields": [
           {"name": "id", "type": "string", "required": true, "in": "path"}
@@ -68,7 +68,7 @@
       "buyable": false,
       "lastPaidSuccessAt": null,
       "hidden": true,
-      "listingState": "paused",
+      "listingState": "healthy",
       "paidSuccesses": 0,
       "paidFailures": 0,
       "schemaConfidence": "high",
@@ -76,7 +76,7 @@
         "level": "limited",
         "label": "Limited track record",
         "short": "Limited record",
-        "facts": "Delivery health: untested. Paid successes: 0. Paid failures: 0. Schema confidence: high."
+        "facts": "Delivery health: failing. Paid successes: 0. Paid failures: 0. Schema confidence: high."
       },
       "feeBps": 2000,
       "feeMinSats": 3,

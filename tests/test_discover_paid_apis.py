@@ -339,7 +339,7 @@ def test_fixture_covers_the_rows_the_skill_must_handle():
     # listingState and buyable on every row instead of trusting search.
     leads = {leading_label(row["trust"]["label"]) for row in rows()}
     assert {"Verified", "Having trouble"} <= leads
-    # Every live Verified label carried detail; quote it whole, never trimmed.
+    # Every live Verified label carried detail as of 2026-10-12; quote it whole, never trimmed.
     labels = [row["trust"]["label"] for row in rows()]
     assert any(leading_label(label) == "Verified" and label != "Verified" for label in labels)
     assert any(row["buyable"] is False and row["listingState"] == "paused" for row in rows())
