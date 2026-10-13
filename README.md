@@ -66,6 +66,10 @@ skills move the same protocol into your own code, and `l402-compatibility-report
 checks the result: the unpaid challenge first, then, with your yes, one paid
 call. Shared rules for those checks live in
 [`references/l402-verification-levels.md`](references/l402-verification-levels.md).
+After a paid self-test, `producer-setup`, `create-l402-proxy`, and
+`l402-server-integration` can draft an optional listing on
+[Amazap](https://amazap.com/sell) that you review and submit yourself; the
+rules are in [`references/amazap-marketplace.md`](references/amazap-marketplace.md).
 Lightning Enable does not hold funds; the wallet or the payment provider
 facilitates custody and settlement.
 

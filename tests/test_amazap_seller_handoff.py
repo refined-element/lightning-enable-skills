@@ -508,3 +508,14 @@ def test_native_step_targets_marketplace_ready_without_the_proxy_cap(skill):
     for phrase in ("`FULFILLMENT_VERIFIED` at most", "`FULFILLMENT_VERIFIED` is the ceiling",
                    "not the host alone", "`api.lightningenable.com`"):
         assert phrase not in step, f"{skill} carries the proxy-only rule {phrase!r}"
+
+
+ROOT_README = REPO_ROOT / "README.md"
+
+
+def test_root_readme_mentions_the_step_in_a_sentence_not_a_row():
+    text = read(ROOT_README)
+    assert "(references/amazap-marketplace.md)" in text
+    assert "https://amazap.com/sell" in text
+    rows = [line for line in text.splitlines() if line.startswith("|") and "amazap" in line.lower()]
+    assert not rows, f"Amazap is an optional step, not a skill; no table row: {rows}"
