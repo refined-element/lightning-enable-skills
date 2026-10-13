@@ -415,6 +415,27 @@ def test_proxy_steps_send_the_seller_to_fill_the_fields_by_hand(skill):
 
 
 @pytest.mark.parametrize("skill", SELLER_SKILLS)
+@pytest.mark.parametrize("phrase", (
+    "Never draft a duplicate",
+    "before any paid gate",
+    "No answer means no",
+    "hidden: false",
+))
+def test_step_checks_the_row_asks_first_and_reads_back_visibility(skill, phrase):
+    assert phrase in flat(amazap_step(skill)), f"{skill} is missing {phrase!r}"
+
+
+@pytest.mark.parametrize("skill", PROXY_SKILLS)
+@pytest.mark.parametrize("phrase", (
+    "`FULFILLMENT_VERIFIED` at most",
+    "`FULFILLMENT_VERIFIED` is the ceiling",
+    "endpoint URL, not the host",
+))
+def test_proxy_steps_cap_readiness_and_match_rows_by_endpoint_url(skill, phrase):
+    assert phrase in flat(amazap_step(skill)), f"{skill} is missing {phrase!r}"
+
+
+@pytest.mark.parametrize("skill", SELLER_SKILLS)
 def test_readme_describes_the_optional_step(skill):
     raw = readme_step(skill)
     text = flat(raw)

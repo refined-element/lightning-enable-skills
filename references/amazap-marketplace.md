@@ -143,9 +143,10 @@ contract (`report_version` 1), not from the Markdown:
 - **`FULFILLMENT_VERIFIED`:** ready, once items 6, 8, 9, and 10 hold. Pass on
   the report's `paid_fulfillment.hash_source`: for an opaque token the
   preimage was matched against the wallet's recorded payment, not the invoice.
-- **`MARKETPLACE_READY`:** the target. The same remaining items apply. On
-  `api.lightningenable.com`, the host-root metadata check doesn't count for a
-  proxy (see Prefill below), so report such a proxy as
+- **`MARKETPLACE_READY`:** the target for an endpoint on its own host. The
+  same remaining items apply. On `api.lightningenable.com`, the host-root
+  metadata check doesn't count for a proxy (see Prefill below), so report such
+  a proxy as
   `FULFILLMENT_VERIFIED` at most, never as `MARKETPLACE_READY` on the strength
   of that check.
 
@@ -167,8 +168,9 @@ Three limits of the paid check:
   endpoint: if the self-test was skipped because the wallet refused to pay its
   own invoice, do not attempt the paid check with the same wallet, and the
   listing is not ready. If the self-test already paid this exact public URL,
-  with the same method, through `access_l402_resource`, record that call as
-  the evidence (steps 6 and 7 of `l402-compatibility-report`, with the
+  with the same method, through `access_l402_resource`, from either wallet
+  (the seller's own or a second one), record that call as the evidence
+  (steps 6 and 7 of `l402-compatibility-report`, with the
   read-only report above as `--mode-a` and that call's token piped on stdin)
   instead of paying again. If that token is gone, the listing is not ready; do
   not pay again. A self-test that paid this URL with a different method also
@@ -177,6 +179,8 @@ Three limits of the paid check:
   fetches the resource with a token it already holds, and
   `access_l402_resource` would pay again, so in that run the gate stays at
   `CHALLENGE_COMPATIBLE`: the listing is not ready, and the agent does not pay
+  again. A self-test payment made by hand, outside both tools, also counts
+  as paid: the listing is not ready in that run, and the agent does not pay
   again. If the human wants the paid check later, they choose it in a later
   run, and the skill says plainly that it is a second payment for this
   endpoint.
@@ -186,8 +190,11 @@ Three limits of the paid check:
 1. Finish the seller skill through its self-test and its hand-off.
 2. Check for an existing Amazap row. A published Lightning Enable endpoint can
    already be in Amazap's catalog, imported from 402 Index. Search
-   `GET https://amazap.com/api/products?q=<service name or host>`. Search
-   skips hidden rows, so when the human knows a slug, also read
+   `GET https://amazap.com/api/products?q=<service name or host>`. Every
+   Lightning Enable proxy shares `api.lightningenable.com`, so match a row
+   by its full endpoint URL, not the host: a row stores the per-route URL,
+   never the proxy's base URL. Search skips hidden rows, so when the human
+   knows a slug, also read
    `GET https://amazap.com/api/products/<slug>`, and look for the service in
    https://amazap.com/sitemap.xml. If a row exists, report its `hidden`,
    `listingState`, and `healthStatus`, and let the human decide with Amazap

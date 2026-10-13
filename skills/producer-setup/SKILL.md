@@ -371,8 +371,10 @@ Offer it only after the self-test, and only as an offer; no answer means no.
 
 - **Existing row first.** A published endpoint can already be in Amazap's
   catalog, imported from 402 Index. Search
-  `GET https://amazap.com/api/products?q=<service name or host>`. Search skips
-  hidden rows, so when the human knows a slug, also read
+  `GET https://amazap.com/api/products?q=<service name or host>`. Every
+  proxy shares `api.lightningenable.com`, so match a row by its full
+  endpoint URL, not the host. Search skips hidden rows, so when the human
+  knows a slug, also read
   `GET https://amazap.com/api/products/<slug>`, and look for the service in
   https://amazap.com/sitemap.xml. If a row exists, report its `hidden`,
   `listingState`, and `healthStatus`, and let the human decide with Amazap
@@ -386,8 +388,10 @@ Offer it only after the self-test, and only as an offer; no answer means no.
   from that skill's folder, with the human's cap in sats (add
   `--method POST` for a `POST` route). Its paid check reads that saved report.
   Take the `classification` field from the JSON. Offer the listing as ready
-  only at `FULFILLMENT_VERIFIED` or `MARKETPLACE_READY`; `MARKETPLACE_READY`
-  is the target. At `CHALLENGE_COMPATIBLE`, say "challenge-compatible,
+  only at `FULFILLMENT_VERIFIED` or `MARKETPLACE_READY`. For a Lightning
+  Enable proxy, `FULFILLMENT_VERIFIED` is the ceiling: `MARKETPLACE_READY`
+  is not reachable, because the host-root metadata check doesn't count (see
+  Fields by hand). At `CHALLENGE_COMPATIBLE`, say "challenge-compatible,
   fulfillment unverified" and stop. A private, loopback, link-local, or
   non-HTTPS URL, a `200` to an unpaid request, or a `400`, `415`, or `422` to a
   request with no body is not listing-ready.
@@ -397,7 +401,7 @@ Offer it only after the self-test, and only as an offer; no answer means no.
   purchase because the wallet refused to pay its own invoice, do not attempt
   the paid check with the same wallet, and the listing is not ready. If step 5
   paid this exact URL with the same method through `access_l402_resource`,
-  record that call as the evidence (steps 6 and 7 of
+  from either wallet, record that call as the evidence (steps 6 and 7 of
   `l402-compatibility-report`, with `--mode-a mode-a.json` and that call's
   token piped on stdin) instead of paying again. If that token is gone, or
   step 5 paid this URL with a different method, the listing is not ready; do
@@ -405,6 +409,8 @@ Offer it only after the self-test, and only as an offer; no answer means no.
   agent has no tool that fetches the resource with a token it already holds,
   and `access_l402_resource` would pay again, so in that run the gate stays at
   `CHALLENGE_COMPATIBLE`: the listing is not ready, and the agent does not pay
+  again. A self-test payment made by hand, outside both tools, also counts
+  as paid: the listing is not ready in that run, and the agent does not pay
   again. If the human wants the paid check later, they choose it in a later
   run, and the skill says plainly that it is a second payment for this
   endpoint. Without the

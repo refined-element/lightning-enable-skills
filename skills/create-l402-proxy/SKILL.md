@@ -318,14 +318,18 @@ L402 endpoints. Listing there is optional distribution, and the human decides.
 Offer it only after the self-test, and only as an offer; no answer means no.
 
 - **Existing row first.** A published proxy can already be in Amazap's
-  catalog, imported from 402 Index. Search
-  `GET https://amazap.com/api/products?q=<service name or host>`; every proxy
-  shares the host `api.lightningenable.com`, so match a row by its endpoint
-  URL, not the host. Search skips hidden rows, so when the human knows a slug,
-  also read `GET https://amazap.com/api/products/<slug>`, and look for the
-  service in https://amazap.com/sitemap.xml. If a row exists, report its
-  `hidden`, `listingState`, and `healthStatus`, and let the human decide with
-  Amazap whether to refresh it. Never draft a duplicate listing.
+  catalog, imported from 402 Index. Search by service name,
+  `GET https://amazap.com/api/products?q=<service name>`, and page with
+  `limit` and `offset` until `offset >= total` before you conclude there is
+  no row; a host search returns every Lightning Enable proxy. Every proxy
+  shares `api.lightningenable.com`, so match a row by its full endpoint URL,
+  not the host: a row stores the per-route URL, such as
+  `https://api.lightningenable.com/l402/proxy/<proxyId>/<path>`. Search skips
+  hidden rows, so when the human knows a slug, also read
+  `GET https://amazap.com/api/products/<slug>`, and look for the service in
+  https://amazap.com/sitemap.xml. If a row exists, report its `hidden`,
+  `listingState`, and `healthStatus`, and let the human decide with Amazap
+  whether to refresh it. Never draft a duplicate listing.
 - **Ask first.** Ask whether the human wants an Amazap listing before any paid
   gate check, so no sats are spent on a listing they don't want. No answer
   means no.
@@ -335,8 +339,10 @@ Offer it only after the self-test, and only as an offer; no answer means no.
   from that skill's folder, with the human's cap in sats (add
   `--method POST` for a `POST` route). Its paid check reads that saved report.
   Take the `classification` field from the JSON. Offer the listing as ready
-  only at `FULFILLMENT_VERIFIED` or `MARKETPLACE_READY`; `MARKETPLACE_READY`
-  is the target. At `CHALLENGE_COMPATIBLE`, say "challenge-compatible,
+  only at `FULFILLMENT_VERIFIED` or `MARKETPLACE_READY`. For a Lightning
+  Enable proxy, `FULFILLMENT_VERIFIED` is the ceiling: `MARKETPLACE_READY`
+  is not reachable, because the host-root metadata check doesn't count (see
+  Fields by hand). At `CHALLENGE_COMPATIBLE`, say "challenge-compatible,
   fulfillment unverified" and stop. A private, loopback, link-local, or
   non-HTTPS URL, a `200` to an unpaid request, or a `400`, `415`, or `422` to a
   request with no body is not listing-ready.
@@ -358,6 +364,8 @@ Offer it only after the self-test, and only as an offer; no answer means no.
   has no tool that fetches the resource with a token it already holds, and
   `access_l402_resource` would pay again, so in that run the gate stays at
   `CHALLENGE_COMPATIBLE`: the listing is not ready, and the agent does not pay
+  again. A self-test payment made by hand, outside both tools, also counts
+  as paid: the listing is not ready in that run, and the agent does not pay
   again. If the human wants the paid check later, they choose it in a later
   run, and the skill says plainly that it is a second payment for this
   endpoint. Without the token the paid check ends `INCONCLUSIVE`, so a paid
@@ -375,8 +383,9 @@ Offer it only after the self-test, and only as an offer; no answer means no.
   report it as `FULFILLMENT_VERIFIED` at most, even when the report says
   `MARKETPLACE_READY`.
 - **Two prices.** Show the seller price (the invoice amount, which is
-  `default_price_sats`) and Amazap's all-in shopper price separately, never
-  added together; the all-in figure comes from Amazap's draft or page. Amazap
+  `default_price_sats` unless the route has its own price in the dashboard)
+  and Amazap's all-in shopper price separately, never added together; the
+  all-in figure comes from Amazap's draft or page. Amazap
   locks the price at listing time, so after any price change in the dashboard
   the seller must re-run Amazap's checks.
 - **The human decides.** Without the human's explicit approval, never submit
