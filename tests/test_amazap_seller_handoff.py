@@ -73,23 +73,25 @@ PROXY_SKILLS: tuple[str, ...] = ("producer-setup", "create-l402-proxy")
 # The seller skills whose API runs the L402 middleware on its own host.
 NATIVE_SKILLS: tuple[str, ...] = ("l402-server-integration",)
 HANDOFF_TARGETS = ("reference", *SELLER_SKILLS)
+# Seller skills whose pay-once and read-only-check rules have moved from the
+# Amazap step to a core "Verify your endpoint" step. Tasks 5 to 7 of the
+# rebalance plan add one each; test_seller_verification.py reads the rules
+# from whichever step holds them.
+VERIFIED_SELLERS: tuple[str, ...] = ()
 
 STEP_HEADING = re.compile(r"^### (\d+)\. Optional: list on Amazap[ \t]*$", re.MULTILINE)
 HAND_OFF_HEADING = re.compile(r"^### (\d+)\. Hand off[ \t]*$", re.MULTILINE)
 
-# Present in the reference and in every skill's step (spec section 20).
-GATE_RULES = (
-    "non-HTTPS",
-    "`200` to an unpaid request",
-    "`400`, `415`, or `422`",
-    "challenge-compatible, fulfillment unverified",
+# Present in the reference and in every skill's Amazap step, before and after
+# the rebalance (spec section 20). The pay-once and read-only-check rules live
+# in test_seller_verification.py.
+AMAZAP_RULES = (
     "`FULFILLMENT_VERIFIED`",
     "`list_my_endpoint`",
     "example parameters by hand",
     "separately",
     "all-in",
     "re-run Amazap's checks",
-    "never twice",
     "listed or live until",
     READ_BACK,
     "`hidden`, `listingState`, and `healthStatus`",
@@ -292,7 +294,7 @@ def test_reference_sends_proxy_sellers_to_fill_fields_by_hand():
 @pytest.mark.parametrize("target", HANDOFF_TARGETS)
 def test_handoff_states_the_gate_and_its_labels(target):
     text = handoff_text(target)
-    missing = [rule for rule in GATE_RULES if rule not in text]
+    missing = [rule for rule in AMAZAP_RULES if rule not in text]
     assert not missing, f"{target} is missing: {missing}"
 
 
@@ -355,24 +357,6 @@ def test_handoff_hard_codes_no_amazap_figures(target):
     )
 
 
-@pytest.mark.parametrize("target", HANDOFF_TARGETS)
-def test_handoff_counts_a_pay_l402_challenge_payment_as_paid(target):
-    text = handoff_text(target)
-    for phrase in ("pay_l402_challenge", "counts as paid", "does not pay again"):
-        assert phrase in text, f"{target} is missing {phrase!r}"
-
-
-@pytest.mark.parametrize("target", HANDOFF_TARGETS)
-@pytest.mark.parametrize("phrase", (
-    "either wallet",
-    # "by hand" alone also matches "example parameters by hand".
-    "made by hand, outside both tools",
-    "a wallet that can pay this endpoint",
-))
-def test_handoff_states_the_mirrored_payment_rules(target, phrase):
-    assert phrase in handoff_text(target), f"{target} is missing {phrase!r}"
-
-
 # Only proxies share a host; an API on its own domain owns its host.
 @pytest.mark.parametrize("target", ("reference", *PROXY_SKILLS))
 def test_proxy_handoff_matches_rows_by_url_not_the_host_alone(target):
@@ -404,15 +388,7 @@ def test_step_links_the_reference_the_seller_page_and_the_report(skill):
     step = amazap_step(skill)
     assert REFERENCE_URL in step, "link the reference by its GitHub URL; skills install one folder"
     assert "https://amazap.com/sell" in step
-    assert "(../l402-compatibility-report/)" in step
-
-
-@pytest.mark.parametrize("skill", SELLER_SKILLS)
-def test_step_runs_the_read_only_check_and_pays_at_most_once(skill):
-    step = flat(amazap_step(skill))
-    assert "python scripts/l402_check.py <url> --json" in step
-    assert "never twice" in step
-    assert "`GET` or `HEAD` only" in step
+    assert "(../l402-compatibility-report/)" in read(SKILLS_DIR / skill / "SKILL.md")
 
 
 @pytest.mark.parametrize("skill", SELLER_SKILLS)
@@ -437,7 +413,6 @@ def test_proxy_steps_send_the_seller_to_fill_the_fields_by_hand(skill):
 @pytest.mark.parametrize("skill", SELLER_SKILLS)
 @pytest.mark.parametrize("phrase", (
     "Never draft a duplicate",
-    "before any paid gate",
     "No answer means no",
     "hidden: false",
 ))
@@ -465,24 +440,11 @@ def test_readme_describes_the_optional_step(skill):
 
 
 @pytest.mark.parametrize("skill", SELLER_SKILLS)
-@pytest.mark.parametrize("phrase", (
-    "with the same method",
-    "`--mode-a mode-a.json`",
-    "token piped on stdin",
-    "If that token is gone",
-    "with a different method",
-    "Python MCP server",
-))
-def test_step_reuses_a_self_test_payment_instead_of_paying_again(skill, phrase):
-    assert phrase in flat(amazap_step(skill)), f"{skill} is missing {phrase!r}"
-
-
-@pytest.mark.parametrize("skill", SELLER_SKILLS)
 def test_step_runs_the_gate_before_list_my_endpoint(skill):
     step = flat(amazap_step(skill))
     tool = step.find("`list_my_endpoint`")
     assert tool >= 0, f"{skill} never names `list_my_endpoint`"
-    for gate_text in ("**Gate.**", "python scripts/l402_check.py"):
+    for gate_text in ("**Gate.**",):
         gate = step.find(gate_text)
         assert 0 <= gate < tool, f"{skill}: {gate_text!r} must come before `list_my_endpoint`"
     draft = step.find("**Draft, never publish.** Only once the gate passes")
@@ -492,13 +454,11 @@ def test_step_runs_the_gate_before_list_my_endpoint(skill):
 def test_native_step_points_the_prefill_at_the_apis_own_host_root():
     step = flat(amazap_step("l402-server-integration"))
     assert "at the root of the API's own host" in step
-    assert "A test against `localhost` doesn't count." in step
 
 
 @pytest.mark.parametrize("skill", NATIVE_SKILLS)
 def test_native_step_carries_no_proxy_only_rule(skill):
     step = flat(amazap_step(skill))
-    assert "before body validation" in step
     # Proxy-only rules: an API on its own domain owns its host and its host root.
     for phrase in ("not the host alone", "`api.lightningenable.com`"):
         assert phrase not in step, f"{skill} carries the proxy-only rule {phrase!r}"
@@ -529,15 +489,11 @@ def test_root_readme_offers_the_step_after_any_self_test_for_the_human_to_submit
 
 # --- Final-review guards ---------------------------------------------------
 
-READ_ONLY_COMMAND = re.compile(r"`python scripts/l402_check\.py <url>[^`]*`")
-NOT_READY_UNTIL_PAID = "do not offer the listing as ready until the paid check below lifts it"
 FULL_READY_CONDITION = (
     "and only once example parameters are known, replay behavior is understood, "
     "no error or output exposes a secret, and the human has chosen title, "
     "description, category, and price"
 )
-PAY_ONCE_OPENING = "made no payment for this endpoint by any means"
-PAY_ONCE_OTHERWISE = "otherwise the cases below apply and the agent never pays again"
 SUBMITTING_PUBLISHES = re.compile(
     r"Submitting (?:the form )?publishes the listing automatically once Amazap's checks pass"
 )
@@ -547,62 +503,11 @@ REPORT_URL = (
 )
 
 
-@pytest.mark.parametrize("target", HANDOFF_TARGETS)
-def test_handoff_read_only_command_carries_max_sats(target):
-    commands = READ_ONLY_COMMAND.findall(handoff_text(target))
-    assert commands, f"{target} never shows the read-only command"
-    missing = [command for command in commands if "--max-sats <cap>" not in command]
-    assert not missing, f"{target}: the paid check needs a capped read-only report: {missing}"
-
-
-@pytest.mark.parametrize("target", HANDOFF_TARGETS)
-def test_handoff_challenge_compatible_waits_for_the_paid_check(target):
-    text = handoff_text(target)
-    assert NOT_READY_UNTIL_PAID in text, f"{target} is missing {NOT_READY_UNTIL_PAID!r}"
-    # The read-only check returns CHALLENGE_COMPATIBLE for a correct endpoint,
-    # so stopping there would skip the paid check entirely.
-    assert 'fulfillment unverified" and stop' not in text, f"{target} stops before the paid check"
-
-
 @pytest.mark.parametrize("skill", SELLER_SKILLS)
 def test_step_ready_condition_names_the_whole_gate(skill):
     assert FULL_READY_CONDITION in flat(amazap_step(skill)), (
         f"{skill}: FULFILLMENT_VERIFIED alone covers neither replay nor secrets"
     )
-
-
-@pytest.mark.parametrize("target", HANDOFF_TARGETS)
-def test_handoff_pay_once_opens_with_any_payment_by_any_means(target):
-    text = handoff_text(target)
-    for phrase in (PAY_ONCE_OPENING, PAY_ONCE_OTHERWISE):
-        assert phrase in text, f"{target} is missing {phrase!r}"
-    # "did not pay this exact URL" is true after a pay_l402_challenge, by-hand,
-    # or from-code payment, and would invite a second payment.
-    for stale in ("did not pay this exact", "did not already pay"):
-        assert stale not in text, f"{target} still opens pay-once with {stale!r}"
-    assert text.find(PAY_ONCE_OPENING) < text.find("If that token is gone")
-
-
-@pytest.mark.parametrize("target", HANDOFF_TARGETS)
-def test_handoff_says_a_testnet_payment_is_not_a_payment_for_the_gate(target):
-    text = handoff_text(target)
-    # A testnet payment moved no real money for this endpoint: it is not reuse
-    # evidence, and it doesn't use up the one mainnet paid check.
-    assert "(a testnet invoice doesn't count)" in text, target
-    start = text.find("A self-test payment of a testnet invoice")
-    assert start >= 0, f"{target} has no testnet sentence"
-    sentence = text[start:text.find(". A ", start) + 1]
-    for phrase in ("neither reuse evidence nor a payment for the gate",
-                   "run the paid check once, with the human's yes"):
-        assert phrase in sentence, f"{target}: the testnet sentence is missing {phrase!r}"
-    assert "does not pay again" not in sentence, f"{target}: a testnet payment must not end the run"
-
-
-@pytest.mark.parametrize("target", HANDOFF_TARGETS)
-def test_handoff_without_the_report_skill_is_not_ready(target):
-    text = handoff_text(target)
-    assert "`l402-compatibility-report` is not installed, the listing is not ready" in text, target
-    assert REPORT_URL in text, f"{target} must give the report skill's GitHub URL"
 
 
 @pytest.mark.parametrize("target", HANDOFF_TARGETS)
@@ -649,12 +554,78 @@ def test_no_handoff_caps_a_proxy_below_the_top_classification(target):
     assert not hits, f"{target} still caps a proxy: {hits}"
 
 
-def test_native_step_sets_the_price_with_a_yes_and_a_deploy_before_the_gate():
-    step = flat(amazap_step("l402-server-integration"))
-    check = step.find("python scripts/l402_check.py")
-    assert check >= 0
-    for phrase in ("with the human's explicit yes, set the route's chosen price",
-                   "(shown as a diff)", "have it deployed"):
-        at = step.find(phrase)
-        assert 0 <= at < check, f"{phrase!r} must come before the read-only check"
-    assert "Continue only when the read-only report's invoice amount equals the chosen price" in step
+def test_reference_opens_amazap_as_an_optional_extension():
+    intro = flat(read(REFERENCE).split("\n## ", 1)[0])
+    for phrase in (
+        "Amazap is optional, and it extends a working Lightning Enable setup",
+        "Lightning Enable registry",
+        "`discover_api`",
+        "(../skills/pay-l402-anywhere/)",
+    ):
+        assert phrase in intro, phrase
+    assert "Amazap helps agents find and buy listed endpoints" not in intro
+
+
+def test_reference_gate_reuses_the_report_and_never_pays_again():
+    gate = flat(reference_section("### Readiness gate"))
+    for phrase in (
+        "Reuse that JSON report",
+        "never pay again for the gate",
+        "`report_version` 2",
+        "`marketplace_profiles.amazap.status`",
+        "challenge-compatible, fulfillment unverified",
+        "do not offer the listing as ready until the paid check lifts it",
+        "`l402-compatibility-report` is not installed, the listing is not ready",
+        REPORT_URL,
+        "(l402-verification-levels.md#verifying-your-own-endpoint)",
+    ):
+        assert phrase in gate, phrase
+    for gone in ("Pay once for the gate", "--max-sats", "either wallet"):
+        assert gone not in gate, f"the reference gate still carries {gone!r}"
+
+
+def test_reference_asks_before_looking_for_a_row():
+    flow = flat(reference_section("### Handoff flow"))
+    ask = flow.find("Ask whether the human wants Amazap distribution")
+    row = flow.find("check for an existing Amazap row")
+    assert 0 <= ask < row, "ask about Amazap before searching its catalog"
+
+
+def test_reference_seller_handoff_follows_a_complete_setup():
+    text = flat(reference_section("## Seller handoff"))
+    assert "finish a complete Lightning Enable setup first" in text
+
+
+def test_reference_gate_needs_the_classification_the_profile_and_the_human_items():
+    # Plan D3: core FULFILLMENT_VERIFIED, the Amazap profile READY, and the
+    # human-side items. stable_price is a required profile check (Amazap pays a
+    # live invoice only when it fits the stored price); host-root metadata is
+    # advisory.
+    gate = flat(reference_section("### Readiness gate"))
+    for phrase in (
+        "The listing is ready when the classification is `FULFILLMENT_VERIFIED`, the Amazap profile "
+        "is `READY`, and items 6, 8, 9, and 10 hold",
+        "a stable price (the paid amount equals the read-only quote)",
+        "The advisory `host_root_metadata` check never decides it; `stable_price` does.",
+        "never from the Markdown",
+    ):
+        assert phrase in gate, phrase
+
+
+def test_reference_flow_completes_the_lightning_enable_setup_before_amazap():
+    flow = flat(reference_section("### Handoff flow"))
+    done = flow.find("The Lightning Enable setup is complete at that point; what follows is optional.")
+    ask = flow.find("Ask whether the human wants Amazap distribution")
+    assert 0 <= done < ask, "the Lightning Enable setup is complete before Amazap comes up"
+
+
+def test_reference_never_frames_amazap_as_the_end_of_the_setup():
+    text = handoff_text("reference").lower()
+    for stale in (
+        "end with an optional step that offers an amazap listing",
+        "extra distribution channel",
+        "amazap helps agents find and buy",
+        "a storefront and remote mcp",
+    ):
+        assert stale not in text, f"the reference still says {stale!r}"
+    assert "after that, they may offer an optional amazap listing as an extension" in text

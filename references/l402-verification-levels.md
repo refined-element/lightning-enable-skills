@@ -103,6 +103,79 @@ In both cases:
 A second recorded payment for one check is a finding in its own right. Stop
 and reconcile from the wallet receipts.
 
+## Verifying your own endpoint
+
+The seller skills ([`producer-setup`](../skills/producer-setup/),
+[`create-l402-proxy`](../skills/create-l402-proxy/), and
+[`l402-server-integration`](../skills/l402-server-integration/)) check a new
+endpoint with [`l402-compatibility-report`](../skills/l402-compatibility-report/)
+before they hand it off. The check reads; the seller skill's own self-test is
+its paid evidence. These are the rules for that step.
+
+1. Run the read-only check on the public URL, with the method a buyer will
+   use: `python scripts/l402_check.py <url> --max-sats <cap> --json --output mode-a.json`
+   from that skill's folder, with the human's cap in sats (add `--method POST`
+   for a `POST` route). Take the `classification` field from the JSON report,
+   which is the script's contract (`report_version` 2), not from the
+   Markdown. If `l402-compatibility-report` is not installed, paid delivery
+   stays unverified; give the human its GitHub URL,
+   https://github.com/refined-element/lightning-enable-skills/tree/main/skills/l402-compatibility-report.
+2. Read the result:
+   - `INCOMPATIBLE`: give the fix the report names. A private, loopback,
+     link-local, or non-HTTPS URL, a `200` to an unpaid request, or a `400`,
+     `415`, or `422` to a request with no body each has one.
+   - `CHALLENGE_COMPATIBLE`: the most the read-only check can return for a
+     correct endpoint. Say "challenge-compatible, fulfillment unverified", and
+     do not report paid delivery as proven until the paid evidence below lifts
+     it.
+   - `PAYMENT_COMPATIBLE` or `INCONCLUSIVE`: paid delivery wasn't proven.
+   - `FULFILLMENT_VERIFIED`: the whole paid flow worked. Pass on the report's
+     `paid_fulfillment.hash_source`: for an opaque token the preimage was
+     matched against the wallet's recorded payment, not the invoice.
+3. Pay once, never twice, under the three limits below.
+
+Three limits of the paid check:
+
+- It runs on `GET` or `HEAD` only, because `access_l402_resource` sends
+  nothing else. A `POST` route stops at `CHALLENGE_COMPATIBLE` through these
+  skills.
+- It needs the credential. `FULFILLMENT_VERIFIED` and `PAYMENT_COMPATIBLE`
+  both require the paid call's token piped to the script on stdin (step 7 of
+  `l402-compatibility-report`). Without it the paid check ends `INCONCLUSIVE`
+  with `preimage_unchecked`, and a wallet receipt never upgrades that. The
+  Python MCP server returns the token only on the `alreadyPaid` path, which is
+  `INCONCLUSIVE` anyway, so a paid check through the Python MCP server never
+  proves paid delivery either.
+- Pay once, never twice. If the self-test made no payment for this endpoint
+  by any means (a testnet invoice doesn't count), run the compatibility
+  report's paid check once, with the human's yes; otherwise the cases below
+  apply and the agent never pays again. The paid check needs a wallet that
+  can pay this endpoint: if the self-test was skipped because the wallet
+  refused to pay its own invoice, do not attempt the paid check with the same
+  wallet, and paid delivery stays unverified. If the self-test already paid
+  this exact public URL, with the same method, through `access_l402_resource`,
+  from either wallet (the seller's own or a second one), record that call as
+  the evidence (steps 6 and 7 of `l402-compatibility-report`, with the
+  read-only report above as `--mode-a` and that call's token piped on stdin)
+  instead of paying again. If that token is gone, paid delivery stays
+  unverified; do not pay again. A self-test payment of a testnet invoice moved
+  no real money for this endpoint, so it is neither reuse evidence nor the one
+  paid check: once the endpoint quotes a mainnet invoice at the chosen price,
+  run the paid check once, with the human's yes. A self-test that paid this
+  URL with a different method also counts as paid; paid delivery stays
+  unverified; do not pay again. A payment through `pay_l402_challenge` counts
+  as paid. The agent has no tool that fetches the resource with a token it
+  already holds, and `access_l402_resource` would pay again, so in that run
+  the result stays at `CHALLENGE_COMPATIBLE`: paid delivery stays unverified,
+  and the agent does not pay again. A self-test payment made by hand, outside
+  both tools, also counts as paid: paid delivery stays unverified in that run,
+  and the agent does not pay again. If the human wants the paid check later,
+  they choose it in a later run, and the skill says plainly that it is a
+  second payment for this endpoint.
+
+The report's optional marketplace profiles never change this result; a seller
+skill reads them only for an optional listing.
+
 ## Optional marketplace profiles
 
 A marketplace can expect more than L402 does. The report checks those
