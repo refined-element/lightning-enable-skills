@@ -168,7 +168,8 @@ Three limits of the paid check:
   the evidence (steps 6 and 7 of `l402-compatibility-report`, with the
   read-only report above as `--mode-a` and that call's token piped on stdin)
   instead of paying again. If that token is gone, the listing is not ready; do
-  not pay again.
+  not pay again. A self-test that paid this URL with a different method also
+  counts as paid; the listing is not ready; do not pay again.
 
 ### Handoff flow
 
@@ -209,8 +210,9 @@ describe the platform, not the proxy, so the host-root metadata check doesn't
 count for a proxy. The handoff reports such a proxy as `FULFILLMENT_VERIFIED`
 at most, even when the script's report says `MARKETPLACE_READY`, and never as
 `MARKETPLACE_READY` on that basis. Tell the human to supply the title,
-description, category, and example parameters by hand. For an API on its own domain, an `openapi.json` or `llms.txt` at the
-host root gives the prefill something accurate to read.
+description, category, and example parameters by hand. For an API on its own
+domain, an `openapi.json` or `llms.txt` at the host root gives the prefill
+something accurate to read.
 
 **Price lock.** Amazap reads the price from the probe's invoice and locks it at
 listing time; each buy pays the live invoice only when it fits the stored
