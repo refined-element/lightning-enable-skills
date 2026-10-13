@@ -148,8 +148,8 @@ Only when the human asked for it, and only when the preflight says `allowed`:
 - It is the cheapest route that proves the flow. Step 7 needs the token, which
   shows in the command text and stays reusable until its expiry.
 
-State the payment and **stop for a yes**: "I will call `GET <url>` once through
-your Lightning wallet. It costs `<amount>` sats; the cap is `<cap>`. Go ahead?"
+State the payment and **stop for a yes**: "I will call `<method> <url>` once
+through your Lightning wallet. It costs `<amount>` sats; the cap is `<cap>`. Go ahead?"
 
 ### 4. Check the leash
 
@@ -165,8 +165,15 @@ person asks for it.
 ### 5. Pay once
 
 ```
-access_l402_resource(url="<exact url from step 1>", max_sats=<the approved cap>)
+access_l402_resource(url="<exact url from step 1>", method="<the step 1 method>", headers={"Accept": "application/json"}, max_sats=<the approved cap>)
 ```
+
+Repeat the request step 1 checked: the same `url`, the same `method`, and in
+`headers` the same non-secret headers you gave `--header` (leave `headers` out
+when step 1 had none). A `HEAD` check paid as a `GET`, or an endpoint that
+depends on `Accept` paid without it, tests a different request than the report
+describes. The Python server takes `headers` as an object; the .NET server
+takes it as a JSON object in a string: `headers='{"Accept": "application/json"}'`.
 
 One call requests the URL, pays the 402's invoice, and retries with the
 `Authorization: L402 <macaroon>:<preimage>` header. A server may mint a fresh
@@ -205,6 +212,7 @@ holds one):
 ```json
 {
   "cap_sats": 50,
+  "method": "GET",
   "tool_result": {
     "success": true,
     "status_code": 200,
@@ -230,7 +238,10 @@ holds one):
 | `payments[]` | receipts' `amountSats`, `status`, `paymentHash`, `context` | the same |
 | the credential | none returned | `payment.l402Token`, piped in step 7, never in this file |
 
-`expected` is optional: the status and content type the human expects.
+`method` is optional: the method you passed in step 5. The script refuses
+evidence whose `method` differs from the read-only check's, and judges the
+result by that one method (a `HEAD` result needs no body). `expected` is
+optional: the status and content type the human expects.
 
 ### 7. Validate the evidence
 
@@ -408,7 +419,8 @@ On the .NET server:
 >    sats; your cap is 10. Go ahead?" The human says yes.
 > 3. `budget(action="status")` and `get_balance()` → the budget and the balance
 >    cover 3 sats.
-> 4. `access_l402_resource(url="https://api.example.com/forecast?city=paris", max_sats=10)`
+> 4. `access_l402_resource(url="https://api.example.com/forecast?city=paris", method="GET", max_sats=10)`,
+>    the same request step 1 checked (it sent no extra headers)
 >    → paid 3 sats, 200, JSON body.
 > 5. `receipts(source="durable")` → one settled 3-sat receipt. Copy its hash,
 >    amount, status, and context into `evidence.json`, then pipe the token with

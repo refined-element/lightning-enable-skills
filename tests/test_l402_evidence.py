@@ -299,6 +299,33 @@ def test_head_request_does_not_need_a_body():
     assert "non_empty_body" not in {c["name"] for c in report["paid_fulfillment"]["expectations"]}
 
 
+@pytest.mark.parametrize("checked, paid", [("GET", "get"), ("HEAD", "HEAD")])
+def test_evidence_naming_the_checked_method_is_accepted(checked, paid):
+    evidence, credential = evidence_for("fulfilled-2xx")
+    evidence["mode_a_report"]["target"]["method"] = checked
+    evidence["method"] = paid
+    assert l402_evidence.evaluate(evidence, credential)["classification"] == "FULFILLMENT_VERIFIED"
+
+
+@pytest.mark.parametrize("checked, paid", [("HEAD", "GET"), ("GET", "HEAD")])
+def test_a_paid_call_with_another_method_is_refused(checked, paid):
+    # A HEAD check paid as a GET (or the reverse) tested a different request than the report describes.
+    evidence, credential = evidence_for("fulfilled-2xx")
+    evidence["mode_a_report"]["target"]["method"] = checked
+    evidence["method"] = paid
+    with pytest.raises(l402_evidence.EvidenceError, match="same method and non-secret headers"):
+        l402_evidence.evaluate(evidence, credential)
+
+
+@pytest.mark.parametrize("value", ["", "G E T", 5, "fixture-string-method-name"])
+def test_a_malformed_evidence_method_is_refused(value):
+    evidence, credential = evidence_for("fulfilled-2xx")
+    evidence["method"] = value
+    with pytest.raises(l402_evidence.EvidenceError, match="evidence.method must be") as caught:
+        l402_evidence.evaluate(evidence, credential)
+    assert "fixture-string" not in str(caught.value)
+
+
 @pytest.mark.parametrize("status, code", [(403, "paid_retry_rejected"), (500, "paid_retry_failed"), (501, "paid_retry_failed")])
 def test_definitive_non_2xx_after_a_confirmed_payment_is_payment_compatible(status, code):
     evidence, credential = evidence_for("paid-retry-402")

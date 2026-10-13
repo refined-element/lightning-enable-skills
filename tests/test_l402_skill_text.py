@@ -36,7 +36,13 @@ def test_l402_verified_appears_only_as_a_prohibition(path):
 
 def test_paid_check_is_one_capped_access_l402_resource_call():
     text = flat(SKILL)
-    assert re.search(r'access_l402_resource\(url="[^"]+", max_sats=', text)
+    calls = re.findall(r"access_l402_resource\(([^`]*?)\)(?:`|\s|,|$)", text)
+    assert calls
+    for call in calls:
+        # The paid call repeats the checked request: the same url and method, and a cap.
+        assert re.match(r'url="[^"]+", method="[^"]+", ', call), call
+        assert "max_sats=" in call, call
+    assert re.search(r'access_l402_resource\(url="[^"]+", method="[^"]+", headers=\{', text)
     assert "GET or HEAD" in text
     assert "Never start a second payment" in text
     assert "stop for a yes" in text

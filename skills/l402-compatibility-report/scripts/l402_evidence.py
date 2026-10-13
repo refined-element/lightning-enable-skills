@@ -40,6 +40,7 @@ TERMINAL_PAYMENT_STATUSES = frozenset({"settled", "succeeded", "paid", "complete
 # could not reach the server): the retry outcome is ambiguous.
 AMBIGUOUS_RETRY_STATUSES = frozenset(TRANSIENT_STATUSES) | {502, 503, 504}
 HEX64 = re.compile(r"[0-9a-f]{64}")  # always used with fullmatch
+METHOD = re.compile(r"[A-Za-z]{1,16}")  # always used with fullmatch
 # Credential forms shorter than this are not added to the scrub list, so a tiny
 # bad credential can't turn into a one-character scrub of the whole report.
 MIN_SECRET_LENGTH = 8
@@ -239,6 +240,14 @@ def _require(evidence: dict) -> tuple[dict, int, dict, list, dict]:
     cap = evidence.get("cap_sats")
     if not _is_int(cap) or cap <= 0:
         raise EvidenceError("evidence.cap_sats must be the approved max_sats, a positive integer")
+    _optional(evidence, "method", "evidence", lambda v: isinstance(v, str) and bool(METHOD.fullmatch(v)),
+              "the HTTP method the paid call used, such as GET or HEAD")
+    checked = str(mode_a["target"]["method"]).upper()
+    if evidence.get("method") is not None and evidence["method"].upper() != checked:
+        # The HEAD rule and every expectation are judged by the read-only check's method.
+        raise EvidenceError(
+            "evidence.method differs from the read-only check's method; the paid call must repeat the "
+            "checked request with the same method and non-secret headers")
     tool = evidence.get("tool_result")
     if not isinstance(tool, dict):
         raise EvidenceError("evidence.tool_result must record the access_l402_resource result fields")
@@ -293,6 +302,8 @@ def evaluate(evidence: dict, credential: str | None = None) -> dict:
     # Never inferred: with no reported status the retry outcome is ambiguous.
     status = tool.get("status_code")
     preimage_result, sources = check_preimage(credential, payments)
+    # The paid call repeats the checked request (same method and non-secret headers), and
+    # _require refuses evidence that names another method, so the HEAD rule follows this one.
     method = str((mode_a.get("target") or {}).get("method") or "GET").upper()
     expectations = _expectations(tool, expected, status, method)
     quoted = (mode_a.get("invoice") or {}).get("amount_sats")
