@@ -95,6 +95,7 @@ ROW_FIELDS = (
     "feeBps",
     "healthStatus",
     "listingState",
+    "hidden",
     "buyable",
     "paidSuccesses",
     "paidFailures",
@@ -103,7 +104,16 @@ ROW_FIELDS = (
     "trust.label",
     "inputSchema.fields",
 )
-PRODUCTS_PARAMS = ("q", "protocol", "category", "healthyOnly", "synthetic", "limit", "offset")
+PRODUCTS_PARAMS = (
+    "q",
+    "protocol",
+    "category",
+    "source",
+    "healthyOnly",
+    "synthetic",
+    "limit",
+    "offset",
+)
 
 NON_GOAL = (
     "Never steer a buyer away from Amazap's all-in price toward direct payment "
@@ -149,6 +159,10 @@ NEGATION = re.compile(r"\b(?:never|not|no|don't|doesn't|isn't|aren't)\b", re.IGN
 BLOCK_START = re.compile(r"^(?:#{1,6} |[-*] |\d+\. )")
 FENCE = "`" * 3  # a code fence, spelled so this file can sit inside one
 SENTENCE_END = re.compile(r"(?<=[.!?])\s+|(?<=[.!?]\*\*)\s+")
+# Where one clause of a sentence ends and the next begins: a semicolon, a
+# colon, or a comma before a joining word. A negation only covers the MCP
+# budget when it sits in the same clause as the budget mention.
+CLAUSE_END = re.compile(r"[;:]\s*|,\s+(?=(?:and|but|or|so|yet|while|whereas)\b)|\s+(?=(?:but|whereas)\b)")
 KEYWORD = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)\s*=")
 
 
@@ -206,11 +220,20 @@ def table_rows(text: str) -> list[list[str]]:
 
 
 def budget_claims(text: str) -> list[str]:
-    """Sentences that put the MCP budget beside an Amazap buy without a negation."""
+    """Sentences that put the MCP budget beside an Amazap buy without negating it.
+
+    A negation counts only inside the clause that names the MCP budget, so
+    "Amazap never pays cash, but the MCP `budget` caps an Amazap `buy`." is
+    caught: its "never" belongs to another clause.
+    """
     return [
         sentence
         for sentence in prose_sentences(text)
-        if MCP_BUDGET.search(sentence) and AMAZAP_BUY.search(sentence) and not NEGATION.search(sentence)
+        if AMAZAP_BUY.search(sentence)
+        and any(
+            MCP_BUDGET.search(clause) and not NEGATION.search(clause)
+            for clause in CLAUSE_END.split(sentence)
+        )
     ]
 
 
@@ -230,6 +253,30 @@ def skill_section(heading: str) -> str:
     match = re.search(rf"^{re.escape(heading)}", text, re.MULTILINE)
     assert match, f"discover-paid-apis/SKILL.md has no heading starting {heading!r}"
     return flat(re.sub(r"(?m)^\s*>\s?", "", section_at(text, match.start())))
+
+
+# --- The budget-claim helper ------------------------------------------------
+
+
+@pytest.mark.parametrize("sentence", (
+    "The MCP `budget` caps every Amazap `buy`.",
+    "Amazap never pays out cash, but the MCP `budget` caps every Amazap `buy`.",
+    "Amazap credits are not cash; `get_balance()` bounds an Amazap buy.",
+    "An Amazap `buy` is never automatic, and `budget(action=\"status\")` caps it.",
+))
+def test_budget_claims_catches_a_budget_clause_without_a_negation(sentence):
+    assert budget_claims(sentence) == [sentence]
+
+
+@pytest.mark.parametrize("sentence", (
+    TWO_WALLET_RULE + ".",
+    "Never present `budget` status or `get_balance` as bounding an Amazap buy.",
+    "An Amazap `buy` spends credits, and the MCP `budget` never bounds it.",
+    "The MCP `budget`, which tracks the MCP wallet, never bounds an Amazap `buy`.",
+    "The MCP `budget` caps a direct L402 payment.",
+))
+def test_budget_claims_passes_a_negated_or_unrelated_budget_clause(sentence):
+    assert budget_claims(sentence) == []
 
 
 # --- The captured-shape fixture ---------------------------------------------
