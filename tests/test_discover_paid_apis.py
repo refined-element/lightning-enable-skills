@@ -1328,7 +1328,31 @@ def test_root_readme_safety_model_keeps_amazap_buys_off_the_mcp_caps():
     text = read(ROOT_README)
     assert (
         "An Amazap buy in `discover-paid-apis` spends prepaid Amazap credits "
-        "under the user's cap and Amazap's own account limits instead; the MCP "
+        "under your cap and Amazap's own account limits instead; the MCP "
         "caps don't see it."
     ) in flat(text)
     assert not budget_claims(text), budget_claims(text)
+
+
+def test_root_readme_api_arbitrage_idea_excludes_amazap_listings():
+    # The roadmap idea compares prices, so it must not invite the steer the
+    # skill forbids: paying a listing Amazap surfaced directly to save money.
+    text = flat(read(ROOT_README))
+    assert (
+        "- **`api-arbitrage`**: compare several L402 providers for the same data, "
+        "buy the cheapest, show the savings. Listings Amazap surfaced stay out of "
+        "the comparison: they're bought through Amazap at its all-in price, never "
+        "paid directly."
+    ) in text
+
+
+def test_root_readme_buy_and_sell_paragraph_is_wrapped():
+    # Prose in the root README wraps near 80 columns; no line runs on. A line
+    # carrying a Markdown link may run long, since the link can't break.
+    start = read(ROOT_README).index("**Buy + sell, end to end:**")
+    paragraph = read(ROOT_README)[start:].split("\n\n", 1)[0]
+    long_lines = [
+        line for line in paragraph.splitlines()
+        if len(line) > 82 and "](" not in line
+    ]
+    assert not long_lines, f"rewrap the Buy + sell paragraph: {long_lines}"

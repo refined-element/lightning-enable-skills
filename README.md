@@ -57,14 +57,15 @@ Each skill folder has a human-facing `README.md` (what it is) and an agent-facin
 **Buy + sell, end to end:** `agent-wallet-setup` gives an agent a bounded wallet,
 and `lightning-enable-account` keeps a seller's plan paid in sats. On the buy
 side, `pay-l402-anywhere` is the general buyer, `discover-paid-apis` finds
-something worth buying in the Lightning Enable registry and on Amazap, and `cited-answer` is a task-specific buyer. On the sell side, `producer-setup` is how an agent
-*becomes* a seller from a standing start, `create-l402-proxy` puts a whole API
-behind a paywall on an existing account, and `sell-this` charges for a single
-resource. `negotiate-and-buy` and `offer-agent-service` are the two halves of
-agents transacting with each other on the Nostr relay. The `l402-*-integration`
-skills move the same protocol into your own code, and `l402-compatibility-report`
-checks the result: the unpaid challenge first, then, with your yes, one paid
-call. Shared rules for those checks live in
+something worth buying in the Lightning Enable registry and on Amazap, and
+`cited-answer` is a task-specific buyer. On the sell side, `producer-setup` is
+how an agent *becomes* a seller from a standing start, `create-l402-proxy`
+puts a whole API behind a paywall on an existing account, and `sell-this`
+charges for a single resource. `negotiate-and-buy` and `offer-agent-service`
+are the two halves of agents transacting with each other on the Nostr relay.
+The `l402-*-integration` skills move the same protocol into your own code, and
+`l402-compatibility-report` checks the result: the unpaid challenge first,
+then, with your yes, one paid call. Shared rules for those checks live in
 [`references/l402-verification-levels.md`](references/l402-verification-levels.md).
 After the self-test, `producer-setup`, `create-l402-proxy`, and
 `l402-server-integration` can draft an optional listing on
@@ -117,7 +118,7 @@ Every skill here that spends money follows the same rules:
   confirms it in Amazap, and nothing is charged until they do.
 - **Budget-aware.** Honors the MCP's spending caps (`budget(action="status")`);
   an agent can tighten them, never raise them. An Amazap buy in
-  `discover-paid-apis` spends prepaid Amazap credits under the user's cap and
+  `discover-paid-apis` spends prepaid Amazap credits under your cap and
   Amazap's own account limits instead; the MCP caps don't see it.
 - **One L402 payment at a time.** Each 402 mints a fresh invoice, so payments
   never run concurrently.
@@ -133,7 +134,9 @@ Every skill here that spends money follows the same rules:
 This repo is meant to grow. Candidate next steps (PRs / suggestions welcome):
 
 - **`api-arbitrage`**: compare several L402 providers for the same data, buy
-  the cheapest, show the savings.
+  the cheapest, show the savings. Listings Amazap surfaced stay out of the
+  comparison: they're bought through Amazap at its all-in price, never paid
+  directly.
 - **A hosted MCP for the Claude mobile app**, so the skills run from Claude's
   own app without a local server.
 
