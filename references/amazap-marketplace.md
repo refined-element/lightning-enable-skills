@@ -10,9 +10,11 @@ Amazap is optional, and it extends a working Lightning Enable setup rather
 than completing one. With Lightning Enable alone, a developer creates, prices,
 checks, and publishes an L402 endpoint: the Lightning Enable registry lists a
 published Lightning Enable proxy, and an API on its own domain serves its own
-L402 manifest. Buyers' agents find either with `discover_api` and pay it
-directly from their own wallets, and a buyer can pay a known L402 URL directly
-with [`pay-l402-anywhere`](../skills/pay-l402-anywhere/). Amazap adds another
+L402 manifest. Buyers' agents find a registered proxy with
+`discover_api(query=...)`, and an API on its own domain through its manifest
+URL with `discover_api(url=...)`, and pay either directly from their own
+wallets; a buyer can also pay a known L402 URL directly with
+[`pay-l402-anywhere`](../skills/pay-l402-anywhere/). Amazap adds another
 catalog, its own trust signals, and prepaid-credit buying, for sellers and
 buyers who want them. Describe the relationship as collaboration or ecosystem
 support. Never claim a partnership or any other commercial relationship among
@@ -217,9 +219,11 @@ never from the Markdown:
   Amazap check passed: public HTTPS, a priced mainnet invoice, a `402` for a
   request with no body within 8 seconds, no redirect, a synchronous paid
   response, and a stable price (the paid amount equals the read-only quote).
-  Any other status names the check that failed; fix it in the endpoint, never
-  by paying again. The advisory `host_root_metadata` check never decides it;
-  `stable_price` does.
+  `NOT_READY` means a required check failed, or the classification rules
+  readiness out; the profile's checks name the check that failed. Fix it in
+  the endpoint, never by paying again. `NOT_CHECKED` means the paid evidence
+  has not reached `FULFILLMENT_VERIFIED` and nothing failed. The advisory
+  `host_root_metadata` check never decides the status; `stable_price` does.
 
 The listing is ready when the classification is `FULFILLMENT_VERIFIED`, the
 Amazap profile is `READY`, and items 6, 8, 9, and 10 hold. Two limits carry

@@ -141,8 +141,11 @@ def test_a_pay_l402_challenge_payment_counts_as_paid(target):
 def test_read_only_command_carries_max_sats(target):
     commands = READ_ONLY_COMMAND.findall(pay_once_text(target))
     assert commands, f"{target} never shows the read-only command"
-    missing = [command for command in commands if "--max-sats <cap>" not in command]
-    assert not missing, f"{target}: the paid check needs a capped read-only report: {missing}"
+    # Each part is its own substring, so flag order never matters; the shared
+    # order is `<url> --json --max-sats <cap>`.
+    for part in ("<url>", "--json", "--max-sats <cap>"):
+        missing = [command for command in commands if part not in command]
+        assert not missing, f"{target}: the paid check needs a capped JSON read-only report: {missing}"
 
 
 @pytest.mark.parametrize("target", PAY_ONCE_TARGETS)
@@ -176,6 +179,10 @@ def test_without_the_report_skill_paid_delivery_is_not_proven(target):
               if migrated(target) else "`l402-compatibility-report` is not installed, the listing is not ready")
     assert wanted in text, target
     assert REPORT_URL in text, f"{target} must give the report skill's GitHub URL"
+    if migrated(target):
+        # Without the report there is no classification at all, so nothing
+        # may be reported as CHALLENGE_COMPATIBLE or better.
+        assert "no classification is available" in text, target
 
 
 @pytest.mark.parametrize("target", PAY_ONCE_TARGETS)
@@ -190,7 +197,11 @@ def test_challenge_compatible_waits_for_the_paid_evidence(target):
 @pytest.mark.parametrize("skill", SELLER_SKILLS)
 def test_skill_runs_the_read_only_check_and_reuses_the_self_test(skill):
     text = pay_once_text(skill)
-    for phrase in ("python scripts/l402_check.py <url> --json", "`GET` or `HEAD` only", "`--mode-a mode-a.json`"):
+    commands = READ_ONLY_COMMAND.findall(text)
+    assert any("<url>" in command and "--json" in command for command in commands), (
+        f"{skill} never runs the read-only check with --json"
+    )
+    for phrase in ("`GET` or `HEAD` only", "`--mode-a mode-a.json`"):
         assert phrase in text, f"{skill} is missing {phrase!r}"
 
 

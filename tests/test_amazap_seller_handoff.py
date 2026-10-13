@@ -109,6 +109,9 @@ APPROVAL_BOUNDARY = (
 )
 READINESS_ITEMS = (
     "public HTTPS",
+    "non-HTTPS",
+    "`200` to an unpaid request",
+    "`400`, `415`, or `422`",
     "`402 Payment Required`",
     "`L402` or `LSAT`",
     "priced BOLT11 invoice",
@@ -152,6 +155,8 @@ AMAZAP_FIGURE = re.compile(
     re.IGNORECASE,
 )
 EM_DASH = "\u2014"
+# The reference gate's bullet for the optional Amazap profile status.
+PROFILE_BULLET = "**`marketplace_profiles.amazap.status`.**"
 
 
 def read(path: Path) -> str:
@@ -342,7 +347,17 @@ def test_handoff_avoids_banned_words(target):
 
 @pytest.mark.parametrize("target", HANDOFF_TARGETS)
 def test_handoff_names_only_the_five_classifications(target):
-    named = set(CLASSIFICATION_NAME.findall(handoff_text(target)))
+    text = handoff_text(target)
+    if target == "reference":
+        # The gate's Amazap profile bullet names the profile status NOT_READY,
+        # which the classification pattern also matches; allow it there only.
+        start = text.find(PROFILE_BULLET)
+        end = text.find("The listing is ready when", start)
+        assert 0 <= start < end, "the reference gate has no Amazap profile bullet"
+        profile = set(CLASSIFICATION_NAME.findall(text[start:end]))
+        assert profile <= set(CLASSIFICATIONS) | {"NOT_READY"}, sorted(profile)
+        text = text[:start] + text[end:]
+    named = set(CLASSIFICATION_NAME.findall(text))
     assert named <= set(CLASSIFICATIONS), f"{target} names {sorted(named - set(CLASSIFICATIONS))}"
     assert "FULFILLMENT_VERIFIED" in named
     assert "MARKETPLACE_READY" not in raw_handoff_text(target)
@@ -559,11 +574,15 @@ def test_reference_opens_amazap_as_an_optional_extension():
     for phrase in (
         "Amazap is optional, and it extends a working Lightning Enable setup",
         "Lightning Enable registry",
-        "`discover_api`",
+        # The registry lists proxies; an API on its own domain is found
+        # through its manifest URL, not a registry search.
+        "find a registered proxy with `discover_api(query=...)`",
+        "an API on its own domain through its manifest URL with `discover_api(url=...)`",
         "(../skills/pay-l402-anywhere/)",
     ):
         assert phrase in intro, phrase
     assert "Amazap helps agents find and buy listed endpoints" not in intro
+    assert "find either with `discover_api`" not in intro
 
 
 def test_reference_gate_reuses_the_report_and_never_pays_again():
@@ -606,8 +625,18 @@ def test_reference_gate_needs_the_classification_the_profile_and_the_human_items
         "The listing is ready when the classification is `FULFILLMENT_VERIFIED`, the Amazap profile "
         "is `READY`, and items 6, 8, 9, and 10 hold",
         "a stable price (the paid amount equals the read-only quote)",
-        "The advisory `host_root_metadata` check never decides it; `stable_price` does.",
+        "The advisory `host_root_metadata` check never decides the status; `stable_price` does.",
         "never from the Markdown",
+    ):
+        assert phrase in gate, phrase
+
+
+def test_reference_gate_explains_not_ready_and_not_checked():
+    gate = flat(reference_section("### Readiness gate"))
+    for phrase in (
+        "`NOT_READY` means a required check failed, or the classification rules readiness out; "
+        "the profile's checks name the check that failed. Fix it in the endpoint, never by paying again.",
+        "`NOT_CHECKED` means the paid evidence has not reached `FULFILLMENT_VERIFIED` and nothing failed.",
     ):
         assert phrase in gate, phrase
 

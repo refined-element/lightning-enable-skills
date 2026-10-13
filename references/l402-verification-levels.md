@@ -113,12 +113,13 @@ before they hand it off. The check reads; the seller skill's own self-test is
 its paid evidence. These are the rules for that step.
 
 1. Run the read-only check on the public URL, with the method a buyer will
-   use: `python scripts/l402_check.py <url> --max-sats <cap> --json --output mode-a.json`
+   use: `python scripts/l402_check.py <url> --json --max-sats <cap> --output mode-a.json`
    from that skill's folder, with the human's cap in sats (add `--method POST`
    for a `POST` route). Take the `classification` field from the JSON report,
    which is the script's contract (`report_version` 2), not from the
    Markdown. If `l402-compatibility-report` is not installed, paid delivery
-   stays unverified; give the human its GitHub URL,
+   stays unverified and no classification is available; give the human its
+   GitHub URL,
    https://github.com/refined-element/lightning-enable-skills/tree/main/skills/l402-compatibility-report.
 2. Read the result:
    - `INCOMPATIBLE`: give the fix the report names. A private, loopback,
