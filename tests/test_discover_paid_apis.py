@@ -505,7 +505,7 @@ def test_skill_links_the_reference_sections_and_live_pages():
     NON_GOAL,
     DIRECT_PAY_SCOPE,
     # search_catalog hands back a ready buy call; searching must not run it.
-    "Do not run it; `buy` waits for the trial step and the human's yes.",
+    "Do not run that buy call; `buy` waits for the trial step and the human's yes.",
     "Stop sooner once you have enough relevant rows to pick five.",
     "**Paused or degraded rows are shown, not bought.**",
     "**Hidden rows are dropped.**",
@@ -602,3 +602,212 @@ def test_doc_never_calls_a_listing_verified(doc):
     # "verified" would be this skill's own claim, which it never makes.
     hits = LOOSE_VERIFIED.findall(flat(read(doc)))
     assert not hits, f"{doc.name} makes a 'verified' claim"
+
+
+def test_trust_bullet_says_quote_as_returned_once():
+    step = skill_section("### 3. Compare at most five candidates")
+    assert "so quote it as returned" not in step, "say 'Quote `trust.label` as returned' once"
+
+
+# --- The skill: quote, one bounded trial, receipt, failures -----------------
+
+
+def test_quote_states_the_cap_for_each_path():
+    step = skill_section("### 5. Quote, and state the cap that applies")
+    assert CAP_RULE in step
+    assert TWO_WALLET_RULE in step
+    assert "Never present `budget` status or `get_balance` as bounding an Amazap buy." in step
+    rows_by_path = {row[0]: row for row in table_rows(read(SKILL))}
+    amazap = rows_by_path.get("Amazap `buy`")
+    assert amazap and "`max_total_sats`" in amazap[2] and "Amazap account limits" in amazap[2]
+    direct = rows_by_path.get("Lightning Enable registry result paid directly")
+    assert direct and "MCP `budget` limits" in direct[2]
+
+
+@pytest.mark.parametrize("doc", GUARDED_DOCS, ids=lambda p: p.name)
+def test_mcp_budget_never_bounds_an_amazap_buy(doc):
+    text = read(doc)
+    assert not budget_claims(text), f"{doc.name}: {budget_claims(text)}"
+    assert not amazap_rows_with_the_mcp_budget(text), (
+        f"{doc.name}: an Amazap row names the MCP budget: {amazap_rows_with_the_mcp_budget(text)}"
+    )
+
+
+def test_over_cap_quote_is_refused():
+    step = skill_section("### 5. Quote, and state the cap that applies")
+    assert "above the lowest cap that applies to its path, refuse and buy nothing" in step
+    assert "A 31-sat quote against a 30-sat cap is a refusal" in step
+    assert "Search, describe, and quote never spend." in step
+
+
+@pytest.mark.parametrize("phrase", (
+    "Read the Amazap account limits and its auto-approve amount from `balance` or `spend_summary`",
+    "never hard-code them",
+    "or `buy` returns `approval_required` and charges nothing",
+))
+def test_quote_reads_the_amazap_limits_live(phrase):
+    step = skill_section("### 5. Quote, and state the cap that applies")
+    assert phrase in step, f"step 5 is missing {phrase!r}"
+
+
+@pytest.mark.parametrize("phrase", (
+    "At most one trial purchase per run, unless the user explicitly asks for more.",
+    "the all-in total is within the lowest cap that applies to its path",
+    "the service is buyable",
+    "**stop for a yes**",
+    "this skill still asks the user first",
+    "set `max_total_sats` to the user's cap",
+    "Set `accept_terms` only after showing the current Amazap terms",
+    "https://amazap.com/terms",
+    "the stale attempt charged nothing",
+    "Show the fresh quote from the error",
+    "Never buy on the fresh quote automatically.",
+    "`approval_required`",
+    "Stop, and ask the person to confirm the exact quote in Amazap",
+    "Never re-quote or split the purchase to get around it.",
+    "Repeating a `quote_id` never charges twice",
+    "A basket is one buy.",
+    "ask before `top_up`",
+    "never copy the invoice into your own message",
+    "Never point it at an Amazap listing's `endpointUrl`.",
+))
+def test_trial_purchase_rules(phrase):
+    assert phrase in skill_section("### 6. Buy one trial"), f"step 6 is missing {phrase!r}"
+
+
+@pytest.mark.parametrize("phrase", (
+    # Step 2 shows paused or degraded rows and never buys them, whatever
+    # `buyable` says.
+    "A paused or degraded row stays unbought this run, even with `buyable: true`, and so does a failing one.",
+    # A stale quote's fresh quote is a new price: the cap and a new yes apply.
+    "its total is still within the cap",
+))
+def test_trial_purchase_respects_listing_state_and_the_cap(phrase):
+    assert phrase in skill_section("### 6. Buy one trial"), f"step 6 is missing {phrase!r}"
+
+
+def test_buy_call_carries_the_four_required_arguments():
+    calls = test_tool_surface.calls_to("buy", read(SKILL))
+    assert calls, "show the buy call"
+    for argument in ("quote_id=", "total_cost=", "max_total_sats=<the user's cap>", "accept_terms="):
+        assert all(argument in call for call in calls), f"every buy call needs {argument}"
+
+
+@pytest.mark.parametrize("phrase", (
+    "Never send secrets, private URLs, authenticated pages, credentials, personal data, or proprietary content",
+    "unless the user explicitly approved that disclosure",
+    "don't send it",
+    "buy nothing",
+))
+def test_sensitive_input_is_never_sent_without_approval(phrase):
+    assert phrase in skill_section("### 4. Read the details, unpaid"), f"step 4 is missing {phrase!r}"
+
+
+PAYING_CALLS = ("access_l402_resource", "buy", "pay_l402_challenge", "pay_invoice", "top_up")
+UNPAID_STEPS = (
+    "### 0. Ask what the human wants",
+    "### 1. Check the tools and the MCP leash",
+    "### 2. Search both sources",
+    "### 3. Compare at most five candidates",
+    "### 4. Read the details, unpaid",
+    "### 5. Quote, and state the cap that applies",
+)
+
+
+@pytest.mark.parametrize("heading", UNPAID_STEPS)
+def test_steps_before_the_trial_make_no_call_that_can_pay(heading):
+    # Step 0 promises that steps 1 to 5 need no yes, so none of them may call
+    # a tool that can spend, not even with a 1-sat cap.
+    step = skill_section(heading)
+    calls = {tool: test_tool_surface.calls_to(tool, step) for tool in PAYING_CALLS}
+    assert not any(calls.values()), f"{heading} calls a tool that can pay: {calls}"
+
+
+def test_reading_details_uses_only_read_only_tools():
+    step = skill_section("### 4. Read the details, unpaid")
+    assert 'discover_api(url="<manifest_url>")' in step
+    assert "Never read it with `access_l402_resource`" in step
+    assert not re.search(r"max_sats=1\b", read(SKILL)), "no 1-sat fetch: reading a document never pays"
+
+
+def test_step_references_match_the_numbering():
+    assert "steps 1 to 5 need no yes. Step 6 pays, and needs its own yes." in skill_section(
+        "### 0. Ask what the human wants"
+    )
+    assert "Step 5 states the caps" in skill_section("### 3. Compare at most five candidates")
+    assert "| Path | Wallet | Caps that apply |" in skill_section(
+        "### 5. Quote, and state the cap that applies"
+    )
+    assert "(step 6 has the table)" in flat(read(SKILL))
+    assert "| | Python server | .NET server |" in skill_section("### 6. Buy one trial")
+
+
+def test_old_steps_are_gone():
+    text = read(SKILL)
+    for heading in (
+        "### 4. Read the manifest, unpaid",
+        "### 5. Confirm, then make ONE paid call",
+        "### 6. Show the result and the spend",
+        "### 7. Hand off",
+    ):
+        assert heading not in text, f"the old heading {heading!r} is still there"
+    headings = re.findall(r"^### (\d+)\. ", text, re.MULTILINE)
+    assert headings == [str(n) for n in range(10)], f"steps run 0 to 9 once each: {headings}"
+
+
+def test_tool_arguments_use_the_pinned_spellings():
+    text = read(SKILL)
+    for tool, allowed in (("discover_api", DISCOVER_API_ARGS), ("access_l402_resource", ACCESS_ARGS)):
+        calls = test_tool_surface.calls_to(tool, text)
+        assert calls, f"no {tool}(...) call"
+        for call in calls:
+            used = set(KEYWORD.findall(test_tool_surface.without_string_literals(call)))
+            assert used <= allowed, f"{tool}({call}) uses {sorted(used - allowed)}"
+            assert "amazap" not in call.lower(), f"{tool} never targets an Amazap listing"
+
+
+@pytest.mark.parametrize("phrase", (
+    "the sats charged",
+    "the remaining Amazap credits or the remaining MCP budget, whichever wallet paid",
+    "the source, the provider, and the listing used",
+    "an order or receipt id safe to keep",
+    "whether fulfillment succeeded",
+    SECRETS,
+    "offer `report_outcome`, with the user's approval",
+))
+def test_receipt_reports_spend_and_delivery_without_secrets(phrase):
+    assert phrase in skill_section("### 7. Report the receipt"), f"step 7 is missing {phrase!r}"
+
+
+def test_receipt_reports_the_all_in_charge():
+    assert "the sats charged, all-in" in skill_section("### 7. Report the receipt")
+
+
+@pytest.mark.parametrize("kind", FAILURE_KINDS)
+def test_failure_kinds_are_distinguished(kind):
+    assert kind in skill_section("### 8. When a paid trial fails"), f"step 8 never names {kind!r}"
+
+
+@pytest.mark.parametrize("phrase", (
+    "Never buy a second candidate after a paid failure without asking.",
+    "Ask before trying another paid listing.",
+    "re-credited as Amazap credits, never cash",
+    "`claim_failed_call`",
+    # The claim window is Amazap's figure: read it from the live credit terms.
+    "within the window the current Amazap credit terms state",
+    "`report_sku`",
+    "never replaced by a second one",
+))
+def test_paid_failure_never_triggers_a_second_buy(phrase):
+    assert phrase in skill_section("### 8. When a paid trial fails"), f"step 8 is missing {phrase!r}"
+
+
+def test_claim_window_is_never_hard_coded():
+    # The reference keeps the observed window in its dated note only.
+    assert not re.search(r"\b\d+[- ]hours?\b", flat(read(SKILL))), "read the claim window live"
+
+
+def test_known_url_hands_off_to_pay_l402_anywhere():
+    step = skill_section("### 9. Hand off")
+    assert "**A URL the user already has:** [`pay-l402-anywhere`](../pay-l402-anywhere/)" in step
+    assert "not to listings Amazap surfaced" in step
