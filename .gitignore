@@ -11,6 +11,9 @@ Thumbs.db
 .vscode/
 .idea/
 
+# Agent working notes (plans, ledgers, scratch diffs)
+.superpowers/
+
 # Local env / secrets — never commit
 .env
 *.local
