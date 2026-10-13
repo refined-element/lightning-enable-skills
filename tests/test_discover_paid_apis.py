@@ -396,18 +396,22 @@ def wallets_section() -> str:
     "`totalSats`, the figure the buyer pays",
     "never add the seller price and the fee yourself",
     "`trust.label`",
-    "Never fetch a hidden row by slug to buy it.",
+    "A hidden row is not a candidate; never fetch one by slug to show or buy it.",
     "read `listingState` and `buyable` on every row",
     "can also be hidden from search and still be returned by",
+    "That detail response wraps the row in `product`.",
     NON_GOAL,
+    "never present a listing's `endpointUrl` as a cheaper way to pay the seller",
+    "show each row as its source returned it",
     DIRECT_PAY_SCOPE,
     "`quote_id`, `total_cost`, `max_total_sats`, and `accept_terms`",
+    "the current Amazap terms (https://amazap.com/terms)",
     "A stale quote returns a fresh quote in the error and charges nothing",
     "Repeating a `quote_id` never charges twice.",
     "A basket is one buy.",
     "`approval_required`",
     "re-credits a failed paid call as Amazap credits, never cash",
-    "`claim_failed_call` within 72 hours",
+    "`claim_failed_call` within the window Amazap states (see https://amazap.com/credits)",
     SENSITIVE,
     "At most one trial purchase per run",
     "(../skills/discover-paid-apis/)",
@@ -437,6 +441,16 @@ def test_reference_cap_table_has_a_row_per_path():
     assert amazap and "`max_total_sats`" in amazap[2] and "Amazap account limits" in amazap[2]
     direct = [row for path, row in rows_by_path.items() if "`access_l402_resource`" in path]
     assert direct and "MCP `budget` limits" in direct[0][2]
+    # The direct path is for a registry result or a URL the user already has,
+    # never for a listing Amazap surfaced.
+    assert "Lightning Enable registry result" in direct[0][0]
+    assert "a URL the user already has" in direct[0][0]
+
+
+def test_reference_keeps_the_claim_window_in_the_dated_note():
+    # The re-credit window is Amazap's figure: dated note only.
+    assert "72" not in discovery_section()
+    assert "72-hour window for `claim_failed_call`" in flat(reference_section("## Observed on 2026-10-12"))
 
 
 def test_reference_keeps_the_mcp_budget_off_every_amazap_row():

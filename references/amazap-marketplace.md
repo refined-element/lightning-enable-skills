@@ -44,7 +44,7 @@ observations near the end are a snapshot, not a rule.
   search result may include paused or degraded rows, so read `listingState`
   and `buyable` on every row. A row can also be hidden from search and still
   be returned by `GET https://amazap.com/api/products/<slug>`, with
-  `hidden: true`.
+  `hidden: true`. That detail response wraps the row in `product`.
 - **Purchase spends Amazap credits.** Amazap's own `quote` and `buy` tools buy
   a listing; Lightning Enable's tools don't.
   [`discover-paid-apis`](../skills/discover-paid-apis/) holds the full buyer
@@ -61,13 +61,15 @@ Every Amazap buy follows these rules:
 - **Spending.** Search, describe, and quote never spend. `buy` is the only
   call that spends Amazap credits.
 - **The all-in price is the price.** Show `totalSats`, the figure the buyer
-  pays, with `priceSats` (the seller price) and `feeBps` as its breakdown.
+  pays, with `priceSats` (the seller price) and `feeBps` beside it.
   Read `feeBps` from the row, and never add the seller price and the fee
   yourself; the all-in total can differ from that sum.
 - **Trust as reported.** Read `trust.label` and the paid track record
   (`paidSuccesses`, `paidFailures`, `lastPaidSuccessAt`). A row imported from
   a directory such as 402 Index is a directory entry, not a record of Amazap
-  delivering it. Never fetch a hidden row by slug to buy it.
+  delivering it.
+- **Hidden rows.** A hidden row is not a candidate; never fetch one by slug
+  to show or buy it.
 - **No direct-pay steer.** Never steer a buyer away from Amazap's all-in price
   toward direct payment of a listing Amazap surfaced. Amazap's margin funds
   its failed-call credits, so never present a listing's `endpointUrl` as a
@@ -77,14 +79,14 @@ Every Amazap buy follows these rules:
 - **The `buy` contract.** `buy` requires `quote_id`, `total_cost`,
   `max_total_sats`, and `accept_terms`. Set `max_total_sats` to the user's
   cap, and set `accept_terms` only after the user has agreed to the current
-  Amazap terms. A stale quote returns a fresh quote in the error and charges
+  Amazap terms (https://amazap.com/terms). A stale quote returns a fresh quote in the error and charges
   nothing; show the fresh quote and confirm before buying. Repeating a
   `quote_id` never charges twice. A basket is one buy. Above Amazap's
   auto-approve amount the person confirms, or `buy` returns
   `approval_required`; stop there and never work around it.
 - **Failed paid calls.** Amazap re-credits a failed paid call as Amazap
   credits, never cash: automatically, or through `claim_failed_call` within
-  72 hours under the current terms (https://amazap.com/credits). After a
+  the window Amazap states (see https://amazap.com/credits). After a
   delivered call, `report_outcome` is optional.
 - **Sensitive input.** Never send secrets, private URLs, authenticated pages,
   credentials, personal data, or proprietary content as a purchase input
@@ -104,7 +106,7 @@ credits, and Amazap's limits don't apply to the MCP wallet.
 | Path | Wallet | Caps that apply |
 |---|---|---|
 | Amazap `buy` | Prepaid Amazap credits, added with `top_up` | The user's stated cap, passed as `max_total_sats`, and the Amazap account limits |
-| A direct L402 payment (`access_l402_resource`) | The Lightning Enable MCP wallet | The user's stated cap and the MCP `budget` limits |
+| A Lightning Enable registry result, or a URL the user already has, paid directly (`access_l402_resource`) | The Lightning Enable MCP wallet | The user's stated cap and the MCP `budget` limits |
 
 State which cap applies to which path before any purchase. Never present
 `budget` status or `get_balance` as bounding an Amazap buy. Amazap's own
@@ -374,6 +376,7 @@ you quote any of them.
   endpoint returned them with `hidden: true`. Later the same day, search
   listed paused rows with `hidden: false` and `buyable: false`.
 - Some rows had a `totalSats` above `priceSats` plus `feeSats`.
+- The credit terms stated a 72-hour window for `claim_failed_call`.
 - A listing marked Partial credit only re-credited less than the full price
   after a failed paid call.
 
