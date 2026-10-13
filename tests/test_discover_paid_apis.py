@@ -323,15 +323,20 @@ def unnegated_clauses(text: str, needle: str) -> list[str]:
     ]
 
 
-# "cheaper" is a steer only beside Amazap or an endpointUrl. A factual price
-# statement about registry rows the registry found on its own is not a steer
-# (audit row 49). The "endpointUrl" needle stays unscoped.
-CHEAPER_SCOPE = re.compile(r"Amazap|endpointUrl", re.IGNORECASE)
+# "cheaper" is a steer only beside a word about bypassing a marketplace:
+# Amazap, an endpointUrl, paying directly, a marketplace or its fee, an
+# all-in price, or credits. A factual price statement about registry rows the
+# registry found on its own names none of these, so it is not a steer (audit
+# row 49). The "endpointUrl" needle stays unscoped.
+CHEAPER_SCOPE = re.compile(
+    r"Amazap|endpointUrl|\bdirect(?:ly)?\b|\bbypass|marketplace|\bfees?\b|all-in|credits",
+    re.IGNORECASE,
+)
 
 
 def steer_hits(text: str, needle: str) -> list[str]:
     """``unnegated_clauses``, with the "cheaper" needle limited to sentences
-    that also name Amazap or an endpointUrl."""
+    that also name a marketplace-bypass word (``CHEAPER_SCOPE``)."""
     hits = unnegated_clauses(text, needle)
     if needle == "cheaper":
         hits = [sentence for sentence in hits if CHEAPER_SCOPE.search(sentence)]
@@ -643,7 +648,8 @@ def test_comparison_reads_every_row_field(name):
     "| Source |",
     "with a one-sentence reason",
     "Prefer a reliable, clearly specified service over the cheapest.",
-    "never recommend one of the two on the price difference alone",
+    "recommend the service, not one of its two rows, and leave the choice between the rows to the human.",
+    "A price difference between the two rows is never a reason to pick one of them.",
     "Never rank a row up or down for its source",
     "never drop a row to favor the other source",
     '"not reported by this source"',
@@ -711,6 +717,10 @@ def test_steer_guard_passes_a_prohibition(sentence):
 @pytest.mark.parametrize("sentence", (
     "Amazap's row is cheaper, so pay the seller directly.",
     "The seller's `endpointUrl` is cheaper.",
+    # Steers that name neither Amazap nor an endpointUrl.
+    "Pay the seller directly; it's cheaper.",
+    "The direct route skips the marketplace fee and is cheaper.",
+    "Skip the credits: the all-in price is higher, and the other row is cheaper.",
 ))
 def test_scoped_cheaper_needle_still_catches_an_amazap_steer(sentence):
     assert steer_hits(sentence, "cheaper") == [sentence]
@@ -1016,7 +1026,9 @@ def test_known_url_hands_off_to_pay_l402_anywhere():
     "the MCP `budget` never bounds an Amazap buy",
     "the human makes the final choice",
     # Audit row 35: the pre-Amazap sentence about where the sats go comes back.
-    "each sat goes from that wallet to the API's seller",
+    "the invoice amount goes from that wallet to the API's seller",
+    # Routing fees go to routing nodes, not the seller, and come on top.
+    "any Lightning routing fee is paid by the user's wallet on top",
 ))
 def test_two_ways_to_buy_explains_both_paths_before_any_purchase(phrase):
     assert phrase in skill_section("## Two ways to buy"), f"Two ways to buy is missing {phrase!r}"
@@ -1382,6 +1394,32 @@ def test_example_buys_a_registry_result_directly_and_contrasts_amazap():
     # Placeholder names only: the example never names a real listing.
     names = set(re.findall(r"`(fixture-string-[a-z0-9-]+)`", example))
     assert names <= {row[key] for row in rows() for key in ("name", "provider")}, names
+
+
+def example_recommendation() -> str:
+    """The Example's step 3: from "3. Five candidates" up to "4."."""
+    example = skill_section("## Example")
+    start = example.index("3. Five candidates")
+    return example[start:example.index(" 4. ", start)]
+
+
+def test_example_recommendation_is_a_fit_judgment_with_its_trade_off():
+    # Review I-1: the reason rests on what the step-3 rows show, names the
+    # other row's delivery track record as the trade-off, and leaves the pick
+    # to the human; it never reads as a preference for the registry.
+    step = example_recommendation()
+    for phrase in (
+        "because it fits the request most directly: its listing describes a forecast by city name",
+        'Its trust label reads "not reported by this source".',
+        "The trade-off: picking it gives up the delivery track record the Amazap row "
+        '`fixture-string-forecast` reports, "Verified: delivered 6 times"',
+        "Either fits; the human picks `example-weather`.",
+    ):
+        assert phrase in step, f"the Example's step 3 is missing {phrase!r}"
+    assert "trust cell" not in skill_section("## Example"), "say trust label, not trust cell"
+    # Step 3 has only the search rows; the manifest is read in step 4.
+    for early in ("manifest", "GET", "route"):
+        assert early not in step, f"the Example's step 3 cites {early!r}, which step 4 reads"
 
 
 # --- Final-review follow-ups ------------------------------------------------

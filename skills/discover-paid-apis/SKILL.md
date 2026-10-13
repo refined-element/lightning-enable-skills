@@ -52,8 +52,9 @@ Before any purchase, tell the human how each candidate would be bought. The
 two paths are separate payment systems, and the human makes the final choice.
 
 - **Direct L402, for a Lightning Enable registry result.** It pays from the
-  user's own connected Lightning wallet through the Lightning Enable MCP, and
-  each sat goes from that wallet to the API's seller. The payment is direct
+  user's own connected Lightning wallet through the Lightning Enable MCP: the
+  invoice amount goes from that wallet to the API's seller, and any Lightning
+  routing fee is paid by the user's wallet on top. The payment is direct
   L402: the preimage the payment returns is the proof that unlocks access.
   Lightning Enable's spending controls apply: the MCP `budget` caps and its
   confirmation codes. It needs no Amazap account and no Amazap credits.
@@ -303,9 +304,10 @@ specification, and the signals its own source reports. Prefer a reliable,
 clearly specified service over the cheapest. Never rank a row up or down for
 its source, and never drop a row to favor the other source. When the same
 service is in both sources, show both rows with their own prices and their
-own way to buy, and leave the choice between them to the human; never
-recommend one of the two on the price difference alone. Never mention a
-listing's `endpointUrl` as a way to pay the seller directly.
+own way to buy; recommend the service, not one of its two rows, and leave the
+choice between the rows to the human. A price difference between the two rows
+is never a reason to pick one of them. Never mention a listing's
+`endpointUrl` as a way to pay the seller directly.
 
 If nothing matched or nothing is affordable, say so plainly instead of
 stretching a weak match. Then let the human pick one.
@@ -692,10 +694,14 @@ registry or Amazap data.
 >    `search_catalog` with "weather forecast" returns three Amazap rows.
 > 3. Five candidates, each labeled "Lightning Enable registry" or "Amazap",
 >    and each with its way to buy: direct L402 from the MCP wallet, or Amazap
->    credits. Recommended: `example-weather` from the registry, because its
->    manifest lists a GET forecast route for one city at 10 sats and the
->    budget covers 48 calls; its trust cell reads "not reported by this
->    source". The human picks it.
+>    credits. Recommended: `example-weather` from the registry, because it
+>    fits the request most directly: its listing describes a forecast by city
+>    name, which matches "Berlin", and the budget covers 48 calls at its
+>    10-sat default price. Its trust label reads "not reported by this
+>    source". The trade-off: picking it gives up the delivery track record
+>    the Amazap row `fixture-string-forecast` reports, "Verified: delivered 6
+>    times", and that row takes latitude and longitude instead of a city.
+>    Either fits; the human picks `example-weather`.
 > 4. `discover_api(url="<manifest_url>")` shows `GET /forecast` at 10 sats,
 >    taking `city`: nothing sensitive. The seller's endpoint receives it.
 > 5. The manifest price is the quote: 10 sats, paid from the MCP wallet,
