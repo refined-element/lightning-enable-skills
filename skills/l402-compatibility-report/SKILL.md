@@ -122,8 +122,8 @@ link-local, and cloud metadata addresses, non-HTTPS public URLs, and redirects
 into any of those. `--allow-private` admits local targets, and plain HTTP to
 them, only when the human is deliberately testing a local development server
 on this machine. Add a marketplace profile flag only when the human wants a
-marketplace listing; Optional marketplace profiles names it and the extra
-requests it makes.
+marketplace listing; the Optional marketplace profiles section below names it
+and the extra requests it makes.
 
 ### 2. Read the report back
 
@@ -401,8 +401,8 @@ The one profile today is `amazap`, for an optional listing on
 only when the human wants a marketplace listing. Add `--profile amazap` to the
 read-only check only then: it also requests `/openapi.json` and `/llms.txt` at
 the host root, where Amazap's listing prefill looks. Without it the read-only
-check makes exactly one request. The paid check reuses the read-only report's
-profile.
+check makes exactly one unpaid request (plus any redirects it follows). The
+paid check reuses the read-only report's profile.
 
 Its `status` is `READY` (the classification is `FULFILLMENT_VERIFIED` and
 every required check passed), `NOT_READY` (a required check failed, or the
@@ -411,9 +411,9 @@ classification is `INCOMPATIBLE` or `PAYMENT_COMPATIBLE`), or `NOT_CHECKED`
 `FULFILLMENT_VERIFIED`). Required checks: `public_https`, `priced_invoice`,
 `mainnet_invoice`, `probe_without_body` (Amazap's listing probe sends the
 listed method with no body), `within_probe_window` (the 402 within 8 seconds),
-`stable_path` (no redirect), `stable_price` (the paid amount equals the
-read-only quote, because Amazap pays a live invoice only when it fits the
-price stored at listing time), and, after a paid check,
+`stable_path` (no redirect), and, after a paid check, `stable_price` (the
+paid amount equals the read-only quote, because Amazap pays a live invoice
+only when it fits the price stored at listing time) and
 `synchronous_response`. One advisory check never decides the status:
 `host_root_metadata` (`openapi.json` or `llms.txt` at the host root, where
 Amazap's prefill looks; probed only with `--profile amazap`). On

@@ -7,6 +7,10 @@ Read-only check (Mode A, the default). One unpaid request, then a report:
   python scripts/l402_check.py https://api.example.com/resource --json --output mode-a.json
   python scripts/l402_check.py https://api.example.com/search --method POST --header "Accept=application/json"
   python scripts/l402_check.py https://api.example.com/resource --max-sats 50
+
+Optional, only when the human wants an Amazap listing (adds the two host-root
+requests for the Amazap profile):
+
   python scripts/l402_check.py https://api.example.com/resource --profile amazap
 
 Paid check (Mode B). The agent pays once with the Lightning Enable MCP tool
