@@ -7,6 +7,7 @@ Read-only check (Mode A, the default). One unpaid request, then a report:
   python scripts/l402_check.py https://api.example.com/resource --json --output mode-a.json
   python scripts/l402_check.py https://api.example.com/search --method POST --header "Accept=application/json"
   python scripts/l402_check.py https://api.example.com/resource --max-sats 50
+  python scripts/l402_check.py https://api.example.com/resource --profile amazap
 
 Paid check (Mode B). The agent pays once with the Lightning Enable MCP tool
 access_l402_resource (max_sats set to the approved cap), records the result in
@@ -18,6 +19,8 @@ The script never pays: it has no payment code path. It never prints an invoice
 string, macaroon, token, preimage, or authorization header, and prints the
 payment hash and amount only. --header takes non-secret headers only; a
 credential, Host, or framing header is refused before any request.
+--profile amazap also fetches /openapi.json and /llms.txt at the host root for
+the optional Amazap profile; without it the read-only check makes one request.
 --output PATH writes the report to PATH as UTF-8 instead of printing it, which
 avoids shell redirection (Windows PowerShell 5.1 redirects as UTF-16). The
 JSON and evidence files are read as UTF-8, with or without a byte order mark,
@@ -73,6 +76,11 @@ preimage, or authorization header.
 the file. Use it instead of shell redirection: Windows PowerShell 5.1 writes a
 redirected report as UTF-16.
 
+--profile amazap: the optional Amazap marketplace profile is reported either
+way and never changes the classification; this flag also requests
+/openapi.json and /llms.txt at the host root, where Amazap's listing prefill
+looks. Without it the read-only check makes exactly one request.
+
 Exit status:
   0  a report was printed or written, whatever its classification (a refused
      target gives an INCONCLUSIVE report)
@@ -106,6 +114,14 @@ def parse_method(text: str) -> str:
     return text.upper()
 
 
+def parse_profile(text: str) -> str:
+    """A marketplace profile name. The error is fixed text: it never echoes the input."""
+    if text not in l402_analyze.MARKETPLACE_PROFILES:
+        raise argparse.ArgumentTypeError(
+            "the profile must be one of: " + ", ".join(l402_analyze.MARKETPLACE_PROFILES))
+    return text
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog=PROG,
@@ -125,6 +141,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--timeout", type=float, default=l402_http.DEFAULT_TIMEOUT,
                         help=f"seconds for the whole check (more than 0, at most {MAX_TIMEOUT:g})")
     parser.add_argument("--max-sats", type=int, help="the cap for a paid check; adds a preflight verdict")
+    parser.add_argument("--profile", action="append", default=[], type=parse_profile, metavar="NAME",
+                        help="run an optional marketplace profile's extra read-only requests: amazap probes "
+                             "/openapi.json and /llms.txt at the host root (never changes the classification)")
     parser.add_argument("--json", action="store_true", help="print JSON instead of Markdown")
     parser.add_argument("--output", metavar="PATH",
                         help="write the report to PATH as UTF-8 instead of printing it (use this, not shell "
@@ -160,8 +179,9 @@ def run_mode_a(
     now: datetime,
     resolver=None,
     transport=None,
+    profiles: tuple[str, ...] = (),
 ) -> tuple[dict, set[str]]:
-    """Probe once, then the host-root metadata files; return (report, secrets).
+    """Probe once, then, with the amazap profile, the host-root metadata files; return (report, secrets).
 
     The metadata files are fetched only after the main request got a 402, as
     unpaid GETs with no caller headers and no body, over the same pinned
@@ -175,9 +195,10 @@ def run_mode_a(
         request.url, method=request.method, headers=request.headers, body=request.body,
         timeout=timeout, allow_private=allow_private, resolver=resolver, transport=transport,
     )
-    root_metadata = {}
-    if (result.error_kind is None and result.final_target is not None
+    root_metadata = None
+    if ("amazap" in profiles and result.error_kind is None and result.final_target is not None
             and result.response is not None and result.response.status == 402):
+        root_metadata = {}
         for path in ROOT_METADATA_PATHS:
             extra = l402_http.probe(result.final_target.origin + path, timeout=timeout,
                                     allow_private=allow_private, resolver=resolver, transport=transport)
@@ -318,6 +339,8 @@ def main(argv: list[str] | None = None, *, stdin=None, stdout=None, resolver=Non
     if args.evidence is not None:
         if args.url:
             parser.error("give a URL for the read-only check or --evidence for the paid check, not both")
+        if args.profile:
+            parser.error("--profile goes with a URL: the paid check reuses the read-only report's profile")
         try:
             text = run_mode_b(args, stdin)
         except l402_evidence.EvidenceError as exc:
@@ -343,6 +366,7 @@ def main(argv: list[str] | None = None, *, stdin=None, stdout=None, resolver=Non
         report, secrets = run_mode_a(
             request, timeout=args.timeout, allow_private=args.allow_private, max_sats=args.max_sats,
             now=now or datetime.now(timezone.utc), resolver=resolver, transport=transport,
+            profiles=tuple(args.profile),
         )
     except l402_http.RefusedHeaderError as exc:
         # Fixed text: names the header only when the name is a plain token, never its value.

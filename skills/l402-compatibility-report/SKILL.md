@@ -110,12 +110,13 @@ Use `--output`, not shell redirection: it writes UTF-8 on every platform,
 while Windows PowerShell 5.1 redirects `>` as UTF-16. The script still reads a
 UTF-16 file that starts with a byte order mark.
 
-The script makes one unpaid request, then requests `/openapi.json` and
-`/llms.txt` at the host root (where Amazap's listing prefill looks). It refuses
-localhost, loopback, private, link-local, and cloud metadata addresses,
-non-HTTPS public URLs, and redirects into any of those. `--allow-private` admits
-local targets, and plain HTTP to them, only when the human is deliberately
-testing a local development server on this machine.
+The script makes one unpaid request. It refuses localhost, loopback, private,
+link-local, and cloud metadata addresses, non-HTTPS public URLs, and redirects
+into any of those. `--allow-private` admits local targets, and plain HTTP to
+them, only when the human is deliberately testing a local development server
+on this machine. Add `--profile amazap` only when the human wants the optional
+Amazap profile's prefill check: the script then also requests `/openapi.json`
+and `/llms.txt` at the host root, where Amazap's listing prefill looks.
 
 ### 2. Read the report back
 
@@ -305,8 +306,8 @@ The report also compares the Mode A invoice's payment hash with the paid
 payment hash, as information only. A mismatch is normal, because a server may
 mint a fresh invoice for each 402, and it is never a finding.
 
-Paid-check finding codes, and the listing checks the paid check adds, as the
-report prints them:
+Paid-check finding codes, and the checks the paid check adds to the optional
+Amazap profile, as the report prints them:
 
 - **Nothing to evaluate (`INCONCLUSIVE`):** `paid_check_without_challenge` (the
   read-only check wasn't `CHALLENGE_COMPATIBLE`), `awaiting_confirmation` (the
@@ -334,10 +335,10 @@ report prints them:
   `paid_retry_rejected` (another 4xx), `paid_retry_failed` (a 5xx or another
   non-2xx answer), `unexpected_result` (a 2xx that misses the stated
   expectations).
-- **Listing checks, never the classification:** the paid check adds
-  `stable_price` (the paid amount equals the read-only quote) and
-  `synchronous_response` (a reported 2xx other than `202 Accepted`) to the
-  marketplace checks.
+- **Amazap profile, never the classification:** the paid check adds
+  `synchronous_response` (a reported 2xx other than `202 Accepted`) and
+  `stable_price` (the paid amount equals the read-only quote) to
+  `marketplace_profiles.amazap`. Both are required for `READY`.
 
 ### 8. Hand off
 
@@ -368,9 +369,12 @@ read-only check.
 
 **The JSON report is the contract.** Tools and gates read `--json`, never the
 Markdown: `report_version` (2), `mode`, `classification`, `evidence`, and
-`marketplace.checks`. After a paid check, `paid_fulfillment` adds
-`hash_source`, `paid_checked_at`, and `evidence_source` ("agent-recorded
-access_l402_resource result": validated, never independently observed).
+`marketplace_profiles`, the optional marketplace checks, which never change
+`classification`. After a paid check, `paid_fulfillment` adds `hash_source`,
+`paid_checked_at`, and `evidence_source` ("agent-recorded access_l402_resource
+result": validated, never independently observed). Version 2 dropped the
+version 1 marketplace classification; a reader that gated on it reads
+`marketplace_profiles.amazap.status` instead.
 
 ## What can go wrong
 
@@ -418,8 +422,9 @@ access_l402_resource result": validated, never independently observed).
 
 - **Not custody.** Lightning Enable does not hold funds; the payment provider
   facilitates custody and settlement.
-- **Not a load test or a security audit.** It sends one unpaid request (plus two
-  metadata requests) and, at most, one paid call.
+- **Not a load test or a security audit.** It sends one unpaid request (plus
+  two host-root requests, only with `--profile amazap`) and, at most, one paid
+  call.
 - **Not a marketplace listing.** It reports readiness; it never lists anything.
 - **Not a signature check.** It decodes the invoice and reads the macaroon's
   public parts; only the issuer can check a macaroon signature.

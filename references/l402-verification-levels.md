@@ -103,6 +103,42 @@ In both cases:
 A second recorded payment for one check is a finding in its own right. Stop
 and reconcile from the wallet receipts.
 
+## Optional marketplace profiles
+
+A marketplace can expect more than L402 does. The report checks those
+expectations in a separate profile, `marketplace_profiles.<name>` in the JSON
+report and the last section of the Markdown. A profile never changes the
+classification, never adds a finding or a required fix, and never makes a
+correct endpoint read as deficient. A seller lists on a marketplace only by
+choice.
+
+The one profile today is `amazap`, for an optional listing on
+[Amazap](https://amazap.com/sell) (see [Amazap marketplace](amazap-marketplace.md)).
+Its `status` is one of:
+
+| Status | Means |
+|---|---|
+| `READY` | The classification is `FULFILLMENT_VERIFIED` and every required check passed. |
+| `NOT_READY` | A required check failed, or the classification is `INCOMPATIBLE` or `PAYMENT_COMPATIBLE`. |
+| `NOT_CHECKED` | Nothing failed, but readiness needs a paid check that reaches `FULFILLMENT_VERIFIED`: a read-only run, an `INCONCLUSIVE` paid check, or a required check that could not be judged. |
+
+Required checks: `public_https`, `priced_invoice`, `mainnet_invoice`,
+`probe_without_body` (Amazap's listing probe sends the listed method with no
+body), `within_probe_window` (the 402 within 8 seconds), `stable_path` (no
+redirect before the 402), and, after a paid check, `synchronous_response` (a
+2xx other than `202 Accepted`) and `stable_price` (the paid amount equals the
+read-only quote; Amazap pays a live invoice only when it fits the price it
+stored at listing time, so a price that moves breaks buys). Advisory checks
+never decide the status: `host_root_metadata` (`openapi.json` or `llms.txt` at
+the host root, where Amazap's listing prefill looks; probed only when the check
+runs with `--profile amazap`). On `api.lightningenable.com` the host-root files
+describe the Lightning Enable platform, not the endpoint, so the check says to
+supply the listing fields by hand.
+
+Report version 1 called a `READY` Amazap profile `MARKETPLACE_READY` and
+reported it as a sixth classification. Version 2 has no such classification;
+read `marketplace_profiles.amazap.status`.
+
 ## Custody
 
 Lightning Enable does not hold funds; the payment provider facilitates custody

@@ -100,3 +100,28 @@ def test_shared_references_are_covered_by_the_repo_guards():
     assert REFERENCE in test_skill_metadata.markdown_files()
     assert REFERENCE in test_tool_surface.scanned_files()
     assert REFERENCE in test_tool_arguments_surface.skill_docs()
+
+
+def test_reference_has_the_optional_marketplace_profiles_section():
+    section = " ".join(section_text(text(), PROFILES_HEADING).split())
+    for phrase in (
+        "`marketplace_profiles.<name>`",
+        "never changes the classification",
+        "`READY`",
+        "`NOT_READY`",
+        "`NOT_CHECKED`",
+        "`host_root_metadata`",
+        "Advisory checks never decide the status",
+        "`MARKETPLACE_READY`",
+        "`marketplace_profiles.amazap.status`",
+    ):
+        assert phrase in section, phrase
+    # stable_price is required (Amazap pays only at the price it stored); host-root metadata is advisory.
+    required, advisory = section.split("Advisory checks never decide the status", 1)
+    assert "`stable_price`" in required and "`stable_price`" not in advisory
+    assert "`host_root_metadata`" in advisory and "`host_root_metadata`" not in required
+
+
+def test_marketplace_ready_appears_only_in_the_profiles_section():
+    assert "MARKETPLACE_READY" not in without_section(text(), PROFILES_HEADING)
+    assert "MARKETPLACE_READY" in section_text(text(), PROFILES_HEADING)

@@ -29,9 +29,13 @@ from l402_levels import (
     FULFILLMENT_VERIFIED,
     INCOMPATIBLE,
     INCONCLUSIVE,
+    MARKETPLACE_PROFILES,
     PAYMENT_COMPATIBLE,
+    REPORT_VERSION,
     TRANSIENT_STATUSES,
     Finding,
+    profile_note,
+    profile_status,
 )
 
 # Key names refused anywhere in the evidence file, compared case-insensitively
@@ -48,7 +52,7 @@ METHOD = re.compile(r"[A-Za-z]{1,16}")  # always used with fullmatch
 # bad credential can't turn into a one-character scrub of the whole report.
 MIN_SECRET_LENGTH = 8
 MODE_A_KEYS = ("checked_at", "target", "transport", "challenge", "invoice", "binding",
-               "marketplace", "findings", "evidence")
+               "marketplace_profiles", "findings", "evidence")
 NOT_CHECKED_BY_PAID_CHECK = "a synchronous, bounded response"
 # Where the paid section's facts come from, so no downstream gate reads them as independently observed.
 EVIDENCE_SOURCE = "agent-recorded access_l402_resource result"
@@ -207,7 +211,7 @@ def _optional(container: dict, key: str, path: str, check, wanted: str) -> None:
 def _require_mode_a_shapes(mode_a: dict) -> None:
     """Refuse a read-only report whose fields this module or the renderer read with the wrong type."""
     path = "evidence.mode_a_report"
-    for key in ("target", "transport", "challenge", "marketplace", "evidence"):
+    for key in ("target", "transport", "challenge", "marketplace_profiles", "evidence"):
         if not isinstance(mode_a[key], dict):
             raise EvidenceError(f"{path}.{key} must be an object")
     for key in ("invoice", "binding"):
@@ -221,12 +225,18 @@ def _require_mode_a_shapes(mode_a: dict) -> None:
         raise EvidenceError(f"{path}.findings and security must hold finding objects")
     if not all(isinstance(mode_a["target"].get(k), str) for k in ("url", "method")):
         raise EvidenceError(f"{path}.target.url and target.method must be strings")
-    marketplace = mode_a["marketplace"]
-    if not isinstance(marketplace.get("checks", []), list) or not all(
-            isinstance(c, dict) for c in marketplace.get("checks", [])):
-        raise EvidenceError(f"{path}.marketplace.checks must be a list of check objects")
-    if not isinstance(marketplace.get("not_checked_by_script", []), list):
-        raise EvidenceError(f"{path}.marketplace.not_checked_by_script must be a list")
+    for name, profile in mode_a["marketplace_profiles"].items():
+        where = f"{path}.marketplace_profiles"
+        if name not in MARKETPLACE_PROFILES:
+            raise EvidenceError(f"{where} holds a profile this script does not know; produce the read-only "
+                                "report again with --json")
+        if not isinstance(profile, dict):
+            raise EvidenceError(f"{where}.{name} must be an object")
+        if not isinstance(profile.get("checks", []), list) or not all(
+                isinstance(c, dict) for c in profile.get("checks", [])):
+            raise EvidenceError(f"{where}.{name}.checks must be a list of check objects")
+        if not isinstance(profile.get("not_checked_by_script", []), list):
+            raise EvidenceError(f"{where}.{name}.not_checked_by_script must be a list")
     if not isinstance(mode_a["evidence"].get("statuses", []), list):
         raise EvidenceError(f"{path}.evidence.statuses must be a list")
 
@@ -237,6 +247,9 @@ def _require(evidence: dict) -> tuple[dict, int, dict, list, dict]:
     # First, before any other field is read.
     _reject_embedded_credentials(evidence)
     mode_a = evidence.get("mode_a_report")
+    if isinstance(mode_a, dict) and mode_a.get("mode") == "read-only" and mode_a.get("report_version") != REPORT_VERSION:
+        raise EvidenceError(f"evidence.mode_a_report is not a report_version {REPORT_VERSION} read-only report; "
+                            "produce it again with this l402_check.py and --json")
     if (not isinstance(mode_a, dict) or mode_a.get("mode") != "read-only"
             or mode_a.get("classification") not in CLASSIFICATIONS
             or any(key not in mode_a for key in MODE_A_KEYS)):
@@ -318,11 +331,12 @@ def evaluate(evidence: dict, credential: str | None = None) -> dict:
     payment_hashes = [str(p["payment_hash"]).lower() for p in payments if p.get("payment_hash")]
     paid_hash = sources[0]["payment_hash"] if sources else (payment_hashes[0] if len(payment_hashes) == 1 else None)
 
-    marketplace = copy.deepcopy(report.get("marketplace") or {"checks": [], "not_checked_by_script": []})
-    marketplace["checks"] = list(marketplace.get("checks", [])) + _paid_marketplace_checks(
-        quoted, total_paid, status)
-    marketplace["not_checked_by_script"] = [
-        item for item in marketplace.get("not_checked_by_script", []) if item != NOT_CHECKED_BY_PAID_CHECK]
+    profiles = copy.deepcopy(report.get("marketplace_profiles") or {})
+    amazap = profiles.get("amazap")
+    if amazap is not None:
+        amazap["checks"] = list(amazap.get("checks", [])) + _paid_profile_checks(quoted, total_paid, status)
+        amazap["not_checked_by_script"] = [
+            item for item in amazap.get("not_checked_by_script", []) if item != NOT_CHECKED_BY_PAID_CHECK]
 
     classification = _classify(mode_a, cap, tool, payments, paid_sats, receipt_sats, total_paid, status,
                                preimage_result, sources, expectations, findings)
@@ -383,14 +397,10 @@ def evaluate(evidence: dict, credential: str | None = None) -> dict:
     report["classification"] = classification
     report["summary"] = _summary(classification, total_paid, status, bool(payments) or paid_sats > 0,
                                  sources[0]["source"] if sources else None)
-    marketplace["listing_ready"] = classification == FULFILLMENT_VERIFIED and all(
-        check["pass"] for check in marketplace["checks"])
-    marketplace["note"] = (
-        "Every listing check passed. Listing checks never change the classification."
-        if marketplace["listing_ready"]
-        else "Listing checks are optional and never change the classification."
-    )
-    report["marketplace"] = marketplace
+    for profile in profiles.values():
+        profile["status"] = profile_status(classification, profile.get("checks", []))
+        profile["note"] = profile_note(profile["status"])
+    report["marketplace_profiles"] = profiles
     evidence_section = dict(report.get("evidence") or {})
     evidence_section.update({
         "statuses": list(evidence_section.get("statuses", [])) + ([status] if status is not None else []),
@@ -441,19 +451,29 @@ def _expectations(tool: dict, expected: dict, status, method: str) -> list[dict]
     return checks
 
 
-def _paid_marketplace_checks(quoted, total_paid: int, status) -> list[dict]:
+def _paid_profile_checks(quoted, total_paid: int, status) -> list[dict]:
+    """The checks the paid check adds to the Amazap profile. A status is never inferred.
+
+    Both are required: Amazap pays a live invoice only when it fits the price it
+    stored at listing time, so a price that moves between quote and payment
+    breaks buys. With nothing paid, or no quote, the price can't be compared.
+    """
     if status is None:
-        synchronous, detail = False, "The paid call's status was not reported."
+        synchronous, detail = None, "The paid call's status was not reported."
+    elif status in AMBIGUOUS_RETRY_STATUSES:
+        synchronous, detail = None, f"The paid call returned {status}: no definitive answer."
     elif status == 202:
         synchronous, detail = False, "The paid call returned 202 Accepted: the resource was deferred, not delivered."
     elif 200 <= status < 300:
         synchronous, detail = True, f"The paid call returned {status} within access_l402_resource's bounded call."
     else:
         synchronous, detail = False, f"The paid call returned {status}, not a 2xx."
+    stable = None if quoted is None or total_paid == 0 else quoted == total_paid
     return [
-        {"name": "stable_price", "pass": quoted is not None and quoted == total_paid,
-         "detail": f"Quoted {quoted} sats in the read-only check; paid {total_paid} sats."},
-        {"name": "synchronous_response", "pass": synchronous, "detail": detail},
+        {"name": "stable_price", "pass": stable, "required": True,
+         "detail": f"Quoted {quoted} sats in the read-only check; paid {total_paid} sats. Amazap pays a live "
+                   "invoice only when it fits the price it stored at listing time."},
+        {"name": "synchronous_response", "pass": synchronous, "required": True, "detail": detail},
     ]
 
 

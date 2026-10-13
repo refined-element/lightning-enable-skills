@@ -24,11 +24,11 @@ SECTIONS = (
     "Authorization and binding",
     "Paid fulfillment",
     "Replay/idempotency",
-    "Marketplace readiness",
     "Security findings",
     "Rerun notes",
     "Required fixes",
     "Evidence retained",
+    "Optional marketplace profiles",
 )
 REDACTED = "[REDACTED]"
 HASH_SOURCE_NOTES = {
@@ -167,11 +167,11 @@ def to_markdown(report: dict, secrets: set[str] | frozenset[str] = frozenset()) 
         "Authorization and binding": _binding(report),
         "Paid fulfillment": _paid(report),
         "Replay/idempotency": [report["replay"]["note"]],
-        "Marketplace readiness": _marketplace(report),
         "Security findings": _bullets([_finding(f) for f in report.get("security", [])]),
         "Rerun notes": _bullets(report.get("rerun", [])),
         "Required fixes": _bullets(report.get("required_fixes", [])),
         "Evidence retained": _bullets([f"[{k}] {_value(v)}" for k, v in (report.get("evidence") or {}).items()]),
+        "Optional marketplace profiles": _profiles(report),
     }
     for section in SECTIONS:
         lines += ["", f"## {section}", ""] + body[section]
@@ -308,10 +308,22 @@ def _paid(report: dict) -> list[str]:
     return _bullets(rows)
 
 
-def _marketplace(report: dict) -> list[str]:
-    m = report["marketplace"]
-    rows = [f"[{c['name']}] {'pass' if c['pass'] else 'fail'}. {c['detail']}" for c in m["checks"]]
-    rows += [f"Not checked by the script: {item}" for item in m["not_checked_by_script"]]
-    rows += [_finding(f) for f in report["findings"] if f["section"] == "marketplace"]
-    rows.append(m["note"])
-    return _bullets(rows)
+PROFILE_TITLES = {"amazap": "Amazap"}
+CHECK_VERDICTS = {True: "pass", False: "fail", None: "not checked"}
+
+
+def _profiles(report: dict) -> list[str]:
+    profiles = report.get("marketplace_profiles") or {}
+    if not profiles:
+        return ["- None."]
+    lines = ["Optional. A marketplace profile never changes the classification above."]
+    for name, profile in profiles.items():
+        rows = [f"Status: {profile.get('status') or 'not computed'}"]
+        for check in profile.get("checks", []):
+            advisory = "" if check.get("required", True) else " (advisory)"
+            rows.append(f"[{check['name']}] {CHECK_VERDICTS.get(check['pass'], 'fail')}{advisory}. {check['detail']}")
+        rows += [f"Not checked by the script: {item}" for item in profile.get("not_checked_by_script", [])]
+        if profile.get("note"):
+            rows.append(profile["note"])
+        lines += ["", f"### {PROFILE_TITLES.get(name, name)}", ""] + _bullets(rows)
+    return lines

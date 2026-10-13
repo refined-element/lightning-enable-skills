@@ -324,3 +324,17 @@ def test_no_rendered_row_reads_as_a_token_value():
     section = _section(l402_report.to_markdown(report, secrets), "Authorization and binding")
     assert "Token payment hash: not externally verifiable" in section
     assert l402_report.REDACTED not in section
+
+
+def test_optional_marketplace_profiles_is_the_last_section():
+    assert l402_report.SECTIONS[-1] == "Optional marketplace profiles"
+    assert "Marketplace readiness" not in l402_report.SECTIONS
+    report, secrets = support.run_fixture(support.load_fixture("le-proxy-weather"))
+    markdown = l402_report.to_markdown(report, secrets)
+    core, tail = markdown.split("\n## Optional marketplace profiles\n", 1)
+    assert "### Amazap" in tail
+    assert "- Status: NOT_CHECKED" in tail
+    assert "(advisory)" in tail
+    assert "never changes the classification" in tail
+    assert "marketplace-ready" not in core.lower()
+    assert "host_root_metadata" not in core

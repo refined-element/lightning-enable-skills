@@ -573,23 +573,24 @@ public HTTPS URL, and only as an offer; no answer means no.
   price. If `l402-compatibility-report` is not installed, the listing is not
   ready; give the human its GitHub URL,
   https://github.com/refined-element/lightning-enable-skills/tree/main/skills/l402-compatibility-report.
-  Take the `classification` field from the JSON. Offer the listing as ready
-  only at `FULFILLMENT_VERIFIED`, and only once example
+  Take the `classification` field and `marketplace_profiles.amazap.status`
+  from the JSON. Offer the listing as ready only at `FULFILLMENT_VERIFIED`
+  with the Amazap profile `READY`, and only once example
   parameters are known, replay behavior is understood, no error or output
   exposes a secret, and the human has chosen title, description, category,
-  and price. It also needs a mainnet invoice, a 402 to a bodyless request
-  within 8 seconds, and no redirect between the listed URL and the 402.
-  `CHALLENGE_COMPATIBLE` is the
+  and price. `CHALLENGE_COMPATIBLE` is the
   most the read-only check can return for a correct endpoint: say
   "challenge-compatible, fulfillment unverified", and do not offer the listing
-  as ready until the paid check below lifts it. A private, loopback, link-local, or
-  non-HTTPS URL, a non-mainnet invoice or a 402 slower than 8 seconds, a `200`
-  to an unpaid request, or a `400`, `415`, or `422` to a request with no body
-  is not listing-ready. Step 10's testnet key and a slow cold start are the
-  usual causes of the middle two; fix them in the deployment, never by paying
-  again. The last case means the 402 must come before body validation: in
-  ASP.NET Core, step 2's pipeline order; in Express, mount the `l402`
-  middleware before any body validator on the route.
+  as ready until the paid check below lifts it. The listing is not ready when
+  the endpoint shows any of these: a private, loopback, link-local, or
+  non-HTTPS URL; a `200` to an unpaid request; a `400`, `415`, or `422` to a
+  request with no body; a redirect between the listed URL and the 402; a
+  non-mainnet invoice; or a 402 slower than 8 seconds. Step 10's testnet key
+  and a slow cold start are the usual causes of the last two; fix them in the
+  deployment, never by paying again. A `400`, `415`, or `422` means the 402
+  must come before body validation: in ASP.NET Core, step 2's pipeline order;
+  in Express, mount the `l402` middleware before any body validator on the
+  route.
 - **Pay once.** Pay for the gate once, never twice. A test against `localhost`
   doesn't count. The paid check runs on `GET` or `HEAD` only, so a `POST`,
   `PUT`, or `DELETE` route stays at `CHALLENGE_COMPATIBLE` here and is never
@@ -640,9 +641,11 @@ public HTTPS URL, and only as an offer; no answer means no.
   10's staging price, and after any price change in the code the seller must
   re-run Amazap's checks. The order matters: the chosen price goes in before
   the gate's read-only check (see Gate). A 1-sat token from step 10 still
-  gives `FULFILLMENT_VERIFIED`, which is ready; if the token no longer
-  verifies after the price change, the result is lower and not ready. Either
-  way the agent never pays again.
+  gives the core `FULFILLMENT_VERIFIED`, but its paid amount differs from the
+  chosen price, so the Amazap profile's required `stable_price` check fails,
+  the profile is not `READY`, and the listing is not ready in that run (the
+  gate needs both); if the token no longer verifies after the price change,
+  the result is lower and not ready. Either way the agent never pays again.
 - **The human decides.** Without the human's explicit approval, never submit
   the listing, accept seller terms, provide or infer a contact email, opt into
   announcements, publish a Nostr handle, change the endpoint's price, or claim
