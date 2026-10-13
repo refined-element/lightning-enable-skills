@@ -504,6 +504,11 @@ def test_skill_links_the_reference_sections_and_live_pages():
     "Never frame a price difference as a reason to bypass Amazap.",
     NON_GOAL,
     DIRECT_PAY_SCOPE,
+    # search_catalog hands back a ready buy call; searching must not run it.
+    "Do not run it; `buy` waits for the trial step and the human's yes.",
+    "Stop sooner once you have enough relevant rows to pick five.",
+    "**Paused or degraded rows are shown, not bought.**",
+    "**Hidden rows are dropped.**",
 ))
 def test_search_reads_both_sources_and_labels_every_row(phrase):
     assert phrase in skill_section("### 2. Search both sources"), f"step 2 is missing {phrase!r}"
@@ -521,6 +526,7 @@ def test_amazap_tools_are_named_only_when_the_host_lists_them():
         "Never claim Amazap MCP access you don't have.",
         "Amazap search uses the public products API",
         "https://amazap.com/mcp",
+        "governed by the current Amazap credit terms (https://amazap.com/credits)",
     ):
         assert phrase in text, f"discover-paid-apis is missing {phrase!r}"
 
@@ -549,6 +555,9 @@ def test_comparison_reads_every_row_field(name):
     "Quote `trust.label` as returned",
     "Never upgrade a label.",
     "`buyable: false`, and never buy it",
+    "drop any row with `hidden: true`",
+    # The trust.label prefixes are observed values, not a closed list.
+    "For example, it may start with Verified",
     "Say who receives the input",
     "never as free or unlimited",
 ))

@@ -31,8 +31,8 @@ You search, the human picks, you read the details for free, and at most one
 paid trial shows whether the service delivers.
 
 Lightning Enable does not hold funds; the payment provider facilitates custody
-and settlement. Amazap credits are governed by the current Amazap terms
-(https://amazap.com/credits).
+and settlement. Amazap credits are governed by the current Amazap credit
+terms (https://amazap.com/credits).
 
 Amazap is another company's live product. Its fees, limits, terms, and catalog
 change without notice, so read them from the current Amazap pages
@@ -182,6 +182,7 @@ The registry is `L402_REGISTRY_URL` if set, otherwise
 **Amazap, through its MCP.** When the host lists `search_catalog`, call it
 with the outcome terms. It hides demo and unhealthy listings by default, and
 each result carries an all-in price, a quote, and a ready-to-use buy call.
+Do not run it; `buy` waits for the trial step and the human's yes.
 
 **Amazap, without its MCP.** Use the read-only public products API:
 
@@ -191,7 +192,8 @@ GET https://amazap.com/api/products?q=weather&limit=50&offset=0
 
 It takes `q`, `protocol`, `category`, `source`, `healthyOnly`, `synthetic`,
 `limit` (at most 200), and `offset`, and answers with `products`, `total`,
-`limit`, and `offset`. Page with `offset` until `offset >= total`.
+`limit`, and `offset`. Page with `offset` until `offset >= total`. Stop
+sooner once you have enough relevant rows to pick five.
 `GET https://amazap.com/api/products/<idOrSlug>` returns one row, wrapped in
 `product`, with its `inputSchema.fields[]`. This path reads; it can't buy.
 
@@ -199,11 +201,12 @@ For every row:
 
 - **Label every row** with its source: "Lightning Enable registry" or
   "Amazap". Label any other configured registry by its own name.
-- **Hidden rows stay hidden.** A search result may include paused or
-  degraded rows, so read `listingState` and `buyable` on every row. A row can
-  also be hidden from search and still be returned by slug, with
-  `hidden: true`. A hidden row is not a candidate, to show or to buy. Don't
-  fetch one by slug to work around that.
+- **Paused or degraded rows are shown, not bought.** A search result may
+  include paused or degraded rows, so read `listingState` and `buyable` on
+  every row.
+- **Hidden rows are dropped.** A row can also be hidden from search and still
+  be returned by slug, with `hidden: true`. A hidden row is not a candidate,
+  to show or to buy. Don't fetch one by slug to work around that.
 - **A directory row is not a delivery record.** Many Amazap rows are imported
   from directories such as 402 Index. Read `trust.label` and the paid track
   record instead of assuming Amazap has delivered the service.
@@ -232,10 +235,12 @@ Show at most five candidates, one row each:
 - **Trust and health, exactly as reported.** For an Amazap row, show
   `trust.label`, `healthStatus`, and `listingState`, and the paid record
   (`paidSuccesses`, `paidFailures`, `lastPaidSuccessAt`) when present. Quote
-  `trust.label` as returned; it starts with Verified, Working, Limited track
-  record, or Having trouble and can add detail. Never upgrade a label.
+  `trust.label` as returned. For example, it may start with Verified, Working,
+  Limited track record, or Having trouble, and add detail; those are observed
+  values, not a fixed list, so quote it as returned. Never upgrade a label.
 - **Buyable now.** `buyable` for an Amazap row, read with `listingState` and
-  `hidden`. Show a row with `buyable: false`, and never buy it.
+  `hidden`; drop any row with `hidden: true`. Show a row with
+  `buyable: false`, and never buy it.
 - **Protocol and rail.** `protocol`, `paymentAsset`, and `paymentNetwork` for
   an Amazap row; L402 over Lightning for a registry row.
 - **Wallet.** "Amazap credits" for an Amazap row, "MCP wallet" for a registry
