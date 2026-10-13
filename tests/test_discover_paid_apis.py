@@ -127,7 +127,12 @@ NON_GOAL = (
     "Never steer a buyer away from Amazap's all-in price toward direct payment "
     "of a listing Amazap surfaced."
 )
-DIRECT_PAY_SCOPE = "Direct payment through `pay-l402-anywhere` is for a URL the user already has."
+DIRECT_PAY_SCOPE = "Direct payment is for a Lightning Enable registry result or a URL the user already has."
+# The no-bypass rule never reaches a result the registry found on its own.
+SCOPE_RULE = (
+    "This rule covers listings Amazap surfaced; it never applies to a result the "
+    "Lightning Enable registry returned"
+)
 CAP_RULE = "State which cap applies to which path before any purchase."
 TWO_WALLET_RULE = (
     "The Lightning Enable MCP `budget` and `get_balance` don't see Amazap "
@@ -309,6 +314,21 @@ def unnegated_clauses(text: str, needle: str) -> list[str]:
     ]
 
 
+# "cheaper" is a steer only beside Amazap or an endpointUrl. A factual price
+# statement about registry rows the registry found on its own is not a steer
+# (audit row 49). The "endpointUrl" needle stays unscoped.
+CHEAPER_SCOPE = re.compile(r"Amazap|endpointUrl", re.IGNORECASE)
+
+
+def steer_hits(text: str, needle: str) -> list[str]:
+    """``unnegated_clauses``, with the "cheaper" needle limited to sentences
+    that also name Amazap or an endpointUrl."""
+    hits = unnegated_clauses(text, needle)
+    if needle == "cheaper":
+        hits = [sentence for sentence in hits if CHEAPER_SCOPE.search(sentence)]
+    return hits
+
+
 def skill_section(heading: str) -> str:
     """Flat text of the SKILL.md section that starts with ``heading``, with
     blockquote markers dropped so a quoted example reads as one run of text."""
@@ -441,6 +461,8 @@ def wallets_section() -> str:
     "never present a listing's `endpointUrl` as a cheaper way to pay the seller",
     "show each row as its source returned it",
     DIRECT_PAY_SCOPE,
+    SCOPE_RULE,
+    "A buyer skill searches the registry first and Amazap as an additional source",
     "`quote_id`, `total_cost`, `max_total_sats`, and `accept_terms`",
     "the current Amazap terms (https://amazap.com/terms and https://amazap.com/credits)",
     # max_total_sats is the quoted total; the user's cap is checked before the yes.
@@ -513,7 +535,7 @@ def test_description_names_both_sources_and_keeps_the_routing():
     front = test_skill_metadata.parse_frontmatter(read(SKILL))
     description = front["description"]
     for phrase in (
-        "Lightning Enable registry and Amazap",
+        "Lightning Enable registry, and Amazap as an additional source",
         "label each source",
         "at most one bounded trial purchase",
         "(use pay-l402-anywhere)",
@@ -521,6 +543,12 @@ def test_description_names_both_sources_and_keeps_the_routing():
         "(use agent-wallet-setup)",
     ):
         assert phrase in description, f"the description is missing {phrase!r}"
+
+
+def test_description_names_the_registry_before_amazap():
+    description = test_skill_metadata.parse_frontmatter(read(SKILL))["description"]
+    assert 0 <= description.find("Lightning Enable registry") < description.find("Amazap")
+    assert "explain the two ways to buy" in description
 
 
 def test_skill_links_the_reference_sections_and_live_pages():
@@ -547,6 +575,8 @@ def test_skill_links_the_reference_sections_and_live_pages():
     "Never frame a price difference as a reason to bypass Amazap.",
     NON_GOAL,
     DIRECT_PAY_SCOPE,
+    "Search the Lightning Enable registry first.",
+    SCOPE_RULE,
     # search_catalog hands back a ready buy call; searching must not run it.
     "Do not run that buy call; `buy` waits for the trial step and the human's yes.",
     "Stop sooner once you have enough relevant rows to pick five.",
@@ -591,7 +621,14 @@ def test_comparison_reads_every_row_field(name):
     "| Source |",
     "with a one-sentence reason",
     "Prefer a reliable, clearly specified service over the cheapest.",
-    "never on the price difference between the rows",
+    "never recommend one of the two on the price difference alone",
+    "Never rank a row up or down for its source",
+    "never drop a row to favor the other source",
+    '"not reported by this source"',
+    "`endpoint_count`",
+    "`manifest_url`",
+    "/openapi.json",
+    "say which way each candidate is bought (see [Two ways to buy](#two-ways-to-buy))",
     "`totalSats`, the all-in figure the buyer pays",
     "Never add `priceSats` and the fee yourself",
     "quote required",
@@ -618,7 +655,7 @@ def test_skill_says_plainly_that_endpoint_url_is_never_a_way_to_pay():
 @pytest.mark.parametrize("needle", STEER_WORDS)
 @pytest.mark.parametrize("doc", STEER_DOCS, ids=lambda p: p.relative_to(REPO_ROOT).as_posix())
 def test_steer_words_appear_only_in_a_negated_clause(doc, needle):
-    loose = unnegated_clauses(read(doc), needle)
+    loose = steer_hits(read(doc), needle)
     assert not loose, (
         f"{doc.name}: {needle!r} outside a prohibition, which frames a lower "
         f"price as a reason to bypass Amazap: {loose}"
@@ -631,10 +668,10 @@ def test_steer_guard_catches_a_negation_in_another_clause(bait, needle):
     # The final review's mutant: "Don't" negates "overpay", not the clause
     # that offers the endpointUrl as cheaper. Planted mid-paragraph in step 3.
     text = read(SKILL)
-    anchor = "Recommend one candidate, with a one-sentence reason."
-    assert anchor in text
+    anchor = "Recommend one candidate, with a"
+    assert text.count(anchor) == 1
     mutated = text.replace(anchor, f"{bait} {anchor}", 1)
-    assert any(bait in sentence for sentence in unnegated_clauses(mutated, needle)), (
+    assert any(bait in sentence for sentence in steer_hits(mutated, needle)), (
         f"the {needle!r} guard let {bait!r} through"
     )
 
@@ -647,6 +684,20 @@ def test_steer_guard_catches_a_negation_in_another_clause(bait, needle):
 def test_steer_guard_passes_a_prohibition(sentence):
     assert unnegated_clauses(sentence, "endpointUrl") == []
     assert unnegated_clauses(sentence, "cheaper") == []
+
+
+@pytest.mark.parametrize("sentence", (
+    "Amazap's row is cheaper, so pay the seller directly.",
+    "The seller's `endpointUrl` is cheaper.",
+))
+def test_scoped_cheaper_needle_still_catches_an_amazap_steer(sentence):
+    assert steer_hits(sentence, "cheaper") == [sentence]
+
+
+def test_scoped_cheaper_needle_passes_a_registry_only_price_fact():
+    sentence = "Of the two registry rows for the same data, the second is cheaper."
+    assert unnegated_clauses(sentence, "cheaper") == [sentence]
+    assert steer_hits(sentence, "cheaper") == []
 
 
 @pytest.mark.parametrize("doc", GUARDED_DOCS, ids=lambda p: p.name)
@@ -928,6 +979,47 @@ def test_known_url_hands_off_to_pay_l402_anywhere():
     step = skill_section("### 9. Hand off")
     assert "**A URL the user already has:** [`pay-l402-anywhere`](../pay-l402-anywhere/)" in step
     assert "not to listings Amazap surfaced" in step
+    assert "which publishes to the Lightning Enable registry" in step
+    assert "optional Amazap listing" not in flat(read(SKILL))
+
+
+@pytest.mark.parametrize("phrase", (
+    "Before any purchase, tell the human how each candidate would be bought.",
+    "**Direct L402, for a Lightning Enable registry result.**",
+    "the user's own connected Lightning wallet",
+    "the preimage the payment returns is the proof that unlocks access",
+    "Lightning Enable's spending controls apply",
+    "It needs no Amazap account and no Amazap credits.",
+    "**Amazap, for an Amazap listing.**",
+    "prepaid Amazap credits, at Amazap's all-in price, under the current Amazap terms and Amazap's account limits",
+    "trust indicators",
+    "the MCP `budget` never bounds an Amazap buy",
+    "the human makes the final choice",
+    # Audit row 35: the pre-Amazap sentence about where the sats go comes back.
+    "each sat goes from that wallet to the API's seller",
+))
+def test_two_ways_to_buy_explains_both_paths_before_any_purchase(phrase):
+    assert phrase in skill_section("## Two ways to buy"), f"Two ways to buy is missing {phrase!r}"
+
+
+def test_step_1_reads_the_mcp_leash_before_the_amazap_tools():
+    # Audit row 36: the direct path's own leash comes first; Amazap's tools second.
+    step = skill_section("### 1. Check the tools and the MCP leash")
+    leash = step.find("**The MCP leash, for the direct path only:**")
+    tools = step.find("**Which tools does the host list?**")
+    assert 0 <= leash < tools, "read the MCP leash before checking for Amazap's tools"
+
+
+def test_two_ways_to_buy_comes_before_the_flow():
+    text = read(SKILL)
+    assert 0 <= text.find("\n## Two ways to buy\n") < text.find("\n## Flow\n")
+
+
+def test_an_unreachable_amazap_falls_back_to_the_registry():
+    rows_by_symptom = what_can_go_wrong()
+    symptom = "Amazap's products API or MCP is unreachable or errors"
+    assert symptom in rows_by_symptom
+    assert "carry on with the Lightning Enable registry" in rows_by_symptom[symptom]
 
 
 # --- Fix round 1: top-ups, direct-path stops, row state, yes, one cap name --
@@ -1021,7 +1113,8 @@ def test_what_can_go_wrong_covers_the_amazap_cases(symptom):
     "At most one trial purchase per run,",
     "The MCP budget never bounds an Amazap buy.",
     "Never offer an Amazap listing's `endpointUrl` as a cheaper way to pay.",
-    "Direct payment is for a URL the user already has.",
+    DIRECT_PAY_SCOPE,
+    SCOPE_RULE,
     "Sensitive input stays with the user",
     "Never raise a limit.",
 ))
@@ -1038,8 +1131,12 @@ def test_what_this_is_not_keeps_amazap_separate():
 @pytest.mark.parametrize("phrase", (
     '"Lightning Enable registry" or "Amazap"',
     "for the direct path only",
+    "Recommended: `example-weather` from the registry",
+    '"not reported by this source"',
+    'access_l402_resource(url="<endpoint url>", max_sats=<the listed price>)',
+    "from your MCP wallet, within your 30-sat cap.",
     "13 sats all-in, paid from Amazap credits",
-    # The example's yes carries the wallet and the cap clause of the template.
+    # The Amazap contrast keeps the yes, the wallet, and the cap clause.
     "for 13 sats all-in, paid from Amazap credits, within your 30-sat cap.",
     # max_total_sats is the quoted total (13), not the user's cap (30).
     "`max_total_sats=13`",
@@ -1184,20 +1281,22 @@ def test_safety_rules_restate_the_buyer_rules_in_one_place(phrase):
     assert phrase in skill_section("## Safety rules"), f"Safety rules is missing {phrase!r}"
 
 
-def test_example_runs_one_amazap_path_and_contrasts_the_direct_path():
+def test_example_buys_a_registry_result_directly_and_contrasts_amazap():
     example = skill_section("## Example")
     for phrase in (
         "`fixture-string-forecast`",
         "Do you accept them and go ahead?",
         "the order id `<order id>`",
         "Fulfilled.",
-        "The names, the trust label, and the sats figures are illustrative, not Amazap terms or data.",
+        "The names, the trust label, and the sats figures are illustrative, not registry or Amazap data.",
         "The row shows `buyable: true` and is neither paused, degraded, nor failing.",
-        "Had the human picked a Lightning Enable registry result",
-        "after reading its manifest and confirming a GET endpoint",
-        'access_l402_resource(url="<endpoint url>", max_sats=<the listed price>)',
+        "Had the human picked the Amazap row",
+        'discover_api(url="<manifest_url>")',
     ):
         assert phrase in example, f"the example is missing {phrase!r}"
+    direct = example.find('access_l402_resource(url="<endpoint url>"')
+    amazap = example.find("Had the human picked the Amazap row")
+    assert 0 <= direct < amazap, "the example buys the registry result first, then contrasts Amazap"
     # Placeholder names only: the example never names a real listing.
     names = set(re.findall(r"`(fixture-string-[a-z0-9-]+)`", example))
     assert names <= {row[key] for row in rows() for key in ("name", "provider")}, names

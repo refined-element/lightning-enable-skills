@@ -64,7 +64,9 @@ observations near the end are a snapshot, not a rule.
 Every Amazap buy follows these rules:
 
 - **Two sources, labeled.** Amazap does not replace the Lightning Enable
-  registry. A buyer skill searches both and labels every row with its source.
+  registry. A buyer skill searches the registry first and Amazap as an
+  additional source, unless the user leaves Amazap out, and labels every row
+  with its source.
 - **Spending.** Search, describe, and quote never spend. `buy` is the only
   call that spends Amazap credits.
 - **The all-in price is the price.** Show `totalSats`, the figure the buyer
@@ -81,8 +83,10 @@ Every Amazap buy follows these rules:
   toward direct payment of a listing Amazap surfaced. Amazap's margin funds
   its failed-call credits, so never present a listing's `endpointUrl` as a
   cheaper way to pay the seller. When the same service appears in both
-  sources, show each row as its source returned it. Direct payment through
-  `pay-l402-anywhere` is for a URL the user already has.
+  sources, show each row as its source returned it. Direct payment is for a
+  Lightning Enable registry result or a URL the user already has. This rule
+  covers listings Amazap surfaced; it never applies to a result the Lightning
+  Enable registry returned, which the buyer may pay directly.
 - **The `buy` contract.** `buy` requires `quote_id`, `total_cost`,
   `max_total_sats`, and `accept_terms`. Check the quoted total against the
   user's cap before the yes, set `max_total_sats` to the quoted total, and
