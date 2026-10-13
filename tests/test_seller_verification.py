@@ -7,10 +7,9 @@ L402 compatibility report before the hand-off. The generic rules live in
 endpoint"; each skill carries a "Verify your endpoint" step that records its
 self-test payment as evidence and pays at most once.
 
-``pay_once_text`` reads those rules wherever a skill keeps them: its "Verify
-your endpoint" step once the skill is in ``VERIFIED_SELLERS``, otherwise the
-gate of its optional Amazap step, where they lived before the rebalance. Like
-the rest of the suite these are text guards; nothing opens a socket or pays.
+``pay_once_text`` reads those rules from the levels reference or from a
+skill's "Verify your endpoint" step. Like the rest of the suite these are text
+guards; nothing opens a socket or pays.
 """
 import re
 
@@ -83,15 +82,8 @@ def verify_step(skill: str) -> str:
     return section_at(text, match.start())
 
 
-def migrated(target: str) -> bool:
-    """True where the pay-once rules carry their post-rebalance wording."""
-    return target == "levels" or target in VERIFIED_SELLERS
-
-
 def raw_pay_once_text(target: str) -> str:
-    if target == "levels":
-        return levels_section()
-    return verify_step(target) if target in VERIFIED_SELLERS else amazap_step(target)
+    return levels_section() if target == "levels" else verify_step(target)
 
 
 def pay_once_text(target: str) -> str:
@@ -169,8 +161,7 @@ def test_a_testnet_payment_is_neither_evidence_nor_the_one_paid_check(target):
     start = text.find("A self-test payment of a testnet invoice")
     assert start >= 0, f"{target} has no testnet sentence"
     sentence = text[start:text.find(". A ", start) + 1]
-    neither = ("neither reuse evidence nor the one paid check" if migrated(target)
-               else "neither reuse evidence nor a payment for the gate")
+    neither = "neither reuse evidence nor the one paid check"
     for phrase in (neither, "run the paid check once, with the human's yes"):
         assert phrase in sentence, f"{target}: the testnet sentence is missing {phrase!r}"
     assert "does not pay again" not in sentence, f"{target}: a testnet payment must not end the run"
@@ -179,21 +170,18 @@ def test_a_testnet_payment_is_neither_evidence_nor_the_one_paid_check(target):
 @pytest.mark.parametrize("target", PAY_ONCE_TARGETS)
 def test_without_the_report_skill_paid_delivery_is_not_proven(target):
     text = pay_once_text(target)
-    wanted = ("`l402-compatibility-report` is not installed, paid delivery stays unverified"
-              if migrated(target) else "`l402-compatibility-report` is not installed, the listing is not ready")
+    wanted = "`l402-compatibility-report` is not installed, paid delivery stays unverified"
     assert wanted in text, target
     assert REPORT_URL in text, f"{target} must give the report skill's GitHub URL"
-    if migrated(target):
-        # Without the report there is no classification at all, so nothing
-        # may be reported as CHALLENGE_COMPATIBLE or better.
-        assert "no classification is available" in text, target
+    # Without the report there is no classification at all, so nothing
+    # may be reported as CHALLENGE_COMPATIBLE or better.
+    assert "no classification is available" in text, target
 
 
 @pytest.mark.parametrize("target", PAY_ONCE_TARGETS)
 def test_challenge_compatible_waits_for_the_paid_evidence(target):
     text = pay_once_text(target)
-    wanted = ("do not report paid delivery as proven until the paid evidence below lifts it"
-              if migrated(target) else "do not offer the listing as ready until the paid check below lifts it")
+    wanted = "do not report paid delivery as proven until the paid evidence below lifts it"
     assert wanted in text, f"{target} is missing {wanted!r}"
     assert 'fulfillment unverified" and stop' not in text, f"{target} stops before the paid evidence"
 
@@ -233,8 +221,7 @@ def test_pay_once_text_names_only_core_classifications(target):
 def test_pay_once_text_has_no_em_dash_or_loose_verified(target):
     raw = raw_pay_once_text(target)
     assert EM_DASH not in raw, f"{target} uses an em-dash"
-    if migrated(target):
-        assert not LOOSE_VERIFIED.findall(flat(raw)), f"{target}: 'verified' only inside a classification"
+    assert not LOOSE_VERIFIED.findall(flat(raw)), f"{target}: 'verified' only inside a classification"
 
 
 # The longest Amazap step before the rebalance ran 125 lines; each now runs
@@ -266,6 +253,23 @@ def test_verify_step_names_the_lightning_enable_report(skill):
     step = verify_step(skill)
     assert "(../l402-compatibility-report/)" in step
     assert "Lightning Enable L402 compatibility report" in flat(step)
+
+
+@pytest.mark.parametrize("skill", VERIFIED_SELLERS)
+def test_verify_step_runs_the_check_with_the_routes_method(skill):
+    # The read-only check uses the route's own method, so a POST route is
+    # probed as POST rather than as whatever the self-test sent.
+    assert "(add `--method POST` for a `POST` route)" in flat(verify_step(skill)), skill
+
+
+@pytest.mark.parametrize("skill", VERIFIED_SELLERS)
+def test_amazap_read_back_matches_the_rows_url_and_price(skill):
+    # An imported row for the same host can look listed; only a row whose
+    # endpoint URL and seller price match this one is this listing.
+    step = flat(amazap_step(skill))
+    start = step.find("**Read back.**")
+    assert start >= 0, f"{skill}: the Amazap step has no read-back bullet"
+    assert "the row's endpoint URL and seller price match this" in step[start:], skill
 
 
 @pytest.mark.parametrize("skill", VERIFIED_SELLERS)

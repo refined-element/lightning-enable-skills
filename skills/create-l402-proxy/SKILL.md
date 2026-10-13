@@ -57,6 +57,7 @@ instead: it creates the account and then runs these same steps.
 - **The routes to sell and the price per call, in sats**, from the human.
 - **For the self-test**: a wallet that returns Lightning preimages (NWC, LND, or
   Strike) with enough sats for one call.
+- **The [`l402-compatibility-report`](../l402-compatibility-report/) skill**, for step 6.
 
 Tools this skill uses:
 

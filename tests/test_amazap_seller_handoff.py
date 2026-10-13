@@ -73,11 +73,8 @@ PROXY_SKILLS: tuple[str, ...] = ("producer-setup", "create-l402-proxy")
 # The seller skills whose API runs the L402 middleware on its own host.
 NATIVE_SKILLS: tuple[str, ...] = ("l402-server-integration",)
 HANDOFF_TARGETS = ("reference", *SELLER_SKILLS)
-# Seller skills whose pay-once and read-only-check rules have moved from the
-# Amazap step to a core "Verify your endpoint" step. Tasks 5 to 7 of the
-# rebalance plan add one each; test_seller_verification.py reads the rules
-# from whichever step holds them.
-VERIFIED_SELLERS: tuple[str, ...] = ("producer-setup", "create-l402-proxy")
+# Every seller skill keeps its pay-once and read-only-check rules in a core "Verify your endpoint" step.
+VERIFIED_SELLERS: tuple[str, ...] = SELLER_SKILLS
 
 STEP_HEADING = re.compile(r"^### (\d+)\. Optional: list on Amazap[ \t]*$", re.MULTILINE)
 HAND_OFF_HEADING = re.compile(r"^### (\d+)\. Hand off[ \t]*$", re.MULTILINE)

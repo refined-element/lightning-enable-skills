@@ -47,6 +47,7 @@ self-test purchase, the compatibility check, and the hand-off summary.
   installed and running.
 - A wallet that returns Lightning **preimages**: NWC, LND, or Strike. OpenNode
   does not return preimages and cannot pay L402 challenges.
+- The [`l402-compatibility-report`](../l402-compatibility-report/) skill, for step 6.
 - Tools this skill uses:
   - `setup_wallet` — reports the configured wallet, or connects one over NWC.
   - `get_balance` — the real funds.
@@ -552,8 +553,8 @@ never retry a call that failed on a cap.
 >    forecast. `l402_producer(action="list_challenges", challenge_status="paid")`
 >    shows the sale.
 > 8. `python scripts/l402_check.py <endpoint url> --json --max-sats 20 --output mode-a.json`
->    → `CHALLENGE_COMPATIBLE`; recording the step 7 call as the evidence turns
->    it into `FULFILLMENT_VERIFIED`, with no second payment.
+>    → `CHALLENGE_COMPATIBLE`; recording item 7's self-test call as the
+>    evidence turns it into `FULFILLMENT_VERIFIED`, with no second payment.
 > 9. Hand off: "Live and charging 10 sats a call, listed in the Lightning
 >    Enable registry, where agents find it with `discover_api` and pay from
 >    their own wallets. The compatibility report reads `FULFILLMENT_VERIFIED`.

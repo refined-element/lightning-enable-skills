@@ -31,6 +31,9 @@ or wallet.
    configuration your app reads.
 7. Runs your tests, shows you the diff, proves the 402 for free, and, with your
    yes, pays one 1-sat test call.
+8. Checks the deployed route with `l402-compatibility-report` at the price you
+   chose, reusing a qualifying test payment instead of paying again, then tells
+   you how buyers find and pay the API.
 
 ## What you need
 
@@ -60,26 +63,33 @@ or wallet.
 - Lightning Enable does not hold funds; the payment provider (or your wallet)
   facilitates custody and settlement. There is no per-transaction cut.
 
+## How buyers find you
+
+Buyers' agents call your API's own URLs and pay each call from their own
+wallets over L402, with `access_l402_resource`,
+[`pay-l402-anywhere`](../pay-l402-anywhere/), or any L402 client. No
+marketplace account or credits are involved. To be found, your API publishes
+an L402 manifest at `/.well-known/l402-manifest.json`, which the Lightning
+Enable MCP's `discover_api` reads. The agent can also list the service on the
+agent relay with [`offer-agent-service`](../offer-agent-service/). Before the
+hand-off it checks the deployed route with
+[`l402-compatibility-report`](../l402-compatibility-report/), the Lightning
+Enable L402 compatibility report.
+
 ## Optional: list on Amazap
 
-Once the API is deployed at a public HTTPS URL and the self-test is done, the
-agent can offer one more step: a draft listing on
-[Amazap](https://amazap.com/sell), a storefront where agents find and buy L402
-endpoints. It first checks whether Amazap already carries the API (possibly
-imported from 402 Index) and asks whether you want a listing before it spends
-anything on a paid check. It offers the listing as ready only after
-[`l402-compatibility-report`](../l402-compatibility-report/) shows that paid
-delivery worked on the public URL (a test against `localhost` doesn't count),
-then drafts the copy and stops. Amazap fills in the title, description,
-category, and example parameters from an `openapi.json` or `llms.txt` at the
-root of your API's host; without one, you fill them in yourself. You review
-the draft, the current Amazap seller terms, and the two prices (yours and
-Amazap's all-in price), enter your contact email, and submit it yourself;
-submitting publishes the listing once Amazap's checks pass. After any price
-change in your code, re-run Amazap's checks. The agent never calls the API
-listed until it has read the listing back from Amazap. Lightning Enable does
-not hold funds; the payment provider facilitates custody and settlement.
-Details:
+Your setup is complete without this. For more distribution, the agent can
+offer a draft listing on [Amazap](https://amazap.com/sell), a separate
+marketplace, after the hand-off. It asks first, reuses the compatibility
+report instead of paying again, drafts the copy, and stops. Amazap fills in
+the listing from an `openapi.json` or `llms.txt` at the root of your API's
+host; without one, you fill it in yourself. You review the draft, the current
+Amazap seller terms, and both prices, enter your contact email, and submit it
+yourself; submitting publishes the listing once Amazap's checks pass. After
+any price change in your code, re-run Amazap's checks. The agent never calls
+the API listed until it has read the listing back from Amazap. Lightning
+Enable does not hold funds; the payment provider facilitates custody and
+settlement. Details:
 [Amazap marketplace: Seller handoff](https://github.com/refined-element/lightning-enable-skills/blob/main/references/amazap-marketplace.md#seller-handoff).
 
 ## Related skills
