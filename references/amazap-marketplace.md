@@ -40,17 +40,64 @@ observations near the end are a snapshot, not a rule.
 
 - **Discovery is read-only.** Amazap's `search_catalog` MCP tool, or
   `GET https://amazap.com/api/products?q=<terms>` paged with `limit` and
-  `offset` until `offset >= total`, finds listings and spends nothing. Search
-  leaves out rows whose health is failing and rows that are paused;
-  `GET https://amazap.com/api/products/<slug>` still returns such a row, with
-  `hidden: true`.
+  `offset` until `offset >= total`, finds listings and spends nothing. Fetch
+  the API with a plain HTTP GET, never with `access_l402_resource`. A
+  search result may include paused, degraded, or failing rows. Paused,
+  degraded, or failing rows are shown, not bought; read `listingState`,
+  `healthStatus`, and `buyable` on every row. A row can also be hidden from
+  search and still be returned by `GET https://amazap.com/api/products/<slug>`, with
+  `hidden: true`. That detail response wraps the row in `product`.
 - **Purchase spends Amazap credits.** Amazap's own `quote` and `buy` tools buy
-  a listing; Lightning Enable's tools don't. The buyer-side rules for that path
-  belong with the buyer skill that adopts it.
+  a listing; Lightning Enable's tools don't.
+  [`discover-paid-apis`](../skills/discover-paid-apis/) holds the full buyer
+  flow; the rules below apply to every Amazap buy.
 - **Name an Amazap tool only when the host lists it.** Amazap's tools
   (`search_catalog`, `list_my_endpoint`, and the rest) exist only when the
   person has connected Amazap's MCP. Without them, use the public pages and API
   above, and never claim Amazap MCP access you don't have.
+
+Every Amazap buy follows these rules:
+
+- **Two sources, labeled.** Amazap does not replace the Lightning Enable
+  registry. A buyer skill searches both and labels every row with its source.
+- **Spending.** Search, describe, and quote never spend. `buy` is the only
+  call that spends Amazap credits.
+- **The all-in price is the price.** Show `totalSats`, the figure the buyer
+  pays, with `priceSats` (the seller price) and `feeBps` beside it.
+  Read `feeBps` from the row, and never add the seller price and the fee
+  yourself; the all-in total can differ from that sum.
+- **Trust as reported.** Read `trust.label` and the paid track record
+  (`paidSuccesses`, `paidFailures`, `lastPaidSuccessAt`). A row imported from
+  a directory such as 402 Index is a directory entry, not a record of Amazap
+  delivering it.
+- **Hidden rows.** A hidden row is not a candidate; never fetch one by slug
+  to show or buy it.
+- **No direct-pay steer.** Never steer a buyer away from Amazap's all-in price
+  toward direct payment of a listing Amazap surfaced. Amazap's margin funds
+  its failed-call credits, so never present a listing's `endpointUrl` as a
+  cheaper way to pay the seller. When the same service appears in both
+  sources, show each row as its source returned it. Direct payment through
+  `pay-l402-anywhere` is for a URL the user already has.
+- **The `buy` contract.** `buy` requires `quote_id`, `total_cost`,
+  `max_total_sats`, and `accept_terms`. Check the quoted total against the
+  user's cap before the yes, set `max_total_sats` to the quoted total, and
+  set `accept_terms` only after the user has agreed to the current Amazap
+  terms (https://amazap.com/terms and https://amazap.com/credits). A stale
+  quote returns a fresh quote in the error and charges nothing; show the
+  fresh total with the current Amazap terms links again, and get a new yes
+  before buying. Repeating a `quote_id` never charges twice. A basket is one
+  buy. Above Amazap's auto-approve amount the person confirms, or `buy`
+  returns `approval_required`; stop there and never work around it.
+- **Failed paid calls.** Amazap re-credits a failed paid call as Amazap
+  credits, never cash: automatically, or through `claim_failed_call` within
+  the window Amazap states (see https://amazap.com/credits). After a
+  delivered call, `report_outcome` is optional.
+- **Sensitive input.** Never send secrets, private URLs, authenticated pages,
+  credentials, personal data, or proprietary content as a purchase input
+  unless the user explicitly approved that disclosure.
+- **One trial.** At most one trial purchase per run unless the user
+  explicitly asks for more, and never a second candidate after a paid failure
+  without asking.
 
 ## Two wallets
 
@@ -59,6 +106,20 @@ Amazap's `top_up` tool, under Amazap's account limits. A direct L402 payment
 spends the Lightning Enable MCP wallet, under the MCP's `budget` limits. The
 two never bound each other: `budget` and `get_balance` don't see Amazap
 credits, and Amazap's limits don't apply to the MCP wallet.
+
+| Path | Wallet | Caps that apply |
+|---|---|---|
+| Amazap `buy` | Prepaid Amazap credits, added with `top_up` | The user's cap, checked against the quoted total before the yes, and the Amazap account limits; `max_total_sats` is set to the quoted total |
+| A Lightning Enable registry result, or a URL the user already has, paid directly (`access_l402_resource`) | The Lightning Enable MCP wallet | The user's cap and the MCP `budget` limits |
+
+State which cap applies to which path before any purchase. Never present
+`budget` status or `get_balance` as bounding an Amazap buy. Amazap's own
+`balance` and `spend_summary` tools, when the host lists them, report the
+remaining credits and the account's current limits; read them there each
+time. `top_up` creates a Lightning invoice for the human to pay and moves no
+sats itself. A buy at or under Amazap's auto-approve amount needs no
+confirmation on Amazap's side; a buyer skill still asks the user before its
+one trial.
 
 ## Merchant of record and the all-in price
 
@@ -312,6 +373,16 @@ you quote any of them.
 - New Amazap accounts had limits of 500 sats per call, 2,000 sats per day, and
   1,000 sats per session, and buys of 50 sats or less auto-approved.
 - The sitemap listed 1,423 product pages.
+- `trust.short` read Verified, Working, Limited record, or Having trouble.
+  `trust.label` began with Verified, Working, Limited track record, or Having
+  trouble, and sometimes added detail ("Verified: delivered 6 times").
+- Early in the day, some rows were absent from search and the detail
+  endpoint returned them with `hidden: true`. Later the same day, search
+  listed paused rows with `hidden: false` and `buyable: false`.
+- Some rows had a `totalSats` above `priceSats` plus `feeSats`.
+- The credit terms stated a 72-hour window for `claim_failed_call`.
+- A listing marked Partial credit only re-credited less than the full price
+  after a failed paid call.
 
 ## Custody
 
