@@ -156,7 +156,7 @@ DISCOVER_API_ARGS = {"query", "category", "url", "budget_aware"}
 ACCESS_ARGS = {"url", "max_sats", "confirmation_nonce"}
 
 # Docs that carry the file-wide guards. Task 6 adds the skill's README.
-GUARDED_DOCS: tuple[Path, ...] = (SKILL,)
+GUARDED_DOCS: tuple[Path, ...] = (SKILL, README)
 
 # A sentence that names the MCP budget or balance AND an Amazap buy must be a
 # negation: the MCP wallet's caps never bound a buy paid in Amazap credits.
@@ -576,7 +576,9 @@ def test_endpoint_url_appears_only_in_a_prohibition():
 
 @pytest.mark.parametrize("doc", GUARDED_DOCS, ids=lambda p: p.name)
 def test_doc_carries_the_custody_sentence(doc):
-    assert CUSTODY in flat(read(doc))
+    text = flat(read(doc))
+    assert CUSTODY in text
+    assert "the wallet facilitates" not in text, f"{doc.name} keeps the old custody wording"
 
 
 @pytest.mark.parametrize("doc", GUARDED_DOCS, ids=lambda p: p.name)
@@ -1017,6 +1019,15 @@ def test_what_can_go_wrong_covers_every_ending(symptom):
     assert not missing, f"the {symptom!r} row is missing {missing}"
 
 
+def test_price_outage_row_never_promises_small_payments_keep_working():
+    # "may keep working" alone isn't enough: the old promise must not sit
+    # beside it.
+    row = what_can_go_wrong()["Payments refused while no BTC price is available"]
+    assert "keep small payments working" not in row.lower(), (
+        "the price-outage row promises that small payments keep working"
+    )
+
+
 @pytest.mark.parametrize("phrase", (
     NON_GOAL,
     SECRETS,
@@ -1049,3 +1060,42 @@ def test_example_runs_one_amazap_path_and_contrasts_the_direct_path():
     # Placeholder names only: the example never names a real listing.
     names = set(re.findall(r"`(fixture-string-[a-z0-9-]+)`", example))
     assert names <= {row[key] for row in rows() for key in ("name", "provider")}, names
+
+
+# --- The skill's README -----------------------------------------------------
+
+
+@pytest.mark.parametrize("phrase", (
+    "Lightning Enable registry",
+    "[Amazap](https://amazap.com)",
+    "Every result is labeled with its source.",
+    "not a replacement for the registry",
+    "At most one trial purchase per run",
+    "A quote over your cap is refused, and nothing is bought.",
+    "re-credited as Amazap credits, never cash",
+    "It never steers you away from Amazap's all-in price",
+    "(../pay-l402-anywhere/)",
+    "https://amazap.com/mcp",
+    "under your cap and Amazap's account limits",
+    "under your cap and the MCP budget",
+))
+def test_readme_describes_both_sources_and_the_bounded_trial(phrase):
+    assert phrase in flat(read(README)), f"discover-paid-apis/README.md is missing {phrase!r}"
+
+
+# A number with a unit: sats, a rate, or a duration. Outside "Try it", where
+# the figure is the user's own cap, the README states none; Amazap's prices,
+# fees, limits, and windows are read live from its own pages.
+README_FIGURE = re.compile(
+    r"\d[\d,.]*\s*-?\s*(?:sats?\b|bps\b|%|percent\b|seconds?\b|minutes?\b|hours?\b|days?\b|weeks?\b|times\b)",
+    re.IGNORECASE,
+)
+
+
+def test_readme_states_no_amazap_figures_and_links_the_live_terms():
+    text = read(README)
+    for link in ("https://amazap.com/llms.txt", "https://amazap.com/credits"):
+        assert link in text, f"discover-paid-apis/README.md doesn't link {link}"
+    try_it = section_at(text, text.index("\n## Try it\n") + 1)
+    hits = README_FIGURE.findall(flat(text.replace(try_it, "")))
+    assert not hits, f"discover-paid-apis/README.md states figures {hits}; link the live Amazap pages instead"

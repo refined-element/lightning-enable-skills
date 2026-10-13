@@ -1,74 +1,113 @@
 # discover-paid-apis
 
-**Find a paid API, see what it costs and how many calls you can afford, then try it once.**
+**Find a paid API or digital service in two places, compare what you'd get, then try one with a single bounded purchase.**
 
-APIs that charge per call over Lightning publish an
-[L402](https://github.com/lightninglabs/L402) manifest: what they do, which
-endpoints they have, and what each call costs. Many of them are listed in a
-public registry. This skill searches that registry for what you asked for, lays
-the candidates out with their prices against your wallet and budget, reads the
-one you pick without paying, and makes a single paid call only after you say yes.
+Services that charge per call over Lightning are listed in two places, and this
+skill searches both:
+
+- the **Lightning Enable registry**, a public list of APIs that publish an
+  [L402](https://github.com/lightninglabs/L402) manifest; and
+- **[Amazap](https://amazap.com)**, a storefront where agents search
+  pay-per-call APIs and digital services and buy calls with prepaid Amazap
+  credits.
+
+Every result is labeled with its source. Amazap is an extra source, not a
+replacement for the registry, and it's optional. It's a separate product from
+a collaborator in the Lightning ecosystem; Lightning Enable doesn't set its
+prices, fees, credits, terms, or ranking.
 
 ## Why it's interesting
 
-- **You see the price before anything moves.** Searching the registry and
-  reading a manifest are free. The only payment is one call you approved, at a
-  price you saw.
-- **Affordability is computed, not guessed.** Each result shows how many calls
-  your session budget and your wallet balance cover. An unknown price reads
-  "unknown", never "free".
-- **It works on sites outside the registry too.** Name a site and the skill
-  looks for an L402 manifest at its well-known paths.
-- **It ends with evidence.** The paid call's result, the sats spent, and the
-  session receipt, so you know what you bought and what it cost.
+- **You see the price before anything moves.** Searching, reading a listing,
+  and quoting are free. The only payment is one trial you approved, at an
+  all-in price you saw.
+- **Trust signals, as reported.** Amazap rows show Amazap's trust label,
+  health, paid track record, and whether they can be bought now. A paused,
+  degraded, or failing row is shown but never bought, and a row Amazap hides
+  from search is left out. Registry rows show how many calls your session
+  budget and wallet balance cover.
+- **The right cap for the right wallet.** An Amazap buy spends Amazap credits,
+  under your cap and Amazap's account limits. A registry result is paid from
+  your Lightning Enable MCP wallet, under your cap and the MCP budget. The
+  MCP budget never bounds an Amazap buy. The skill tells you which cap applies
+  before it buys.
+- **It ends with a receipt:** the sats charged, what's left, the listing, an
+  order id, and whether the service delivered.
 
 ## How it works
 
-1. **Ask** what the API should do and the most one trial call may cost.
-2. **Read the budget and balance** with `budget action=status` and
-   `get_balance`.
-3. **Search** with `discover_api` (`query`, `category`, or both), or read a
-   named site's manifest with `discover_api url=...`.
-4. **Present a short table:** name, what it does, price per call, calls you can
-   afford. You pick one.
-5. **Read its manifest, unpaid:** endpoints, methods, and prices. Lightning
-   Enable proxies also serve an OpenAPI document at
-   `/l402/proxy/{proxyId}/openapi.json`.
-6. **One paid call,** after you say yes to the stated price:
-   `access_l402_resource` with `max_sats` set to that price.
-7. **Report** the result faithfully and the sats spent, from
-   `receipts source=session`, then hand off to
-   [`pay-l402-anywhere`](../pay-l402-anywhere/) for ongoing use or
-   [`cited-answer`](../cited-answer/) for research.
+1. **Ask** what outcome you need, the most one trial may cost, and any limits
+   on providers or data.
+2. **Check the tools.** It notes whether your host lists Amazap's tools, and
+   reads `budget action=status` and `get_balance` for the direct path. When
+   Amazap's tools are listed, it reads your Amazap credits and current account
+   limits from Amazap.
+3. **Search both sources:** `discover_api` for the registry, and Amazap's
+   `search_catalog` when your host lists it, otherwise Amazap's public
+   products API.
+4. **Compare** at most five labeled candidates and recommend one, with a
+   one-sentence reason. Paused, degraded, or failing rows are shown, not
+   bought; hidden rows are dropped.
+5. **Read the details, unpaid:** a registry API's manifest, or an Amazap
+   listing's input schema.
+6. **Quote** the exact all-in total, and state which cap applies. Over the
+   cap, nothing is bought.
+7. **One trial,** after your yes: Amazap's `buy`, or `access_l402_resource`
+   for a registry result. On the Amazap path, the same yes accepts Amazap's
+   current terms. If the quote went stale, it shows you the fresh total and
+   asks again.
+8. **Report** the result and the receipt, then hand off to
+   [`pay-l402-anywhere`](../pay-l402-anywhere/) for a URL you already have,
+   or [`cited-answer`](../cited-answer/) for research.
 
 ## Requirements
 
 - The [Lightning Enable MCP](https://github.com/refined-element/lightning-enable-mcp)
-  server, connected to a funded wallet that returns preimages (NWC, LND, or
-  Strike). If that isn't set up yet, run
-  [`agent-wallet-setup`](../agent-wallet-setup/) first.
+  server, for the registry search and the direct path. Paying a registry
+  result needs a wallet that returns preimages (NWC, LND, or Strike); if that
+  isn't set up yet, run [`agent-wallet-setup`](../agent-wallet-setup/) first.
+- Optional: Amazap's MCP (https://amazap.com/mcp) and some Amazap credits, for
+  an Amazap buy. Without it, Amazap search still works through Amazap's public
+  products API.
 - No Lightning Enable account.
 
 ## Try it
 
-> "Find me a weather API I can pay for over Lightning, and try it once. Spend no
-> more than 20 sats."
+> "Find me a weather API and try one forecast for Berlin. Spend no more than
+> 30 sats."
 
 ## Safety
 
-- One paid call, after an explicit yes, at a price you saw. Never several paid
-  calls to compare APIs.
-- The call never pays more than `max_sats`, which never exceeds your ceiling or
-  the session budget.
-- Larger payments need a confirmation code that goes to you, never to the agent.
-- The agent reports only what the call returned, says when a response was
-  truncated, and says so when nothing matched or nothing is affordable.
-- Macaroons, preimages, and L402 tokens never appear in the agent's output.
-- Lightning Enable does not hold funds; the wallet facilitates custody and
-  settlement.
+- At most one trial purchase per run, after an explicit yes, at an all-in
+  price you saw. Never several paid calls to compare services.
+- A quote over your cap is refused, and nothing is bought.
+- A stale quote is never bought on the old yes: you see the fresh total and
+  say yes again.
+- It never sends secrets, private or logged-in URLs, credentials, personal
+  data, or proprietary content as input unless you approve that.
+- If your Amazap credits run short, it asks before a top-up, and you choose
+  the amount. You pay the top-up invoice yourself, unless you explicitly ask
+  the agent to pay it from your MCP wallet. Then it's its own `pay_invoice`
+  payment that you approve at that exact amount. Your trial cap doesn't cover
+  a top-up; the MCP budget limits do.
+- After a paid failure it reports what happened and asks before trying
+  anything else. A failed Amazap call is re-credited as Amazap credits, never
+  cash.
+- It never steers you away from Amazap's all-in price toward paying a listing
+  Amazap surfaced directly. Direct payment is for a registry result or a URL
+  you already have; to pay a URL you already have, use
+  [`pay-l402-anywhere`](../pay-l402-anywhere/).
+- Macaroons, preimages, invoices, and tokens never appear in the agent's
+  output.
+- Amazap's fees, limits, and terms belong to Amazap and change; the skill reads
+  them live (https://amazap.com/llms.txt and https://amazap.com/credits).
+- Lightning Enable does not hold funds; the payment provider facilitates
+  custody and settlement.
 
 ## What it doesn't do
 
-It doesn't vouch for a seller, set up a wallet, or call endpoints that need POST
-(the paying tool is read-only: GET and HEAD). For listing your own API in the
-registry, see [`producer-setup`](../producer-setup/).
+It doesn't vouch for a seller, set up a wallet, top up Amazap credits without
+your yes, or pay registry endpoints that need POST (its direct path is
+read-only: GET and HEAD). To sell an API of your own, see
+[`producer-setup`](../producer-setup/), which can also draft an optional
+Amazap listing.
