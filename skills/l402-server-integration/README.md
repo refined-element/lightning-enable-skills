@@ -60,6 +60,28 @@ or wallet.
 - Lightning Enable does not hold funds; the payment provider (or your wallet)
   facilitates custody and settlement. There is no per-transaction cut.
 
+## Optional: list on Amazap
+
+Once the API is deployed at a public HTTPS URL and the self-test is done, the
+agent can offer one more step: a draft listing on
+[Amazap](https://amazap.com/sell), a storefront where agents find and buy L402
+endpoints. It first checks whether Amazap already carries the API (possibly
+imported from 402 Index) and asks whether you want a listing before it spends
+anything on a paid check. It offers the listing as ready only after
+[`l402-compatibility-report`](../l402-compatibility-report/) shows that paid
+delivery worked on the public URL (a test against `localhost` doesn't count),
+then drafts the copy and stops. Amazap fills in the title, description,
+category, and example parameters from an `openapi.json` or `llms.txt` at the
+root of your API's host; without one, you fill them in yourself. You review
+the draft, the current Amazap seller terms, and the two prices (yours and
+Amazap's all-in price), enter your contact email, and submit it yourself;
+submitting publishes the listing once Amazap's checks pass. After any price
+change in your code, re-run Amazap's checks. The agent never calls the API
+listed until it has read the listing back from Amazap. Lightning Enable does
+not hold funds; the payment provider facilitates custody and settlement.
+Details:
+[Amazap marketplace: Seller handoff](https://github.com/refined-element/lightning-enable-skills/blob/main/references/amazap-marketplace.md#seller-handoff).
+
 ## Related skills
 
 - [`create-l402-proxy`](../create-l402-proxy/) to put an API behind a paid proxy
