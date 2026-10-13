@@ -1161,7 +1161,9 @@ def test_what_this_is_not_keeps_amazap_separate():
     "Recommended: `example-weather` from the registry",
     '"not reported by this source"',
     'access_l402_resource(url="<endpoint url>", max_sats=<the listed price>)',
-    "from your MCP wallet, within your 30-sat cap.",
+    "for 10 sats, the invoice amount, paid from your MCP wallet. Your 30-sat cap "
+    "and the MCP budget count that invoice amount; any Lightning routing fee is "
+    "paid on top, within the wallet's fee limit.",
     "13 sats all-in, paid from Amazap credits",
     # The Amazap contrast keeps the yes, the wallet, and the cap clause.
     "for 13 sats all-in, paid from Amazap credits, within your 30-sat cap.",
@@ -1470,14 +1472,36 @@ def test_products_api_is_read_with_a_plain_get(heading, phrase):
 
 @pytest.mark.parametrize("phrase", (
     # The yes names the wallet and the cap, not just the total.
-    'I will buy one call to `<listing>` from `<source>` for `<total>` sats '
-    'all-in, paid from `<wallet>`, within your `<cap>`-sat cap. `<who>` '
+    'I will buy one call to `<listing>` from Amazap for `<total>` sats '
+    'all-in, paid from Amazap credits, within your `<cap>`-sat cap. `<who>` '
     'receives your input. Go ahead?',
+    # The direct yes states the invoice amount, which is what the cap and the
+    # MCP budget count; a routing fee comes on top (MCP PayInvoiceTool reserves
+    # amountSats only).
+    'I will buy one call to `<listing>` from the Lightning Enable registry for '
+    '`<price>` sats, the invoice amount, paid from your MCP wallet. Your '
+    '`<cap>`-sat cap and the MCP budget count that invoice amount; any '
+    "Lightning routing fee is paid on top, within the wallet's fee limit. The "
+    "seller's endpoint receives your input. Go ahead?",
     # After the person approves in Amazap, one buy on that quote, no more.
     "Once they say they approved it, the same `quote_id` can be bought once.",
 ))
 def test_trial_step_pins_the_yes_the_approval_and_the_top_up(phrase):
     assert phrase in skill_section("### 6. Buy one trial"), f"step 6 is missing {phrase!r}"
+
+
+def test_direct_path_yes_never_says_all_in():
+    # "All-in" is Amazap's term. The MCP cap and budget count the invoice
+    # amount only, and a routing fee is paid on top, so a direct yes that said
+    # "all-in" would understate what leaves the wallet.
+    step = skill_section("### 6. Buy one trial")
+    start = step.index("**A direct payment:**")
+    direct_yes = step[start:step.index("Go ahead?", start)]
+    assert "all-in" not in direct_yes, direct_yes
+    example = skill_section("## Example")
+    start = example.index('6. "I will buy one call to `example-weather`')
+    example_yes = example[start:example.index("Go ahead?", start)]
+    assert "all-in" not in example_yes, example_yes
 
 
 # --- The skill's README -----------------------------------------------------

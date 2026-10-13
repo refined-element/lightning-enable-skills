@@ -415,11 +415,17 @@ A paused or degraded row stays unbought this run, even with `buyable: true`,
 and so does a failing one. Step 2 shows such a row; it is not a candidate to
 buy.
 
-State the purchase and **stop for a yes**: "I will buy one call to
-`<listing>` from `<source>` for `<total>` sats all-in, paid from `<wallet>`,
-within your `<cap>`-sat cap. `<who>` receives your input. Go ahead?" Amazap
-auto-approves small buys on its own side; this skill still asks the user
-first.
+State the purchase and **stop for a yes**, in the words of its path:
+
+- **An Amazap buy:** "I will buy one call to `<listing>` from Amazap for
+  `<total>` sats all-in, paid from Amazap credits, within your `<cap>`-sat
+  cap. `<who>` receives your input. Go ahead?" Amazap auto-approves small
+  buys on its own side; this skill still asks the user first.
+- **A direct payment:** "I will buy one call to `<listing>` from the
+  Lightning Enable registry for `<price>` sats, the invoice amount, paid from
+  your MCP wallet. Your `<cap>`-sat cap and the MCP budget count that invoice
+  amount; any Lightning routing fee is paid on top, within the wallet's fee
+  limit. The seller's endpoint receives your input. Go ahead?"
 
 For an Amazap buy, the same yes also covers the current Amazap terms. Add:
 "Buying through Amazap means accepting its current terms
@@ -707,9 +713,10 @@ registry or Amazap data.
 > 5. The manifest price is the quote: 10 sats, paid from the MCP wallet,
 >    within the 30-sat cap and the MCP budget.
 > 6. "I will buy one call to `example-weather` from the Lightning Enable
->    registry for 10 sats all-in, paid from your MCP wallet, within your
->    30-sat cap. The seller's endpoint receives your city. Go ahead?" The
->    human says yes.
+>    registry for 10 sats, the invoice amount, paid from your MCP wallet. Your
+>    30-sat cap and the MCP budget count that invoice amount; any Lightning
+>    routing fee is paid on top, within the wallet's fee limit. The seller's
+>    endpoint receives your city. Go ahead?" The human says yes.
 >    `access_l402_resource(url="<endpoint url>", max_sats=<the listed price>)`
 >    pays 10 sats and returns the forecast.
 > 7. `receipts(source="durable")` gives the payment's `paymentHash`. "You
