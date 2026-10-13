@@ -541,6 +541,102 @@ Tell the human, plainly:
   [l402-example-node](https://github.com/refined-element/l402-example-node) and
   [l402-example-aspnet](https://github.com/refined-element/l402-example-aspnet).
 
+### 12. Optional: list on Amazap
+
+[Amazap](https://amazap.com/sell) is a storefront where agents find and buy
+L402 endpoints. Listing there is optional distribution, and the human decides.
+Offer it only after the self-test (step 10), once the API is deployed at a
+public HTTPS URL, and only as an offer; no answer means no.
+
+- **Existing row first.** A published API can already be in Amazap's catalog,
+  imported from 402 Index. Search by service name,
+  `GET https://amazap.com/api/products?q=<service name>`, and page with
+  `limit` and `offset` until `offset >= total` before you conclude there is
+  no row. Match the full endpoint URL the row stores (a route URL or the API's
+  base URL) against this API. Search skips hidden rows, so when the human
+  knows a slug, also read `GET https://amazap.com/api/products/<slug>`, and
+  look for the service in https://amazap.com/sitemap.xml. If a row exists,
+  report its `hidden`, `listingState`, and `healthStatus`, and let the human
+  decide with Amazap whether to refresh it. Never draft a duplicate listing.
+- **Ask first.** Ask whether the human wants an Amazap listing before any paid
+  gate check, so no sats are spent on a listing they don't want. No answer
+  means no.
+- **Gate.** Run [`l402-compatibility-report`](../l402-compatibility-report/)
+  on the route's public URL with the method you would list:
+  `python scripts/l402_check.py <url> --json --max-sats <cap> --output mode-a.json`
+  from that skill's folder, with the human's cap in sats (add
+  `--method POST` for a `POST` route). Its paid check reads that saved report.
+  Take the `classification` field from the JSON. Offer the listing as ready
+  only at `FULFILLMENT_VERIFIED` or `MARKETPLACE_READY`. On the API's own
+  domain, `MARKETPLACE_READY` is the target: it also needs an `openapi.json`
+  or `llms.txt` at the host root (see Fields). At `CHALLENGE_COMPATIBLE`, say
+  "challenge-compatible, fulfillment unverified" and stop. A private,
+  loopback, link-local, or non-HTTPS URL, a `200` to an unpaid request, or a
+  `400`, `415`, or `422` to a request with no body is not listing-ready; that
+  last case means the 402 must come before body validation (step 2's pipeline
+  order).
+- **Pay once.** Pay for the gate once, never twice. A test against `localhost`
+  doesn't count. The paid check runs on `GET` or `HEAD` only, so a `POST`,
+  `PUT`, or `DELETE` route stays at `CHALLENGE_COMPATIBLE` here and is never
+  offered as ready. If step 10 did not pay this exact public URL, run the
+  report's paid check once, with the human's yes. The paid check needs a
+  wallet that can pay this endpoint: if step 10 stopped at the free 402
+  because the wallet refused to pay its own invoice, do not attempt the paid
+  check with the same wallet, and the listing is not ready. If step 10 paid
+  this exact public URL with the same method through `access_l402_resource`,
+  from either wallet (the merchant's own or a second one), record that call as
+  the evidence (steps 6 and 7 of `l402-compatibility-report`, with
+  `--mode-a mode-a.json` and that call's token piped on stdin) instead of
+  paying again. If that token is gone, the listing is not ready; do not pay
+  again. A step 10 payment of this URL with a different method also counts as
+  paid: the listing is not ready; do not pay again. A payment through
+  `pay_l402_challenge` counts as paid. The agent has no tool that fetches the
+  resource with a token it already holds, and `access_l402_resource` would pay
+  again, so in that run the gate stays at `CHALLENGE_COMPATIBLE`: the listing
+  is not ready, and the agent does not pay again. A step 10 payment of this
+  public URL from code (the `l402-client-integration` snippet), or one made by
+  hand, outside both tools, also counts as paid: the listing is not ready in
+  that run, and the agent does not pay again. If the human wants the paid
+  check later, they choose it in a later run, and the skill says plainly that
+  it is a second payment for this endpoint. Without the token the paid check
+  ends `INCONCLUSIVE`, so a paid check through the Python MCP server is never
+  offered as ready.
+- **Draft, never publish.** Only once the gate passes, call Amazap's read-only
+  `list_my_endpoint` tool when the host lists it; otherwise give the human
+  https://amazap.com/sell and a draft built from the reference's listing-copy
+  template. Show the draft beside the current Amazap seller terms, linked
+  live.
+- **Fields.** Amazap prefills the title, description, category, and example
+  parameters from `openapi.json` or `llms.txt` at the root of the API's own
+  host. Without either, the human supplies the title, description, category,
+  and example parameters by hand. Adding one of those files is a code change:
+  show the diff first.
+- **Two prices.** Show the seller price (the invoice amount the route's code
+  sets) and Amazap's all-in shopper price separately, never added together;
+  the all-in figure comes from Amazap's draft or page. Amazap locks the price
+  at listing time, so list the route at the human's chosen price, not step
+  10's staging price, and after any price change in the code the seller must
+  re-run Amazap's checks.
+- **The human decides.** Without the human's explicit approval, never submit
+  the listing, accept seller terms, provide or infer a contact email, opt into
+  announcements, publish a Nostr handle, change the endpoint's price, or claim
+  a commercial relationship among any of Lightning Enable, Amazap, or Amboss.
+  The human enters the contact email and submits. Submitting publishes the
+  listing automatically once Amazap's checks pass, so the human reviews the
+  email, the copy, both prices, and the terms first.
+- **Read back.** Never call the endpoint listed or live until you have read
+  its product page or `GET https://amazap.com/api/products/<slug>` and checked
+  `hidden`, `listingState`, and `healthStatus`. Before you say "listed", the
+  row's endpoint URL and displayed seller price must match this route;
+  otherwise report the row's state and that it may be an imported row, not
+  this listing. Call it listed only when the row also has `hidden: false` or
+  the page shows the listing as buyable; otherwise report those three fields.
+  Listed is not verified paid delivery.
+
+Lightning Enable does not hold funds; the payment provider facilitates custody
+and settlement. Full rules, including the listing-copy template:
+[Amazap marketplace: Seller handoff](https://github.com/refined-element/lightning-enable-skills/blob/main/references/amazap-marketplace.md#seller-handoff).
+
 ## Safety rules
 
 - **Show the diff and get an explicit yes before any paid call.** The free 402

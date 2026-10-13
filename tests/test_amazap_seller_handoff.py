@@ -67,9 +67,11 @@ REFERENCE_SECTIONS = (
 )
 
 # The seller skills whose Amazap step is guarded; Tasks 2 to 4 add one each.
-SELLER_SKILLS: tuple[str, ...] = ("producer-setup", "create-l402-proxy")
+SELLER_SKILLS: tuple[str, ...] = ("producer-setup", "create-l402-proxy", "l402-server-integration")
 # The seller skills whose endpoint is a proxy on api.lightningenable.com.
 PROXY_SKILLS: tuple[str, ...] = ("producer-setup", "create-l402-proxy")
+# The seller skills whose API runs the L402 middleware on its own host.
+NATIVE_SKILLS: tuple[str, ...] = ("l402-server-integration",)
 HANDOFF_TARGETS = ("reference", *SELLER_SKILLS)
 
 STEP_HEADING = re.compile(r"^### (\d+)\. Optional: list on Amazap[ \t]*$", re.MULTILINE)
@@ -364,10 +366,16 @@ def test_handoff_counts_a_pay_l402_challenge_payment_as_paid(target):
     "either wallet",
     # "by hand" alone also matches "example parameters by hand".
     "made by hand, outside both tools",
-    "not the host alone",
+    "a wallet that can pay this endpoint",
 ))
-def test_handoff_states_the_mirrored_payment_and_row_rules(target, phrase):
+def test_handoff_states_the_mirrored_payment_rules(target, phrase):
     assert phrase in handoff_text(target), f"{target} is missing {phrase!r}"
+
+
+# Only proxies share a host; an API on its own domain owns its host.
+@pytest.mark.parametrize("target", ("reference", *PROXY_SKILLS))
+def test_proxy_handoff_matches_rows_by_url_not_the_host_alone(target):
+    assert "not the host alone" in handoff_text(target), f"{target} is missing 'not the host alone'"
 
 
 @pytest.mark.parametrize("target", HANDOFF_TARGETS)
@@ -458,3 +466,33 @@ def test_readme_describes_the_optional_step(skill):
     for match in LISTING_CLAIM.finditer(text):
         before = text[max(0, match.start() - 80):match.start()].lower()
         assert any(word in before for word in NEGATIONS), match.group(0)
+
+
+@pytest.mark.parametrize("skill", SELLER_SKILLS)
+@pytest.mark.parametrize("phrase", (
+    "with the same method",
+    "`--mode-a mode-a.json`",
+    "token piped on stdin",
+    "If that token is gone",
+    "with a different method",
+    "Python MCP server",
+))
+def test_step_reuses_a_self_test_payment_instead_of_paying_again(skill, phrase):
+    assert phrase in flat(amazap_step(skill)), f"{skill} is missing {phrase!r}"
+
+
+def test_native_step_points_the_prefill_at_the_apis_own_host_root():
+    step = flat(amazap_step("l402-server-integration"))
+    assert "at the root of the API's own host" in step
+    assert "A test against `localhost` doesn't count." in step
+
+
+@pytest.mark.parametrize("skill", NATIVE_SKILLS)
+def test_native_step_targets_marketplace_ready_without_the_proxy_cap(skill):
+    step = flat(amazap_step(skill))
+    assert "`MARKETPLACE_READY` is the target" in step
+    assert "before body validation" in step
+    # Proxy-only rules: an API on its own domain owns its host and its host root.
+    for phrase in ("`FULFILLMENT_VERIFIED` at most", "`FULFILLMENT_VERIFIED` is the ceiling",
+                   "not the host alone", "`api.lightningenable.com`"):
+        assert phrase not in step, f"{skill} carries the proxy-only rule {phrase!r}"
