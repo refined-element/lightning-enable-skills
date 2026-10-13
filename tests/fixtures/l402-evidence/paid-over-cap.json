@@ -1,0 +1,20 @@
+{
+  "cap_sats": 1,
+  "tool_result": {
+    "success": true,
+    "status_code": 200,
+    "content_type": "application/json; charset=utf-8",
+    "body_length": 42,
+    "paid_sats": 2,
+    "already_paid": false,
+    "requires_confirmation": false
+  },
+  "payments": [
+    {
+      "amount_sats": 2,
+      "status": "settled",
+      "payment_hash": "65e0276b37174dbbdfecc0de804298820c9bb69500d080314b7cc6609d82c88c"
+    }
+  ],
+  "test_preimage_seed": "fixture-string-preimage-1"
+}

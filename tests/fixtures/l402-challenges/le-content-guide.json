@@ -1,0 +1,47 @@
+{
+  "name": "le-content-guide",
+  "origin": "captured 2026-10-12T20:37:35.622052Z; macaroon and token values replaced with fixture-string placeholders",
+  "observed_at": "2026-10-12T20:37:45Z",
+  "dns": {},
+  "request": {
+    "method": "GET",
+    "url": "https://api.lightningenable.com/api/l402/content/agent-fleet-economics.md"
+  },
+  "responses": [
+    {
+      "url": "https://api.lightningenable.com/api/l402/content/agent-fleet-economics.md",
+      "status": 402,
+      "headers": [
+        [
+          "WWW-Authenticate",
+          "L402 macaroon=\"fixture-string-macaroon\", invoice=\"lnbc36160n1p4v63g3pp5qkd8m02zk6yhh3scryujn37zpn94nqrjl4cerajeacm2fcm6x6nqdz5fs6rqv3qv93kxetnwvazqtmpwp5j7mp5xqez7cm0de6x2mn59askwetwwskkvmr9v46z6etrdahx7mtfvdescqzzsxqyz5tlsp5jc3tw0l4wmnzkf80qpuyhj5y8pcgd3mdk8wn7dxgqtvp8m2cnrcq9qxpqysgqe8v7382my9kclr3yfsz9ekkl7d08pdz0uzlxztvza3jg6fcd0fkxw5mtjssw99jvd0hcdns97nss93n7wqyjsh8tme2dtl4gez3dzaqq4pr6wh\""
+        ],
+        [
+          "WWW-Authenticate",
+          "Payment id=\"JBLwfGJu78Zbw5ddy6ptoPYy3WDJw1bTVVEF4h5xtFM\", realm=\"lightning-enable\", method=\"lightning\", intent=\"charge\", request=\"eyJhbW91bnQiOiIzNjE2IiwiY3VycmVuY3kiOiJzYXQiLCJtZXRob2REZXRhaWxzIjp7Imludm9pY2UiOiJsbmJjMzYxNjBuMXA0djYzZzNwcDVxa2Q4bTAyems2eWhoM3Njcnl1am4zN3pwbjk0bnFyamw0Y2VyYWplYWNtMmZjbTZ4Nm5xZHo1ZnM2cnF2M3F2OTNreGV0bnd2YXpxdG1wd3A1ajdtcDV4cWV6N2NtMGRlNngybW41OWFza3dldHd3c2trdm1yOXY0Nno2ZXRyZGFoeDdtdGZ2ZGVzY3F6enN4cXl6NXRsc3A1amMzdHcwbDR3bW56a2Y4MHFwdXloajV5OHBjZ2QzbWRrOHduN2R4Z3F0dnA4bTJjbnJjcTlxeHBxeXNncWU4djczODJteTlrY2xyM3lmc3o5ZWtrbDdkMDhwZHowdXpseHp0dnphM2pnNmZjZDBma3h3NW10anNzdzk5anZkMGhjZG5zOTduc3M5M243d3F5anNoOHRtZTJkdGw0Z2V6M2R6YXFxNHByNndoIiwibmV0d29yayI6Im1haW5uZXQiLCJwYXltZW50SGFzaCI6IjA1OWE3ZGJkNDJiNjg5N2JjNjE4MTkzOTI5YzdjMjBjY2I1OTgwNzJmZDcxOTFmNjU5ZWUzNmE0ZTM3YTM2YTYifX0\", expires=\"2026-10-12T20:47:37Z\", invoice=\"lnbc36160n1p4v63g3pp5qkd8m02zk6yhh3scryujn37zpn94nqrjl4cerajeacm2fcm6x6nqdz5fs6rqv3qv93kxetnwvazqtmpwp5j7mp5xqez7cm0de6x2mn59askwetwwskkvmr9v46z6etrdahx7mtfvdescqzzsxqyz5tlsp5jc3tw0l4wmnzkf80qpuyhj5y8pcgd3mdk8wn7dxgqtvp8m2cnrcq9qxpqysgqe8v7382my9kclr3yfsz9ekkl7d08pdz0uzlxztvza3jg6fcd0fkxw5mtjssw99jvd0hcdns97nss93n7wqyjsh8tme2dtl4gez3dzaqq4pr6wh\", amount=\"3616\", currency=\"sat\""
+        ],
+        [
+          "Content-Type",
+          "application/json; charset=utf-8"
+        ],
+        [
+          "Cache-Control",
+          "no-store"
+        ]
+      ],
+      "body": "{\"error\":\"Payment Required\",\"message\":\"Pay the Lightning invoice to access this resource\",\"l402\":{\"macaroon\":\"fixture-string-macaroon\",\"invoice\":\"lnbc36160n1p4v63g3pp5qkd8m02zk6yhh3scryujn37zpn94nqrjl4cerajeacm2fcm6x6nqdz5fs6rqv3qv93kxetnwvazqtmpwp5j7mp5xqez7cm0de6x2mn59askwetwwskkvmr9v46z6etrdahx7mtfvdescqzzsxqyz5tlsp5jc3tw0l4wmnzkf80qpuyhj5y8pcgd3mdk8wn7dxgqtvp8m2cnrcq9qxpqysgqe8v7382my9kclr3yfsz9ekkl7d08pdz0uzlxztvza3jg6fcd0fkxw5mtjssw99jvd0hcdns97nss93n7wqyjsh8tme2dtl4gez3dzaqq4pr6wh\",\"amount_sats\":3616,\"payment_hash\":\"059a7dbd42b6897bc618193929c7c20ccb598072fd7191f659ee36a4e37a36a6\",\"expires_at\":\"2026-10-12T20:47:37.2495368Z\"},\"instructions\":{\"step1\":\"Pay the Lightning invoice using any Lightning wallet\",\"step2\":\"Copy the preimage (proof of payment) from your wallet\",\"step3\":\"Include in request: Authorization: L402 \\u003Cmacaroon\\u003E:\\u003Cpreimage\\u003E (or Payment method=\\u0022lightning\\u0022, preimage=\\u0022\\u003Chex\\u003E\\u0022)\"}}",
+      "latency_ms": 150
+    }
+  ],
+  "expected": {
+    "classification": "CHALLENGE_COMPATIBLE",
+    "schemes": [
+      "L402",
+      "Payment"
+    ],
+    "classified_by": "L402",
+    "amount_sats": 3616,
+    "payment_hash": "059a7dbd42b6897bc618193929c7c20ccb598072fd7191f659ee36a4e37a36a6",
+    "finding_codes": []
+  }
+}

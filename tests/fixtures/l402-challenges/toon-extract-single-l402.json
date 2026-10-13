@@ -1,0 +1,38 @@
+{
+  "name": "toon-extract-single-l402",
+  "origin": "captured 2026-10-12T20:37:35.622052Z; macaroon and token values replaced with fixture-string placeholders",
+  "observed_at": "2026-10-12T20:37:45Z",
+  "dns": {},
+  "request": {
+    "method": "GET",
+    "url": "https://l402.mainnet.toonprotocol.dev/extract?url=https%3A%2F%2Fexample.com"
+  },
+  "responses": [
+    {
+      "url": "https://l402.mainnet.toonprotocol.dev/extract?url=https%3A%2F%2Fexample.com",
+      "status": 402,
+      "headers": [
+        [
+          "WWW-Authenticate",
+          "L402 macaroon=\"fixture-string-macaroon\", invoice=\"lnbc50n1p4v63gnpp5fpjxv6hv0t9m5wsrk23zy7n6aru6yqtj82pxe28cj6gsatjl8jhqdquds6rqv3dv3hk7u3qv4u8gunpvd6qcqzysxqzjcrzjqv3dpepm8kfdxrk3sl6wzqdf49s9c0h9ljtjrek6c08r6aejlwcnur0dwyqqvucqqqqqqqlgqqqq86qqjqsp5ayjmlhjq8wcy0led3xjr0a8sk475d0qp7pu8p3hrjs7v36qxxmas9qxpqysgqxwhz4mkgxkr94xhq40dwumefp9k56n5csxyc0d5q59qf8hell6xp8yfjq3ch30etzmppnyg8thfwc8evk04caj0tyvk3jfsz3qdxn9qqd9tj3y\""
+        ],
+        [
+          "Content-Type",
+          "application/json"
+        ]
+      ],
+      "body": "{\"ok\":false,\"code\":\"payment_required\",\"price\":{\"sats\":5},\"invoice\":\"lnbc50n1p4v63gnpp5fpjxv6hv0t9m5wsrk23zy7n6aru6yqtj82pxe28cj6gsatjl8jhqdquds6rqv3dv3hk7u3qv4u8gunpvd6qcqzysxqzjcrzjqv3dpepm8kfdxrk3sl6wzqdf49s9c0h9ljtjrek6c08r6aejlwcnur0dwyqqvucqqqqqqqlgqqqq86qqjqsp5ayjmlhjq8wcy0led3xjr0a8sk475d0qp7pu8p3hrjs7v36qxxmas9qxpqysgqxwhz4mkgxkr94xhq40dwumefp9k56n5csxyc0d5q59qf8hell6xp8yfjq3ch30etzmppnyg8thfwc8evk04caj0tyvk3jfsz3qdxn9qqd9tj3y\",\"macaroon\":\"fixture-string-macaroon\",\"payment_hash\":\"4864666aec7acbba3a03b2a2227a7ae8f9a201723a826ca8f896910eae5f3cae\",\"settlement\":\"upfront\",\"invoice_expires_in\":600,\"credit_expires_at\":1791841058,\"terms\":\"One paid invoice buys one answer for this exact url. Retry with `Authorization: L402 <macaroon>:<preimage>`. If the fetch fails the credit stays valid until it expires; there are no Lightning refunds.\"}",
+      "latency_ms": 150
+    }
+  ],
+  "expected": {
+    "classification": "CHALLENGE_COMPATIBLE",
+    "schemes": [
+      "L402"
+    ],
+    "classified_by": "L402",
+    "amount_sats": 5,
+    "payment_hash": "4864666aec7acbba3a03b2a2227a7ae8f9a201723a826ca8f896910eae5f3cae",
+    "finding_codes": []
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "name": "store-checkout-empty-post-415",
+  "origin": "captured 2026-10-12T20:37:35.622052Z; macaroon and token values replaced with fixture-string placeholders",
+  "observed_at": "2026-10-12T20:37:45Z",
+  "dns": {},
+  "request": {
+    "method": "POST",
+    "url": "https://store.lightningenable.com/api/store/checkout"
+  },
+  "responses": [
+    {
+      "url": "https://store.lightningenable.com/api/store/checkout",
+      "status": 415,
+      "headers": [
+        [
+          "Link",
+          "<https://store.lightningenable.com/llms.txt>; rel=\"llms-txt\""
+        ],
+        [
+          "Content-Type",
+          "application/json; charset=utf-8"
+        ]
+      ],
+      "body": "{\"type\":\"https://tools.ietf.org/html/rfc9110#section-15.5.16\",\"title\":\"Unsupported Media Type\",\"status\":415,\"traceId\":\"00-7d705f52bf46a3a7a742690753262af9-f80d9a3ced012731-01\"}",
+      "latency_ms": 150
+    }
+  ],
+  "expected": {
+    "classification": "INCOMPATIBLE",
+    "schemes": [],
+    "classified_by": null,
+    "amount_sats": null,
+    "payment_hash": null,
+    "finding_codes": [
+      "unsupported_media_before_challenge"
+    ]
+  }
+}

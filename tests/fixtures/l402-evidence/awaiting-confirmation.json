@@ -1,0 +1,9 @@
+{
+  "cap_sats": 10,
+  "tool_result": {
+    "success": false,
+    "requires_confirmation": true
+  },
+  "payments": [],
+  "test_preimage_seed": null
+}

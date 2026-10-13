@@ -150,6 +150,7 @@ def skill_docs() -> list[Path]:
 def scanned_files() -> list[Path]:
     """Everything an agent may read: the docs, reference notes, and scripts."""
     files = skill_docs()
+    files.extend(sorted((REPO_ROOT / "references").glob("*.md")))
     for skill in skill_dirs():
         files.extend(sorted((skill / "references").glob("*.md")))
         files.extend(sorted((skill / "scripts").glob("*.py")))

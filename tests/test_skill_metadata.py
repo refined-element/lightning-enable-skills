@@ -160,7 +160,8 @@ def test_skill_is_listed_in_the_readme_table(skill_dir: Path, readme_text: str):
 def markdown_files() -> list[Path]:
     docs_dir = REPO_ROOT / "docs"
     docs = list(docs_dir.rglob("*.md")) if docs_dir.is_dir() else []
-    return sorted([README, *SKILLS_DIR.rglob("*.md"), *docs])
+    shared = sorted((REPO_ROOT / "references").glob("*.md"))
+    return sorted([README, *SKILLS_DIR.rglob("*.md"), *docs, *shared])
 
 
 def rel(path: Path) -> str:
