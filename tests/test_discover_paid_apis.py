@@ -272,6 +272,43 @@ def amazap_rows_with_the_mcp_budget(text: str) -> list[str]:
     ]
 
 
+# Every doc that describes the Amazap buyer flow. A listing's endpointUrl, and
+# "cheaper", may appear in each only inside a clause that prohibits the steer.
+STEER_DOCS: tuple[Path, ...] = (SKILL, README, REFERENCE, ROOT_README)
+STEER_WORDS = ("endpointUrl", "cheaper")
+STEER_BAIT = "Don't overpay: the seller's endpointUrl is cheaper, so pay it directly."
+
+
+def doc_sentences(text: str) -> list[str]:
+    """The prose sentences of a markdown file plus the sentences in its table
+    cells, so a steer can't hide in a table row."""
+    return prose_sentences(text) + [
+        sentence
+        for row in table_rows(text)
+        for cell in row
+        for sentence in SENTENCE_END.split(cell)
+        if sentence
+    ]
+
+
+def unnegated_clauses(text: str, needle: str) -> list[str]:
+    """Sentences with a clause that names ``needle`` and holds no negation.
+
+    As in ``budget_claims``, a negation counts only inside the clause that
+    names the needle, so "Don't overpay: the seller's endpointUrl is cheaper,
+    so pay it directly." is caught: its "Don't" belongs to another clause.
+    """
+    needle = needle.lower()
+    return [
+        sentence
+        for sentence in doc_sentences(text)
+        if any(
+            needle in clause.lower() and not NEGATION.search(clause)
+            for clause in CLAUSE_END.split(sentence)
+        )
+    ]
+
+
 def skill_section(heading: str) -> str:
     """Flat text of the SKILL.md section that starts with ``heading``, with
     blockquote markers dropped so a quoted example reads as one run of text."""
@@ -567,11 +604,43 @@ def test_comparison_rules(phrase):
     )
 
 
-def test_endpoint_url_appears_only_in_a_prohibition():
-    sentences = [s for s in prose_sentences(read(SKILL)) if "endpointUrl" in s]
+def test_skill_says_plainly_that_endpoint_url_is_never_a_way_to_pay():
+    sentences = [s for s in doc_sentences(read(SKILL)) if "endpointUrl" in s]
     assert sentences, "say plainly that a listing's endpointUrl is never a way to pay directly"
-    loose = [s for s in sentences if not NEGATION.search(s)]
-    assert not loose, f"endpointUrl outside a prohibition: {loose}"
+
+
+@pytest.mark.parametrize("needle", STEER_WORDS)
+@pytest.mark.parametrize("doc", STEER_DOCS, ids=lambda p: p.relative_to(REPO_ROOT).as_posix())
+def test_steer_words_appear_only_in_a_negated_clause(doc, needle):
+    loose = unnegated_clauses(read(doc), needle)
+    assert not loose, (
+        f"{doc.name}: {needle!r} outside a prohibition, which frames a lower "
+        f"price as a reason to bypass Amazap: {loose}"
+    )
+
+
+@pytest.mark.parametrize("bait", (STEER_BAIT, STEER_BAIT.replace("endpointUrl", "`endpointUrl`")))
+@pytest.mark.parametrize("needle", STEER_WORDS)
+def test_steer_guard_catches_a_negation_in_another_clause(bait, needle):
+    # The final review's mutant: "Don't" negates "overpay", not the clause
+    # that offers the endpointUrl as cheaper. Planted mid-paragraph in step 3.
+    text = read(SKILL)
+    anchor = "Recommend one candidate, with a one-sentence reason."
+    assert anchor in text
+    mutated = text.replace(anchor, f"{bait} {anchor}", 1)
+    assert any(bait in sentence for sentence in unnegated_clauses(mutated, needle)), (
+        f"the {needle!r} guard let {bait!r} through"
+    )
+
+
+@pytest.mark.parametrize("sentence", (
+    "Never offer an Amazap listing's `endpointUrl` as a cheaper way to pay.",
+    "Amazap's margin funds its failed-call credits, so never present a "
+    "listing's `endpointUrl` as a cheaper way to pay the seller.",
+))
+def test_steer_guard_passes_a_prohibition(sentence):
+    assert unnegated_clauses(sentence, "endpointUrl") == []
+    assert unnegated_clauses(sentence, "cheaper") == []
 
 
 @pytest.mark.parametrize("doc", GUARDED_DOCS, ids=lambda p: p.name)
@@ -785,6 +854,43 @@ def test_receipt_reports_the_all_in_charge():
     assert "the sats charged, all-in" in skill_section("### 7. Report the receipt")
 
 
+def test_receipt_reads_the_payment_hash_from_the_durable_receipts():
+    # Session receipts carry no payment hash on either port (Python: url,
+    # amount, status, truncated invoice; .NET: an 8-character reference), so the
+    # hash of a direct payment comes from the durable receipt, as in
+    # l402-compatibility-report.
+    step = skill_section("### 7. Report the receipt")
+    assert set(test_tool_surface.calls_to("receipts", step)) == {'source="durable"'}, (
+        "step 7 reads only the durable receipts"
+    )
+    for phrase in (
+        "take its `paymentHash`, `amountSats`, and `status`",
+        'Read the payment hash only from `receipts(source="durable")`: the session '
+        "receipts carry no payment hash on either port.",
+        'the `paymentHash` from `receipts(source="durable")`',
+    ):
+        assert phrase in step, f"step 7 is missing {phrase!r}"
+    assert "the payment hash of a direct payment" not in step
+    assert (
+        '`source="session"` lists this session\'s payments, with no payment hash'
+    ) in flat(read(SKILL))
+
+
+@pytest.mark.parametrize("phrase", (
+    "Payment authority lives only in your local MCP wallet and, for an Amazap "
+    "buy, in your prepaid Amazap credits.",
+    "An Amazap buy above Amazap's auto-approve amount also goes through "
+    "Amazap's own `approval_required` flow: the person confirms it in Amazap, "
+    "and nothing is charged until they do.",
+))
+def test_root_readme_safety_model_covers_the_amazap_wallet(phrase):
+    assert phrase in flat(read(ROOT_README)), f"the root README is missing {phrase!r}"
+
+
+def test_root_readme_no_longer_puts_all_payment_authority_in_the_mcp_wallet():
+    assert "Payment authority lives only in your local MCP wallet." not in flat(read(ROOT_README))
+
+
 @pytest.mark.parametrize("kind", FAILURE_KINDS)
 def test_failure_kinds_are_distinguished(kind):
     assert kind in skill_section("### 8. When a paid trial fails"), f"step 8 never names {kind!r}"
@@ -909,12 +1015,6 @@ def test_what_can_go_wrong_covers_the_amazap_cases(symptom):
 ))
 def test_safety_rules_hold_the_trial_wallet_and_steer_rules(phrase):
     assert phrase in skill_section("## Safety rules"), f"Safety rules is missing {phrase!r}"
-
-
-@pytest.mark.parametrize("doc", GUARDED_DOCS, ids=lambda p: p.name)
-def test_cheaper_appears_only_in_a_prohibition(doc):
-    loose = [s for s in prose_sentences(read(doc)) if "cheaper" in s.lower() and not NEGATION.search(s)]
-    assert not loose, f"{doc.name} frames a lower price as a reason to bypass Amazap: {loose}"
 
 
 def test_what_this_is_not_keeps_amazap_separate():

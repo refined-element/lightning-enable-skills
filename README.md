@@ -112,7 +112,9 @@ Every skill here that spends money follows the same rules:
 - **Explicit confirmation before any payment.** No silent spending. When a
   payment is over the MCP's auto-approve threshold, the confirmation code goes
   to the human through the server's confirmation channel (its console by
-  default), never to the agent.
+  default), never to the agent. An Amazap buy above Amazap's auto-approve
+  amount also goes through Amazap's own `approval_required` flow: the person
+  confirms it in Amazap, and nothing is charged until they do.
 - **Budget-aware.** Honors the MCP's spending caps (`budget(action="status")`);
   an agent can tighten them, never raise them. An Amazap buy in
   `discover-paid-apis` spends prepaid Amazap credits under the user's cap and
@@ -121,7 +123,7 @@ Every skill here that spends money follows the same rules:
   never run concurrently.
 - **Intent-driven.** The agent never decides *for* you that you need to buy.
 - **No secrets in this repo.** Payment authority lives only in your local MCP
-  wallet. Skills report a wallet string or API key as set or not set, never its
+  wallet and, for an Amazap buy, in your prepaid Amazap credits. Skills report a wallet string or API key as set or not set, never its
   value.
 - **Lightning Enable does not hold funds.** The wallet or the payment provider
   facilitates custody and settlement.

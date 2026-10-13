@@ -80,7 +80,9 @@ the receipt.
     API's manifest (`url`). It never pays.
   - `access_l402_resource`: fetches a URL with GET or HEAD and pays an L402
     challenge up to `max_sats`.
-  - `receipts`: `source="session"` lists this session's payments.
+  - `receipts`: `source="session"` lists this session's payments, with no
+    payment hash; `source="durable"` returns the wallet's receipt of a
+    payment, with its `paymentHash`.
 - Amazap MCP tools, named by capability, only when the host lists them:
   - search and inspect, which never spend: `search_catalog`, `describe_sku`,
     and `quote`;
@@ -476,13 +478,19 @@ show it.
 
 For an Amazap buy, the receipt carries the sats charged and the balance after
 (`chargedSats`, `balanceAfterSats`) and the remaining Amazap limits; `orders`
-or `get_order` returns the order. For a direct payment, read this session's
-receipts and what the MCP budget has left:
+or `get_order` returns the order. For a direct payment, read the wallet's
+receipt of the payment and what the MCP budget has left:
 
 ```
-receipts(source="session")
+receipts(source="durable")
 budget(action="status")
 ```
+
+Pick the receipt written since step 6 for this URL and take its
+`paymentHash`, `amountSats`, and `status`. The MCP stores the payment hash as
+SHA-256 of the preimage, never the preimage itself, so a receipt holds no
+credential. Read the payment hash only from `receipts(source="durable")`: the
+session receipts carry no payment hash on either port.
 
 Report:
 
@@ -493,8 +501,8 @@ Report:
 - the remaining Amazap credits or the remaining MCP budget, whichever wallet
   paid, when available;
 - the source, the provider, and the listing used;
-- an order or receipt id safe to keep: the Amazap order id, or the payment
-  hash of a direct payment;
+- an order or receipt id safe to keep: the Amazap order id, or, for a direct
+  payment, the `paymentHash` from `receipts(source="durable")`;
 - whether fulfillment succeeded.
 
 Never print invoices, preimages, macaroons, OAuth tokens, NWC strings, wallet
