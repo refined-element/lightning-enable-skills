@@ -77,7 +77,7 @@ HANDOFF_TARGETS = ("reference", *SELLER_SKILLS)
 # Amazap step to a core "Verify your endpoint" step. Tasks 5 to 7 of the
 # rebalance plan add one each; test_seller_verification.py reads the rules
 # from whichever step holds them.
-VERIFIED_SELLERS: tuple[str, ...] = ("producer-setup",)
+VERIFIED_SELLERS: tuple[str, ...] = ("producer-setup", "create-l402-proxy")
 
 STEP_HEADING = re.compile(r"^### (\d+)\. Optional: list on Amazap[ \t]*$", re.MULTILINE)
 HAND_OFF_HEADING = re.compile(r"^### (\d+)\. Hand off[ \t]*$", re.MULTILINE)
