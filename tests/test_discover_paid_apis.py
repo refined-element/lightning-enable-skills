@@ -377,3 +377,73 @@ def test_fixture_uses_placeholder_names():
         for key in ("name", "provider", "slug"):
             assert row[key].startswith("fixture-string-"), (key, row[key])
         assert re.match(r"^https://fixture-string-[a-z0-9-]+\.example/", row["endpointUrl"])
+
+
+# --- The shared reference: buyer rules and two wallets ----------------------
+
+
+def discovery_section() -> str:
+    return flat(reference_section("## Discovery versus purchase"))
+
+
+def wallets_section() -> str:
+    return reference_section("## Two wallets")
+
+
+@pytest.mark.parametrize("phrase", (
+    "Amazap does not replace the Lightning Enable registry",
+    "Search, describe, and quote never spend.",
+    "`totalSats`, the figure the buyer pays",
+    "never add the seller price and the fee yourself",
+    "`trust.label`",
+    "Never fetch a hidden row by slug to buy it.",
+    "read `listingState` and `buyable` on every row",
+    "can also be hidden from search and still be returned by",
+    NON_GOAL,
+    DIRECT_PAY_SCOPE,
+    "`quote_id`, `total_cost`, `max_total_sats`, and `accept_terms`",
+    "A stale quote returns a fresh quote in the error and charges nothing",
+    "Repeating a `quote_id` never charges twice.",
+    "A basket is one buy.",
+    "`approval_required`",
+    "re-credits a failed paid call as Amazap credits, never cash",
+    "`claim_failed_call` within 72 hours",
+    SENSITIVE,
+    "At most one trial purchase per run",
+    "(../skills/discover-paid-apis/)",
+))
+def test_reference_states_the_buyer_rules(phrase):
+    assert phrase in discovery_section(), f"Discovery versus purchase is missing {phrase!r}"
+
+
+def test_reference_no_longer_defers_the_buyer_rules():
+    assert "belong with the buyer skill that adopts it" not in flat(read(REFERENCE))
+
+
+@pytest.mark.parametrize("phrase", (
+    CAP_RULE,
+    "`max_total_sats`",
+    "Never present `budget` status or `get_balance` as bounding an Amazap buy.",
+    "`balance` and `spend_summary`",
+    "auto-approve amount",
+))
+def test_reference_two_wallets_names_the_cap_for_each_path(phrase):
+    assert phrase in flat(wallets_section()), f"Two wallets is missing {phrase!r}"
+
+
+def test_reference_cap_table_has_a_row_per_path():
+    rows_by_path = {row[0]: row for row in table_rows(wallets_section())}
+    amazap = rows_by_path.get("Amazap `buy`")
+    assert amazap and "`max_total_sats`" in amazap[2] and "Amazap account limits" in amazap[2]
+    direct = [row for path, row in rows_by_path.items() if "`access_l402_resource`" in path]
+    assert direct and "MCP `budget` limits" in direct[0][2]
+
+
+def test_reference_keeps_the_mcp_budget_off_every_amazap_row():
+    hits = amazap_rows_with_the_mcp_budget(read(REFERENCE))
+    assert not hits, f"an Amazap row names the MCP budget: {hits}"
+
+
+def test_reference_never_says_the_mcp_budget_bounds_an_amazap_buy():
+    hits = budget_claims(read(REFERENCE))
+    assert not hits, f"the MCP budget never bounds an Amazap buy: {hits}"
