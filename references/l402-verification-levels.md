@@ -205,9 +205,11 @@ read-only quote; Amazap pays a live invoice only when it fits the price it
 stored at listing time, so a price that moves breaks buys). Advisory checks
 never decide the status: `host_root_metadata` (`openapi.json` or `llms.txt` at
 the host root, where Amazap's listing prefill looks; probed only when the check
-runs with `--profile amazap`). On `api.lightningenable.com` the host-root files
-describe the Lightning Enable platform, not the endpoint, so the check says to
-supply the listing fields by hand.
+runs with `--profile amazap`, and "Not probed" on every host without it). With
+the flag, on `api.lightningenable.com` the host-root files describe the
+Lightning Enable platform, not the endpoint, so the check says to supply the
+listing fields by hand. Without the flag, the Markdown shows the profile as one
+line and the JSON keeps it in full with `requested: false`.
 
 Report version 1 called a `READY` Amazap profile `MARKETPLACE_READY` and
 reported it as a sixth classification. Version 2 has no such classification;

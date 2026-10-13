@@ -236,17 +236,27 @@ def test_a_read_only_run_without_the_profile_makes_exactly_one_request():
     assert len(log) == 1
     check = amazap_checks(report)["host_root_metadata"]
     assert check["pass"] is None
-    assert "--profile amazap" in check["detail"]
+    assert check["detail"] == "Not probed: the Amazap profile was not requested."
+    assert amazap(report)["requested"] is False
+    assert amazap(report)["status"] == "NOT_CHECKED"
 
 
 @pytest.mark.parametrize("name", ["le-test-ping", "le-proxy-weather"])
 def test_on_the_lightning_enable_host_the_host_root_files_describe_the_platform(name):
     llms = {"url": "https://api.lightningenable.com/llms.txt", "status": 200, "headers": [], "body": "# llms"}
     report, _ = report_for(name, extra_responses=[llms], profiles=("amazap",))
+    assert amazap(report)["requested"] is True
     check = amazap_checks(report)["host_root_metadata"]
     assert check["pass"] is False
     assert "Lightning Enable platform" in check["detail"]
     assert "by hand" in check["detail"]
+    # Not requested: "Not probed" on the Lightning Enable host too, never a failing Amazap check.
+    unrequested, _ = report_for(name)
+    check = amazap_checks(unrequested)["host_root_metadata"]
+    assert check["pass"] is None
+    assert check["detail"].startswith("Not probed")
+    assert "Lightning Enable platform" not in check["detail"]
+    assert amazap(unrequested)["requested"] is False
 
 
 def test_metadata_is_not_probed_when_there_is_no_402():
@@ -260,7 +270,7 @@ def test_metadata_is_not_probed_when_there_is_no_402():
     assert "only after the listed URL answers 402" in check["detail"]
     assert "add --profile amazap" not in check["detail"]
     unrequested, _ = report_for("synthetic-200-unpaid")
-    assert "add --profile amazap" in amazap_checks(unrequested)["host_root_metadata"]["detail"]
+    assert amazap_checks(unrequested)["host_root_metadata"]["detail"].startswith("Not probed")
 
 
 def test_the_not_ready_note_covers_the_classification_case():

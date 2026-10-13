@@ -51,4 +51,4 @@
 
 ## Optional marketplace profiles
 
-<Optional. One subsection per marketplace profile (### Amazap): its status (READY, NOT_READY, or NOT_CHECKED), each check with pass, fail, or not checked, "(advisory)" on a check that never decides the status, what the script cannot check, and a note. A profile never changes the classification.>
+<Optional. One subsection per marketplace profile (### Amazap): its status (READY, NOT_READY, or NOT_CHECKED), each check with pass, fail, or not checked, "(advisory)" on a check that never decides the status, what the script cannot check, and a note. A profile the run did not request (no --profile amazap) is one line instead, with no checks or verdicts. A profile never changes the classification.>

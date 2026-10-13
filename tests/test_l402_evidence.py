@@ -473,15 +473,52 @@ def test_a_fulfilled_endpoint_is_fulfillment_verified_with_a_ready_amazap_profil
     # Amazap pays a live invoice only when it fits the price it stored at listing time.
     assert checks["stable_price"]["pass"] is True
     assert checks["stable_price"]["required"] is True
-    # le-test-ping is on api.lightningenable.com: the advisory host-root check
-    # fails without lowering anything.
-    assert checks["host_root_metadata"]["pass"] is False
+    # The read-only report did not request the Amazap profile, so the host-root
+    # check was not probed, even on api.lightningenable.com.
+    assert checks["host_root_metadata"]["pass"] is None
     assert checks["host_root_metadata"]["required"] is False
+    assert amazap(report)["requested"] is False
     assert "marketplace" not in report
     assert "marketplace" not in report["summary"].lower()
     assert "marketplace_gaps" not in paid_codes(report)
     unproven, _ = evidence_for("preimage-not-surfaced")
     assert l402_evidence.evaluate(unproven, None)["classification"] == "INCONCLUSIVE"
+
+
+# The paid check accepts the read-only report with or without --profile amazap,
+# and with no "requested" field (an earlier version 2 report).
+@pytest.mark.parametrize("shape", ["unrequested", "requested", "no-field"])
+def test_the_paid_check_accepts_both_read_only_shapes(shape):
+    evidence, credential = evidence_for("fulfilled-2xx")
+    if shape == "requested":
+        evidence["mode_a_report"] = mode_a(("amazap",))
+    if shape == "no-field":
+        del evidence["mode_a_report"]["marketplace_profiles"]["amazap"]["requested"]
+    report = l402_evidence.evaluate(evidence, credential)
+    assert report["classification"] == "FULFILLMENT_VERIFIED"
+    # The advisory host-root check never decides the status: it fails on the
+    # Lightning Enable host only when the profile was requested.
+    assert amazap(report)["status"] == "READY"
+    host_root = profile_checks(report)["host_root_metadata"]["pass"]
+    assert host_root is (False if shape == "requested" else None)
+    markdown = l402_report.to_markdown(report)
+    tail = markdown.split("\n## Optional marketplace profiles\n", 1)[1]
+    if shape == "unrequested":
+        assert "fail (advisory)" not in markdown
+        assert "--profile amazap" not in markdown
+        assert "### Amazap" not in tail
+        assert "marketplace_profiles.amazap" in tail
+    else:
+        assert "### Amazap" in tail
+
+
+def test_a_requested_field_that_is_not_a_boolean_is_refused():
+    evidence, credential = evidence_for("fulfilled-2xx")
+    evidence["mode_a_report"]["marketplace_profiles"]["amazap"]["requested"] = "fixture-string-yes"
+    with pytest.raises(l402_evidence.EvidenceError) as refused:
+        l402_evidence.evaluate(evidence, credential)
+    assert "requested must be true or false" in str(refused.value)
+    assert "fixture-string" not in str(refused.value)
 
 
 def test_a_price_change_keeps_the_core_result_and_makes_the_amazap_profile_not_ready():

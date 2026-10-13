@@ -274,6 +274,9 @@ def _require_mode_a_shapes(mode_a: dict) -> None:
     for name, profile in profiles.items():
         if not isinstance(profile, dict):
             raise EvidenceError(f"{where}.{name} must be an object")
+        # Absent (an earlier version 2 report), true (--profile given), or false.
+        if not isinstance(profile.get("requested", True), bool):
+            raise EvidenceError(f"{where}.{name}.requested must be true or false")
         _require_read_only_checks(profile.get("checks"), name, f"{where}.{name}.checks")
         if not isinstance(profile.get("not_checked_by_script", []), list):
             raise EvidenceError(f"{where}.{name}.not_checked_by_script must be a list")

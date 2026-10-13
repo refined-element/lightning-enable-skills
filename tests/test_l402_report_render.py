@@ -329,7 +329,7 @@ def test_no_rendered_row_reads_as_a_token_value():
 def test_optional_marketplace_profiles_is_the_last_section():
     assert l402_report.SECTIONS[-1] == "Optional marketplace profiles"
     assert "Marketplace readiness" not in l402_report.SECTIONS
-    report, secrets = support.run_fixture(support.load_fixture("le-proxy-weather"))
+    report, secrets = support.run_fixture(support.load_fixture("le-proxy-weather"), profiles=("amazap",))
     markdown = l402_report.to_markdown(report, secrets)
     core, tail = markdown.split("\n## Optional marketplace profiles\n", 1)
     assert "### Amazap" in tail
@@ -338,3 +338,46 @@ def test_optional_marketplace_profiles_is_the_last_section():
     assert "never changes the classification" in tail
     assert "marketplace-ready" not in core.lower()
     assert "host_root_metadata" not in core
+
+
+UNREQUESTED_LINE = "Amazap readiness: not requested; run with `--profile amazap` to include it."
+# A check result row in any section: "- [name] ...".
+CHECK_ROW = re.compile(r"^- \[[a-z_]+\] .*$", flags=re.MULTILINE)
+
+
+def assert_no_unrequested_amazap_verdict(markdown: str) -> None:
+    assert "fail (advisory)" not in markdown
+    assert "### Amazap" not in markdown
+    assert "host_root_metadata" not in markdown
+    assert not [row for row in CHECK_ROW.findall(markdown) if "--profile amazap" in row]
+
+
+# Without --profile amazap, no report says an endpoint fails an Amazap check, the
+# Lightning Enable host included: the section is one neutral line.
+@pytest.mark.parametrize("name", support.fixture_names())
+def test_an_unrequested_amazap_profile_is_one_neutral_line(name):
+    report, secrets = support.run_fixture(support.load_fixture(name))
+    markdown = l402_report.to_markdown(report, secrets)
+    assert_no_unrequested_amazap_verdict(markdown)
+    tail = markdown.split("\n## Optional marketplace profiles\n", 1)[1]
+    assert tail.strip() == UNREQUESTED_LINE
+    # The JSON keeps the full object.
+    profile = json.loads(l402_report.to_json(report, secrets))["marketplace_profiles"]["amazap"]
+    assert profile["requested"] is False
+    assert {c["name"] for c in profile["checks"]} >= {"public_https", "host_root_metadata"}
+
+
+def test_the_guard_catches_an_advisory_fail_and_a_nudge_in_a_check_row():
+    with pytest.raises(AssertionError):
+        assert_no_unrequested_amazap_verdict("- [host_root_metadata] fail (advisory). x\n")
+    with pytest.raises(AssertionError):
+        assert_no_unrequested_amazap_verdict("- [stable_path] not checked. add --profile amazap\n")
+    assert_no_unrequested_amazap_verdict(UNREQUESTED_LINE + "\n")
+
+
+def test_a_report_without_the_requested_field_is_shown_in_full():
+    report, secrets = support.run_fixture(support.load_fixture("le-proxy-weather"))
+    del report["marketplace_profiles"]["amazap"]["requested"]
+    tail = l402_report.to_markdown(report, secrets).split("\n## Optional marketplace profiles\n", 1)[1]
+    assert "### Amazap" in tail
+    assert UNREQUESTED_LINE not in tail

@@ -310,14 +310,31 @@ def _paid(report: dict) -> list[str]:
 
 PROFILE_TITLES = {"amazap": "Amazap"}
 CHECK_VERDICTS = {True: "pass", False: "fail", None: "not checked"}
+# One neutral line for a profile nobody asked for: no checks, no verdicts. The
+# JSON keeps the full object. A paid report never suggests running again, which
+# would mean paying again.
+UNREQUESTED_PROFILE_LINES = {
+    "read-only": "{title} readiness: not requested; run with `--profile {name}` to include it.",
+    "paid": "{title} readiness: not requested; the JSON report holds the profile under "
+            "`marketplace_profiles.{name}`.",
+}
 
 
 def _profiles(report: dict) -> list[str]:
     profiles = report.get("marketplace_profiles") or {}
     if not profiles:
         return ["- None."]
-    lines = ["Optional. A marketplace profile never changes the classification above."]
-    for name, profile in profiles.items():
+    # A report written before the "requested" field existed is shown in full.
+    requested = {name: p for name, p in profiles.items() if p.get("requested", True) is not False}
+    unrequested = [name for name in profiles if name not in requested]
+    template = UNREQUESTED_PROFILE_LINES["paid" if report.get("mode") == "paid" else "read-only"]
+    lines = [template.format(title=PROFILE_TITLES.get(name, name), name=name) for name in unrequested]
+    if not requested:
+        return lines
+    if lines:
+        lines.append("")
+    lines.append("Optional. A marketplace profile never changes the classification above.")
+    for name, profile in requested.items():
         rows = [f"Status: {profile.get('status') or 'not computed'}"]
         for check in profile.get("checks", []):
             advisory = "" if check.get("required", True) else " (advisory)"

@@ -580,21 +580,22 @@ def _host_root_check(target, root_metadata: dict | None, requested: bool) -> dic
 
     ``requested`` is True when --profile amazap asked for the host-root probe;
     with ``root_metadata`` None it means the probe was skipped because no 402 came.
+    Without the profile the check is "Not probed" on every host, the Lightning
+    Enable host included: a report nobody asked to judge for Amazap never says
+    an endpoint fails an Amazap check.
     """
+    if not requested:
+        return _check("host_root_metadata", None,
+                      "Not probed: the Amazap profile was not requested.", required=False)
     if target is not None and target.host == LIGHTNING_ENABLE_HOST:
         return _check("host_root_metadata", False,
                       "On api.lightningenable.com the host-root openapi.json and llms.txt describe the Lightning "
                       "Enable platform, not this endpoint, so Amazap's prefill can't use them; supply the title, "
                       "description, category, and example parameters by hand.", required=False)
-    if root_metadata is None and requested:
+    if root_metadata is None:
         return _check("host_root_metadata", None,
                       "Skipped: --profile amazap was given, but the host root is probed only after the listed URL "
                       "answers 402, and it did not. Fix the 402 first, then run the check again.",
-                      required=False)
-    if root_metadata is None:
-        return _check("host_root_metadata", None,
-                      "Not probed: add --profile amazap to look for openapi.json or llms.txt at the host root, "
-                      "where Amazap's listing prefill looks. Without them, supply the listing fields by hand.",
                       required=False)
     found = sorted(path for path, status in root_metadata.items() if status == 200)
     return _check("host_root_metadata", bool(found),
@@ -629,6 +630,9 @@ def _amazap_profile(request: ProbeRequest, probe_result: ProbeResult, invoice, r
     ]
     return {
         "status": None,
+        # Whether --profile amazap asked for this profile. The JSON always holds the
+        # full object; the Markdown shows it in full only when it was requested.
+        "requested": requested,
         "checks": checks,
         "not_checked_by_script": [
             "example parameters for the listing",

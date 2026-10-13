@@ -401,8 +401,9 @@ The one profile today is `amazap`, for an optional listing on
 only when the human wants a marketplace listing. Add `--profile amazap` to the
 read-only check only then: it also requests `/openapi.json` and `/llms.txt` at
 the host root, where Amazap's listing prefill looks. Without it the read-only
-check makes exactly one unpaid request (plus any redirects it follows). The
-paid check reuses the read-only report's profile.
+check makes exactly one unpaid request (plus any redirects it follows), the
+Markdown shows the profile as one line, and the JSON keeps it in full with
+`requested: false`. The paid check reuses the read-only report's profile.
 
 Its `status` is `READY` (the classification is `FULFILLMENT_VERIFIED` and
 every required check passed), `NOT_READY` (a required check failed, or the
@@ -416,10 +417,11 @@ paid amount equals the read-only quote, because Amazap pays a live invoice
 only when it fits the price stored at listing time) and
 `synchronous_response`. One advisory check never decides the status:
 `host_root_metadata` (`openapi.json` or `llms.txt` at the host root, where
-Amazap's prefill looks; probed only with `--profile amazap`). On
-`api.lightningenable.com` the host-root files describe the Lightning Enable
-platform, not the endpoint, so the check says to supply the listing fields by
-hand. Whichever status it shows, the profile never changes the classification.
+Amazap's prefill looks; probed only with `--profile amazap`, and "Not probed"
+on every host without it). With the flag, on `api.lightningenable.com` the
+host-root files describe the Lightning Enable platform, not the endpoint, so
+the check says to supply the listing fields by hand. Whichever status it
+shows, the profile never changes the classification.
 
 Report version 1 called a `READY` Amazap profile `MARKETPLACE_READY` and
 reported it as a classification. Version 2 has no such classification; read
