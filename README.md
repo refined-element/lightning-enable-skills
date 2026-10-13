@@ -66,8 +66,8 @@ skills move the same protocol into your own code, and `l402-compatibility-report
 checks the result: the unpaid challenge first, then, with your yes, one paid
 call. Shared rules for those checks live in
 [`references/l402-verification-levels.md`](references/l402-verification-levels.md).
-Lightning Enable does not hold
-funds; the wallet or the payment provider facilitates custody and settlement.
+Lightning Enable does not hold funds; the wallet or the payment provider
+facilitates custody and settlement.
 
 ## What works where
 

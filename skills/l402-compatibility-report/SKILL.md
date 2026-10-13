@@ -10,7 +10,7 @@ description: >-
   when a developer asks to check, test, debug, or diagnose an L402
   endpoint ("is my L402 endpoint working", "why won't my endpoint list on
   Amazap", "check this paywall", "run an L402 compatibility report"), or after
-  producer-setup, create-l402-proxy, or l402-server-integration to prove the
+  producer-setup, create-l402-proxy, or l402-server-integration to check the
   result. Do NOT use to buy something for its content (use
   pay-l402-anywhere), to find a paid API (use discover-paid-apis), or to build
   a paywall (use producer-setup, create-l402-proxy, or l402-server-integration).
@@ -126,14 +126,16 @@ matter:
   priced. Say plainly that paid fulfillment was **not tested**.
 - **`INCOMPATIBLE`:** read the Required fixes section. Each defect maps to one
   fix (see the table below).
-- **`INCONCLUSIVE`:** a timeout, a refused target, a server error, or a DNS
-  failure. Say which; don't guess.
+- **`INCONCLUSIVE`:** a timeout, a refused target, a server error, a DNS
+  failure, a `405` (the method the check used isn't served; rerun with the
+  method the endpoint accepts), a `408`, `425`, or `429` (try again later), or
+  a cross-origin redirect of a request with a body, which the script doesn't
+  resend. Say which; don't guess.
 
 A response that offers several schemes (`L402` and `Payment`, `LSAT` and
 `L402`, or `L402`, `Payment`, and `x402`) is normal. The report classifies the
 endpoint by its `L402` challenge (or `LSAT` when there is no `L402`) and lists
-the others. `Payment` is its own
-scheme, never L402.
+the others. `Payment` is its own scheme, never L402.
 
 ### 3. Decide on the paid check
 
@@ -236,7 +238,7 @@ holds one):
 | `already_paid` | `alreadyPaid` | `alreadyPaid` |
 | `requires_confirmation` | `requiresConfirmation` | `requiresConfirmation` |
 | `payments[]` | receipts' `amountSats`, `status`, `paymentHash`, `context` | the same |
-| the credential | none returned | `payment.l402Token`, piped in step 7, never in this file |
+| the credential | `payment.l402Token`, only on the `alreadyPaid` path; piped in step 7, never in this file. That result has no `status_code`, so the outcome is still `INCONCLUSIVE` | `payment.l402Token`, piped in step 7, never in this file |
 
 `method` is optional: the method you passed in step 5. The script refuses
 evidence whose `method` differs from the read-only check's, and judges the
@@ -245,8 +247,9 @@ optional: the status and content type the human expects.
 
 ### 7. Validate the evidence
 
-`FULFILLMENT_VERIFIED` requires the credential. When the result carries
-`payment.l402Token` (the .NET server does), pipe it to the script with this
+`FULFILLMENT_VERIFIED` and `PAYMENT_COMPATIBLE` require the credential. When
+the result carries `payment.l402Token` (the .NET server does; the Python
+server only on the `alreadyPaid` path), pipe it to the script with this
 recipe, the only way to pass it; `--mode-a` adds the read-only report from
 step 1:
 
@@ -258,12 +261,16 @@ In a POSIX shell (bash, zsh), `printf` is a builtin, so the token reaches the
 script on stdin, never as a script argument. The token is still visible in the
 command text to anyone who sees the tool call, and it stays reusable until its
 expiry. That is why the paid check runs against the cheapest route. On Windows
-PowerShell, the equivalent is to pipe the token from a variable
-(`$token | python scripts/l402_check.py --evidence evidence.json --mode-a mode-a.json --credential-stdin`),
-and the same visibility caveat applies to the command that sets the variable. Never repeat the token in chat, and
-never write it to a file. `--evidence` and `--mode-a` take file paths, never
-`-`: stdin carries the token only, and the script refuses to read the token
-from a terminal.
+PowerShell, the equivalent is to pipe the token from a variable:
+
+```powershell
+$token | python scripts/l402_check.py --evidence evidence.json --mode-a mode-a.json --credential-stdin
+```
+
+The same visibility caveat applies to the command that sets the variable.
+Never repeat the token in chat, and never write it to a file. `--evidence` and
+`--mode-a` take file paths, never `-`: stdin carries the token only, and the
+script refuses to read the token from a terminal.
 
 Pipe the whole token, `<macaroon>:<preimage>`; the script refuses a bare
 preimage. It checks that SHA-256 of the preimage equals the payment hash inside
@@ -272,8 +279,8 @@ and equals the receipt's `paymentHash` when you supplied it. The macaroon's
 hash ties the preimage to the server's own challenge. For an opaque token the
 receipt's hash is the only comparison, and it ties the token to the wallet's
 recorded payment, not to the invoice. The report names the source it used in
-`paid_fulfillment.hash_source` and in its summary. It also requires
-an authorized retry with a reported 2xx status that meets the stated
+`paid_fulfillment.hash_source` and in its summary. It also requires an
+authorized retry with a reported 2xx status that meets the stated
 expectations, and exactly one payment recorded at or under the cap, with the
 tool's `paid_sats` and the receipts agreeing. It prints the payment hash and
 the amount, never a credential.
@@ -389,9 +396,9 @@ read-only check.
 - **Credentials never go in a command-line argument,** the evidence file, or
   any other file. `--header` refuses credential-bearing headers. The token
   reaches the script only on stdin, through the `printf` recipe in step 7 (or
-  its PowerShell equivalent). It shows
-  in that command text and stays reusable until its expiry, so the paid check
-  runs against the cheapest route, and you never repeat the token in chat.
+  its PowerShell equivalent). It shows in that command text and stays reusable
+  until its expiry, so the paid check runs against the cheapest route, and you
+  never repeat the token in chat.
 - **A receipt never upgrades the classification.** Without the credential, the
   paid check is `INCONCLUSIVE` with `preimage_unchecked`.
 - **Never claim verification you didn't do.** Report the exact classification.
@@ -435,6 +442,6 @@ On the .NET server:
 >    payment, not the invoice. The Mode A and paid payment hashes differ, which
 >    the report notes as information only.
 
-On the Python server, which returns no token, the same run ends `INCONCLUSIVE`
-with `preimage_unchecked`. The receipt is recorded as supporting evidence and
+On the Python server, which returns a token only on the `alreadyPaid` path, the
+same run ends `INCONCLUSIVE` with `preimage_unchecked`. The receipt is recorded as supporting evidence and
 doesn't upgrade it.

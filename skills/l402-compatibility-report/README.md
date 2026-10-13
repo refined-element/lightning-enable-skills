@@ -74,9 +74,8 @@ fails and how to fix it.
 - No credential goes in a command-line argument or a file. The script refuses
   credential-bearing request headers and takes the L402 token only on stdin,
   through a `printf` recipe (or its PowerShell equivalent). The token shows in
-  that command text and stays
-  reusable until its expiry, so the paid check runs against the cheapest
-  route. No credential appears in the output.
+  that command text and stays reusable until its expiry, so the paid check
+  runs against the cheapest route. No credential appears in the output.
 - An endpoint that needs its own credential before it will issue a 402 is out
   of scope; the report calls it "401 before challenge".
 - Lightning Enable does not hold funds; the payment provider facilitates custody
