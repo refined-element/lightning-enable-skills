@@ -32,7 +32,7 @@ prices, fees, credits, terms, or ranking.
   MCP budget never bounds an Amazap buy. The skill tells you which cap applies
   before it buys.
 - **It ends with a receipt:** the sats charged, what's left, the listing, an
-  order id, and whether the service delivered.
+  order id or payment hash, and whether the service delivered.
 
 ## How it works
 
@@ -78,8 +78,9 @@ prices, fees, credits, terms, or ranking.
 
 ## Safety
 
-- At most one trial purchase per run, after an explicit yes, at an all-in
-  price you saw. Never several paid calls to compare services.
+- At most one trial purchase per run unless you ask for more, after an
+  explicit yes, at an all-in price you saw. Never several paid calls to
+  compare services.
 - A quote over your cap is refused, and nothing is bought.
 - A stale quote is never bought on the old yes: you see the fresh total and
   say yes again.
@@ -89,7 +90,7 @@ prices, fees, credits, terms, or ranking.
   the amount. You pay the top-up invoice yourself, unless you explicitly ask
   the agent to pay it from your MCP wallet. Then it's its own `pay_invoice`
   payment that you approve at that exact amount. Your trial cap doesn't cover
-  a top-up; the MCP budget limits do.
+  a top-up; when the MCP wallet pays it, the MCP budget limits do.
 - After a paid failure it reports what happened and asks before trying
   anything else. A failed Amazap call is re-credited as Amazap credits, never
   cash.

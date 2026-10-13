@@ -1022,10 +1022,23 @@ def test_what_can_go_wrong_covers_every_ending(symptom):
 def test_price_outage_row_never_promises_small_payments_keep_working():
     # "may keep working" alone isn't enough: the old promise must not sit
     # beside it.
-    row = what_can_go_wrong()["Payments refused while no BTC price is available"]
-    assert "keep small payments working" not in row.lower(), (
-        "the price-outage row promises that small payments keep working"
-    )
+    row = what_can_go_wrong()["Payments refused while no BTC price is available"].lower()
+    for promise in ("keep small payments working", "small payments keep working"):
+        assert promise not in row, (
+            "the price-outage row promises that small payments keep working"
+        )
+
+
+# Amazap's windows (claim, quote freshness, limit periods) are read live, so
+# the skill states no duration. Its Example and the 31-versus-30-sat line carry
+# illustrative sats, so only durations are checked here, not the full
+# README_FIGURE pattern.
+SKILL_DURATION = re.compile(r"\d[\d,.]*\s*-?\s*(?:seconds?|minutes?|hours?|days?)\b", re.IGNORECASE)
+
+
+def test_skill_states_no_durations():
+    hits = SKILL_DURATION.findall(flat(read(SKILL)))
+    assert not hits, f"discover-paid-apis/SKILL.md states durations {hits}; read Amazap's windows live"
 
 
 @pytest.mark.parametrize("phrase", (
