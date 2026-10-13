@@ -116,6 +116,8 @@ def test_root_readme_native_row_names_its_manifest_not_the_registry():
     # The registry lists Lightning Enable proxies, not an API on its own domain.
     row = root_row("l402-server-integration")
     assert "its own L402 manifest" in row and "verify" in row
+    # The manifest step is an offer: the human approves and deploys it.
+    assert "optionally publish its own L402 manifest" in row and "you approve and deploy it" in row
     assert "registry" not in row.lower() and "amazap" not in row.lower()
 
 
@@ -132,6 +134,15 @@ def test_root_readme_paragraph_names_the_direct_path_before_amazap():
     assert "the Lightning Enable L402 compatibility report, checks any seller's endpoint" in text
     paragraph = text[text.find("**Buy + sell, end to end:**"):text.find("## What works where")]
     assert CUSTODY in paragraph, "the Buy + sell paragraph carries the custody sentence verbatim"
+
+
+def test_root_readme_names_the_three_skills_that_run_the_report_before_their_hand_off():
+    # sell-this and offer-agent-service have no report step and no hand-off,
+    # so the sentence names the three skills that do, not "the seller skills".
+    text = flat(read(ROOT_README))
+    assert ("The three skills that build a paid endpoint, `producer-setup`, `create-l402-proxy`, and "
+            "`l402-server-integration`, run it before their hand-off.") in text
+    assert "The seller skills run it" not in text
 
 
 def test_levels_reference_puts_verification_before_the_profiles():

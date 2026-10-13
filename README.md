@@ -48,7 +48,7 @@ default `standard` profile advertises.
 | Skill | What it does |
 |---|---|
 | 🧩 **[l402-client-integration](skills/l402-client-integration/)** | Add auto-paying L402 to your own code with `l402-requests` (Python), `L402Requests` (.NET), or `l402-requests` (npm). |
-| 🧱 **[l402-server-integration](skills/l402-server-integration/)** | Charge for your own API in-process with `L402Server.AspNetCore` or `l402-express`, no proxy, then make it discoverable through its own L402 manifest and verify it. |
+| 🧱 **[l402-server-integration](skills/l402-server-integration/)** | Charge for your own API in-process with `L402Server.AspNetCore` or `l402-express`, no proxy, optionally publish its own L402 manifest for discovery (you approve and deploy it), and verify it. |
 | 🩺 **[l402-compatibility-report](skills/l402-compatibility-report/)** | The Lightning Enable L402 compatibility report: check how far any endpoint gets through L402 without paying, then, with your yes, test paid delivery with one capped payment. |
 
 Each skill folder has a human-facing `README.md` (what it is) and an agent-facing
@@ -68,8 +68,10 @@ to the Lightning Enable registry, where buyers' agents find an endpoint with
 transacting with each other on the Nostr relay. The `l402-*-integration`
 skills move the same protocol into your own code. `l402-compatibility-report`,
 the Lightning Enable L402 compatibility report, checks any seller's endpoint:
-the unpaid challenge first, then, with your yes, one paid call. The seller
-skills run it before their hand-off. Shared rules for those checks live in
+the unpaid challenge first, then, with your yes, one paid call. The three
+skills that build a paid endpoint, `producer-setup`, `create-l402-proxy`, and
+`l402-server-integration`, run it before their hand-off. Shared rules for
+those checks live in
 [`references/l402-verification-levels.md`](references/l402-verification-levels.md).
 After the hand-off, `producer-setup`, `create-l402-proxy`, and
 `l402-server-integration` can also draft an optional listing on
