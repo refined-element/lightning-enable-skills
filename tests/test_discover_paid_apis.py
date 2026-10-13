@@ -1552,15 +1552,16 @@ def test_root_readme_row_names_both_sources():
         if line.startswith("|") and "(skills/discover-paid-apis/)" in line
     ]
     assert len(rows) == 1, rows
-    for phrase in ("Lightning Enable registry", "Amazap", "single bounded purchase"):
+    for phrase in ("Lightning Enable registry, with Amazap as an additional source", "single bounded purchase"):
         assert phrase in rows[0], f"the discover-paid-apis row is missing {phrase!r}"
+    assert 0 <= rows[0].find("Lightning Enable registry") < rows[0].find("Amazap")
     assert EM_DASH not in rows[0]
 
 
 def test_root_readme_paragraph_names_both_sources():
     assert (
         "`discover-paid-apis` finds something worth buying in the Lightning "
-        "Enable registry and on Amazap"
+        "Enable registry, and on Amazap as an additional source"
     ) in flat(read(ROOT_README))
 
 

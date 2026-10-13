@@ -32,7 +32,7 @@ from test_amazap_seller_handoff import (
     readme_step,
     section_at,
 )
-from test_shared_references import CLASSIFICATIONS
+from test_shared_references import CLASSIFICATIONS, CUSTODY
 
 LEVELS = REPO_ROOT / "references" / "l402-verification-levels.md"
 LEVELS_HEADING = "## Verifying your own endpoint"
@@ -92,6 +92,46 @@ def pay_once_text(target: str) -> str:
 
 def lines(section: str) -> int:
     return len(section.rstrip("\n").splitlines())
+
+
+ROOT_README = REPO_ROOT / "README.md"
+
+
+def root_row(skill: str) -> str:
+    rows = [line for line in read(ROOT_README).splitlines()
+            if line.startswith("|") and f"(skills/{skill}/)" in line]
+    assert len(rows) == 1, rows
+    return rows[0]
+
+
+@pytest.mark.parametrize("skill", ("producer-setup", "create-l402-proxy"))
+def test_root_readme_seller_rows_lead_with_the_registry(skill):
+    row = root_row(skill)
+    assert "publish to the Lightning Enable registry" in row
+    assert "verify" in row
+    assert "amazap" not in row.lower()
+
+
+def test_root_readme_native_row_names_its_manifest_not_the_registry():
+    # The registry lists Lightning Enable proxies, not an API on its own domain.
+    row = root_row("l402-server-integration")
+    assert "its own L402 manifest" in row and "verify" in row
+    assert "registry" not in row.lower() and "amazap" not in row.lower()
+
+
+def test_root_readme_report_row_brands_the_lightning_enable_report():
+    assert "The Lightning Enable L402 compatibility report" in root_row("l402-compatibility-report")
+
+
+def test_root_readme_paragraph_names_the_direct_path_before_amazap():
+    text = flat(read(ROOT_README))
+    direct = text.find("publish to the Lightning Enable registry, where buyers' agents find an endpoint with "
+                       "`discover_api` and pay it directly from their own wallets")
+    amazap = text.find("can also draft an optional listing on")
+    assert 0 <= direct < amazap
+    assert "the Lightning Enable L402 compatibility report, checks any seller's endpoint" in text
+    paragraph = text[text.find("**Buy + sell, end to end:**"):text.find("## What works where")]
+    assert CUSTODY in paragraph, "the Buy + sell paragraph carries the custody sentence verbatim"
 
 
 def test_levels_reference_puts_verification_before_the_profiles():

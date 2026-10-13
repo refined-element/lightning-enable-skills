@@ -493,10 +493,10 @@ def test_root_readme_mentions_the_step_in_a_sentence_not_a_row():
     assert not rows, f"Amazap is an optional seller step, not a skill; no table row: {rows}"
 
 
-def test_root_readme_offers_the_step_after_any_self_test_for_the_human_to_submit():
+def test_root_readme_offers_the_step_after_the_hand_off_for_the_human_to_submit():
     text = flat(read(ROOT_README))
-    assert "After the self-test, `producer-setup`" in text
-    assert "After a paid self-test" not in text, "the step follows any self-test, paid or not"
+    assert "After the hand-off, `producer-setup`" in text
+    assert "After a paid self-test" not in text, "the step follows the hand-off, paid or not"
     assert "review and submit yourself" in text
 
 
