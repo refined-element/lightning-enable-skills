@@ -1112,3 +1112,34 @@ def test_readme_states_no_amazap_figures_and_links_the_live_terms():
     try_it = section_at(text, text.index("\n## Try it\n") + 1)
     hits = README_FIGURE.findall(flat(text.replace(try_it, "")))
     assert not hits, f"discover-paid-apis/README.md states figures {hits}; link the live Amazap pages instead"
+
+
+# --- The root README --------------------------------------------------------
+
+
+def test_root_readme_row_names_both_sources():
+    rows = [
+        line for line in read(ROOT_README).splitlines()
+        if line.startswith("|") and "(skills/discover-paid-apis/)" in line
+    ]
+    assert len(rows) == 1, rows
+    for phrase in ("Lightning Enable registry", "Amazap", "single bounded purchase"):
+        assert phrase in rows[0], f"the discover-paid-apis row is missing {phrase!r}"
+    assert EM_DASH not in rows[0]
+
+
+def test_root_readme_paragraph_names_both_sources():
+    assert (
+        "`discover-paid-apis` finds something worth buying in the Lightning "
+        "Enable registry and on Amazap"
+    ) in flat(read(ROOT_README))
+
+
+def test_root_readme_safety_model_keeps_amazap_buys_off_the_mcp_caps():
+    text = read(ROOT_README)
+    assert (
+        "An Amazap buy in `discover-paid-apis` spends prepaid Amazap credits "
+        "under the user's cap and Amazap's own account limits instead; the MCP "
+        "caps don't see it."
+    ) in flat(text)
+    assert not budget_claims(text), budget_claims(text)

@@ -517,8 +517,13 @@ def test_root_readme_mentions_the_step_in_a_sentence_not_a_row():
     text = read(ROOT_README)
     assert "(references/amazap-marketplace.md)" in text
     assert "https://amazap.com/sell" in text
-    rows = [line for line in text.splitlines() if line.startswith("|") and "amazap" in line.lower()]
-    assert not rows, f"Amazap is an optional step, not a skill; no table row: {rows}"
+    # discover-paid-apis searches Amazap, so its row names Amazap; no other row may.
+    rows = [
+        line for line in text.splitlines()
+        if line.startswith("|") and "amazap" in line.lower()
+        and "(skills/discover-paid-apis/)" not in line
+    ]
+    assert not rows, f"Amazap is an optional seller step, not a skill; no table row: {rows}"
 
 
 def test_root_readme_offers_the_step_after_any_self_test_for_the_human_to_submit():

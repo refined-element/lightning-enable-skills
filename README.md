@@ -30,7 +30,7 @@ default `standard` profile advertises.
 | Skill | What it does |
 |---|---|
 | ⚡ **[pay-l402-anywhere](skills/pay-l402-anywhere/)** | Pay any L402-gated endpoint from a bounded wallet: discover, confirm, pay per call. The general buyer. |
-| 🔭 **[discover-paid-apis](skills/discover-paid-apis/)** | Find paid APIs in the L402 registry, see what you can afford, try one with a single paid call. |
+| 🔭 **[discover-paid-apis](skills/discover-paid-apis/)** | Search the Lightning Enable registry and Amazap, compare labeled results, and try one with a single bounded purchase. |
 | 📚 **[cited-answer](skills/cited-answer/)** | Answer a question by buying exactly the paid data it needs over L402, cite every figure, show the sats receipt. |
 
 ### Sell
@@ -57,7 +57,7 @@ Each skill folder has a human-facing `README.md` (what it is) and an agent-facin
 **Buy + sell, end to end:** `agent-wallet-setup` gives an agent a bounded wallet,
 and `lightning-enable-account` keeps a seller's plan paid in sats. On the buy
 side, `pay-l402-anywhere` is the general buyer, `discover-paid-apis` finds
-something worth buying, and `cited-answer` is a task-specific buyer. On the sell side, `producer-setup` is how an agent
+something worth buying in the Lightning Enable registry and on Amazap, and `cited-answer` is a task-specific buyer. On the sell side, `producer-setup` is how an agent
 *becomes* a seller from a standing start, `create-l402-proxy` puts a whole API
 behind a paywall on an existing account, and `sell-this` charges for a single
 resource. `negotiate-and-buy` and `offer-agent-service` are the two halves of
@@ -114,7 +114,9 @@ Every skill here that spends money follows the same rules:
   to the human through the server's confirmation channel (its console by
   default), never to the agent.
 - **Budget-aware.** Honors the MCP's spending caps (`budget(action="status")`);
-  an agent can tighten them, never raise them.
+  an agent can tighten them, never raise them. An Amazap buy in
+  `discover-paid-apis` spends prepaid Amazap credits under the user's cap and
+  Amazap's own account limits instead; the MCP caps don't see it.
 - **One L402 payment at a time.** Each 402 mints a fresh invoice, so payments
   never run concurrently.
 - **Intent-driven.** The agent never decides *for* you that you need to buy.
