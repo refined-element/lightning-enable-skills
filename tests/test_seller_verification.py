@@ -278,8 +278,12 @@ def test_hand_off_says_how_buyers_find_and_pay_you(skill):
     start = text.find("**How buyers find and pay you:**")
     end = text.find(" - **", start)
     bullet = "" if start < 0 else text[start:end] if end >= 0 else text[start:]
-    for phrase in ('list_challenges", challenge_status="paid")', "the dashboard"):
+    # The dashboard's Endpoints page counts challenges minted, not payments, so
+    # the paid view is list_challenges and the dashboard is named as minted-only.
+    for phrase in ('list_challenges", challenge_status="paid")',
+                   "the dashboard's Endpoints page shows challenges minted per endpoint, not payments"):
         assert phrase in bullet, f"{skill}: the buyer bullet must name {phrase!r}"
+    assert "and in the dashboard" not in bullet, f"{skill}: the dashboard has no paid-calls view"
     if skill in PROXY_SKILLS:
         wanted = common + ("Lightning Enable registry", "`discover_api(query=")
     else:

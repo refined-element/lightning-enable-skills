@@ -290,9 +290,9 @@ installed, paid delivery stays unverified and no classification is
 available: say so, and give the human its GitHub URL,
 https://github.com/refined-element/lightning-enable-skills/tree/main/skills/l402-compatibility-report.
 
-- **Read-only check.** From that skill's folder, run it on the route's `url`
-  from step 2, with the route's `http_method` from step 2 and the human's cap
-  in sats: `python scripts/l402_check.py <url> --json --max-sats <cap> --output mode-a.json`
+- **Read-only check.** From that skill's folder, run it on the `url` of the
+  route step 4 tested (from step 2), with that route's `http_method` from
+  step 2 and the human's cap in sats: `python scripts/l402_check.py <url> --json --max-sats <cap> --output mode-a.json`
   (add `--method POST` for a `POST` route). Take the `classification` field
   from the JSON, never from the Markdown. `INCOMPATIBLE` comes with its fix:
   a private, loopback, link-local, or non-HTTPS URL, a `200` to an unpaid
@@ -351,8 +351,9 @@ Tell the human, in this order:
   [`pay-l402-anywhere`](../pay-l402-anywhere/) skill, or any L402 client. No
   marketplace account or credits are involved, and every sat settles to the
   account's receive wallet. Each paid call shows up in
-  `l402_producer(action="list_challenges", challenge_status="paid")` and in
-  the dashboard.
+  `l402_producer(action="list_challenges", challenge_status="paid")`; the
+  dashboard's Endpoints page shows challenges minted per endpoint, not
+  payments.
 - **What step 6 showed:** the report's classification, the payment hash, and
   the amount, never a credential. `FULFILLMENT_VERIFIED` is the complete
   result.
@@ -498,8 +499,8 @@ retry a call that failed on a cap.
 > 7. `l402_producer(action="list_challenges", challenge_status="paid")` shows
 >    the sale.
 > 8. `python scripts/l402_check.py <endpoint url> --json --max-sats 20 --output mode-a.json`
->    → `CHALLENGE_COMPATIBLE`; recording the step 6 call as the evidence turns
->    it into `FULFILLMENT_VERIFIED`, with no second payment.
+>    → `CHALLENGE_COMPATIBLE`; recording item 6's self-test call as the
+>    evidence turns it into `FULFILLMENT_VERIFIED`, with no second payment.
 > 9. Hand off: "Live and charging 10 sats a call, listed in the Lightning
 >    Enable registry, where agents find it with `discover_api` and pay from
 >    their own wallets. Share the two URLs; change prices in the dashboard."

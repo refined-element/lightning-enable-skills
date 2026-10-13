@@ -398,8 +398,9 @@ Tell the human, in this order:
   [`pay-l402-anywhere`](../pay-l402-anywhere/) skill, or any L402 client. No
   marketplace account or credits are involved, and every sat settles to the
   wallet from step 3. Each paid call shows up in
-  `l402_producer(action="list_challenges", challenge_status="paid")` and in
-  the dashboard.
+  `l402_producer(action="list_challenges", challenge_status="paid")`; the
+  dashboard's Endpoints page shows challenges minted per endpoint, not
+  payments.
 - **What step 6 showed:** the report's classification, the payment hash, and
   the amount, never a credential. `FULFILLMENT_VERIFIED` is the complete
   result.
