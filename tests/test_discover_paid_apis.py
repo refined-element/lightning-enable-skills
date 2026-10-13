@@ -1543,6 +1543,50 @@ def test_readme_states_no_amazap_figures_and_links_the_live_terms():
     assert not hits, f"discover-paid-apis/README.md states figures {hits}; link the live Amazap pages instead"
 
 
+def test_readme_leads_with_the_registry_and_the_direct_path():
+    text = flat(read(README))
+    tagline = read(README).splitlines()[2]
+    assert 0 <= tagline.find("Lightning Enable registry") < tagline.find("Amazap")
+    for phrase in (
+        "**Two ways to buy, explained before you choose.**",
+        "the preimage is the proof of payment",
+        "no Amazap account or credits are needed",
+        "The skill never ranks or hides a row for its source",
+        "Registry rows show the price, the endpoint count, the manifest",
+        # A signal one source doesn't report is neutral, as in SKILL.md step 3.
+        'reads "not reported by this source", which is neutral, never a warning',
+        "which publishes to the Lightning Enable registry",
+    ):
+        assert phrase in text, f"discover-paid-apis/README.md is missing {phrase!r}"
+    assert "optional Amazap listing" not in text
+    # Audit row 36: the direct path's leash is read before Amazap's tools.
+    leash = text.find("It reads `budget action=status` and `get_balance` for the direct path")
+    assert 0 <= leash < text.find("whether your host lists Amazap's tools")
+
+
+def test_readme_prices_each_path_as_the_skill_does():
+    # SKILL.md step 6: the direct path's yes names the invoice amount, with any
+    # routing fee on top; only an Amazap buy is quoted all-in.
+    text = flat(read(README))
+    for phrase in (
+        "For an Amazap listing that's the all-in total.",
+        "For a registry result it's the invoice amount, which your cap and the MCP budget count",
+        "any Lightning routing fee is paid on top, within your wallet's fee limit",
+        "at the price you saw",
+    ):
+        assert phrase in text, f"discover-paid-apis/README.md is missing {phrase!r}"
+    assert "all-in price you saw" not in text, "the direct path's price isn't all-in; say 'the price you saw'"
+
+
+def test_readme_scopes_the_no_bypass_rule_to_amazap_listings():
+    # The no-steer rule covers listings Amazap surfaced; a registry result is
+    # its own candidate with its own price (SKILL.md step 2).
+    assert (
+        "That rule covers listings Amazap surfaced, never a result the registry "
+        "returned, which is its own candidate with its own price."
+    ) in flat(read(README))
+
+
 # --- The root README --------------------------------------------------------
 
 
