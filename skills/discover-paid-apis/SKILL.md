@@ -110,7 +110,7 @@ Collect, in one message, what you can't infer:
 1. **The outcome:** the result they need ("tomorrow's forecast for Berlin",
    not just "weather"), how fresh it must be, what input they will supply,
    and what output format they want.
-2. **The trial ceiling:** the most one trial may cost, all-in, in sats, and
+2. **The user's cap:** the most one trial may cost, all-in, in sats, and
    whether a paid trial is authorized at all.
 3. **Restrictions:** providers to avoid, and any limits on data handling,
    jurisdiction, or content.
@@ -201,9 +201,9 @@ For every row:
 
 - **Label every row** with its source: "Lightning Enable registry" or
   "Amazap". Label any other configured registry by its own name.
-- **Paused or degraded rows are shown, not bought.** A search result may
-  include paused or degraded rows, so read `listingState` and `buyable` on
-  every row.
+- **Paused, degraded, or failing rows are shown, not bought.** A search
+  result may include paused, degraded, or failing rows, so read
+  `listingState`, `healthStatus`, and `buyable` on every row.
 - **Hidden rows are dropped.** A row can also be hidden from search and still
   be returned by slug, with `hidden: true`. A hidden row is not a candidate,
   to show or to buy. Don't fetch one by slug to work around that.
@@ -238,9 +238,10 @@ Show at most five candidates, one row each:
   `trust.label` as returned. For example, it may start with Verified, Working,
   Limited track record, or Having trouble, and add detail; those are observed
   values, not a fixed list. Never upgrade a label.
-- **Buyable now.** `buyable` for an Amazap row, read with `listingState` and
-  `hidden`; drop any row with `hidden: true`. Show a row with
-  `buyable: false`, and never buy it.
+- **Buyable now.** For an Amazap row, read `buyable` with `listingState`,
+  `healthStatus`, and `hidden`; drop any row with `hidden: true`. Show "no"
+  for a paused, degraded, or failing row, even when `buyable` is true. Show
+  a row with `buyable: false`, and never buy it.
 - **Protocol and rail.** `protocol`, `paymentAsset`, and `paymentNetwork` for
   an Amazap row; L402 over Lightning for a registry row.
 - **Wallet.** "Amazap credits" for an Amazap row, "MCP wallet" for a registry
@@ -288,7 +289,7 @@ endpoint's `path`, and check two things before going on:
   that captures the 402 challenge, `pay_l402_challenge` to pay it (the manual
   path in [`pay-l402-anywhere`](../pay-l402-anywhere/)), or an L402 client
   library ([`l402-client-integration`](../l402-client-integration/)).
-- **The price fits** the human's trial ceiling and the session budget.
+- **The price fits** the user's cap and the session budget.
 
 **Lightning Enable proxies publish an OpenAPI document too.** A registry entry
 whose `proxy_base_url` looks like `https://api.lightningenable.com/l402/proxy/{proxyId}`
@@ -328,8 +329,8 @@ State which cap applies to which path before any purchase.
 
 | Path | Wallet | Caps that apply |
 |---|---|---|
-| Amazap `buy` | Prepaid Amazap credits, added with `top_up` | The user's stated cap, passed as `max_total_sats`, and the Amazap account limits |
-| Lightning Enable registry result paid directly | The Lightning Enable MCP wallet | The user's stated cap and the MCP `budget` limits |
+| Amazap `buy` | Prepaid Amazap credits, added with `top_up` | The user's cap, passed as `max_total_sats`, and the Amazap account limits |
+| Lightning Enable registry result paid directly | The Lightning Enable MCP wallet | The user's cap and the MCP `budget` limits |
 
 The Lightning Enable MCP `budget` and `get_balance` don't see Amazap credits
 and never bound an Amazap buy, and Amazap's limits never bound a direct
@@ -373,6 +374,12 @@ within your `<cap>`-sat cap. `<who>` receives your input. Go ahead?" Amazap
 auto-approves small buys on its own side; this skill still asks the user
 first.
 
+For an Amazap buy, the same yes also covers the current Amazap terms. Add:
+"Buying through Amazap means accepting its current terms
+(https://amazap.com/terms and https://amazap.com/credits). Do you accept
+them and go ahead?" A bare "Go ahead?" is never consent to the terms, so
+it never sets `accept_terms`.
+
 **Through Amazap, with `buy`.**
 
 ```
@@ -386,32 +393,40 @@ buy(<the listing and parameters from the quote>,
 - Start from the buy call that `search_catalog`, `describe_sku`, or `quote`
   returned, and keep its listing and parameters. Pass `quote_id` and
   `total_cost` from the current quote, and set `max_total_sats` to the user's
-  cap.
+  cap. That call arrives with `accept_terms` and `max_total_sats` already
+  filled in; never send it as it came.
 - Set `accept_terms` only after showing the current Amazap terms
   (https://amazap.com/terms and https://amazap.com/credits) and getting the
-  user's agreement.
+  user's agreement in the same yes as the purchase.
 - **A stale quote.** When `buy` reports a stale quote, the stale attempt
   charged nothing, and the error carries a fresh quote. Show the fresh quote
   from the error, check that its total is still within the cap, and confirm
-  with the user that the terms are unchanged before buying again with the
-  fresh quote's `quote_id` and `total_cost`. Never buy on the fresh quote
+  with the user that the terms are unchanged. Then state the fresh total and
+  get a new yes before buying with its `quote_id` and `total_cost`. The first
+  yes never covers a different total. Never buy on the fresh quote
   automatically.
 - **`approval_required`.** The total is above Amazap's auto-approve amount,
   and the person must confirm it in Amazap. Stop, and ask the person to
   confirm the exact quote in Amazap; nothing is charged until they do. Never
   re-quote or split the purchase to get around it. Once they say they
   approved it, the same `quote_id` can be bought once.
-- **Retries.** Repeating a `quote_id` never charges twice, so a retry after a
-  dropped connection with the same `quote_id` is safe. A new quote is a new
-  purchase.
+- **Retries.** When the outcome is unclear (a dropped connection, a
+  timeout), check before any retry: `get_order` or `orders` shows whether the
+  buy went through. Repeating a `quote_id` never charges twice, so a retry
+  with the same `quote_id` is safe once the order shows none. A new quote is
+  a new purchase.
 - **Baskets.** A basket is one buy. Put several listings in one buy only when
   the user asked for more than one call.
 - **Credits short.** If `balance` shows too few credits, ask before `top_up`.
-  It returns a Lightning invoice and a QR code for the human to pay; let the
-  host show that result to the human, and never copy the invoice into your
-  own message. Never pay it from the Lightning Enable MCP wallet unless the
-  human explicitly asks; that is a separate payment, with its own yes, under
-  the MCP limits. Then read `balance` again before buying.
+  The human chooses the top-up amount. `top_up` returns a Lightning invoice
+  and a QR code for the human to pay; let the host show that result to the
+  human, and never copy the invoice into your own message. Never pay the invoice
+  from the Lightning Enable MCP wallet unless the human explicitly asks. If
+  they do, it is a separate payment with `pay_invoice`, and the human says
+  yes to that exact amount first. The user's cap doesn't cover a top-up: it
+  bounds the trial, not the credits added. The MCP `budget` limits do bound
+  that payment, because it leaves the MCP wallet. Then read `balance` again
+  before buying.
 
 **Directly, for a Lightning Enable registry result, with
 `access_l402_resource`.**
@@ -518,7 +533,9 @@ After a paid failure:
   With the user's approval, offer `report_sku` for a listing that misbehaves.
 - **Directly:** follow the `alreadyPaid` rule in step 6. Don't pay again, and
   don't call the URL again.
-- A pending or unclear payment is never replaced by a second one.
+- A pending or unclear payment is never replaced by a second one. Check it
+  before any retry: `get_order` or `orders` on the Amazap path,
+  `receipts(source="session")` on the direct path.
 
 ### 9. Hand off
 
@@ -559,7 +576,7 @@ After a paid failure:
 - **One L402 payment at a time.** Finish one 402, pay, access cycle before
   starting another. Never fan out paid calls across several APIs to compare
   them.
-- **Respect the caps.** `max_sats` never exceeds the human's trial ceiling or
+- **Respect the caps.** `max_sats` never exceeds the user's cap or
   the session budget. Never raise a limit.
 - **Never claim a result the call did not return,** and say when a response was
   truncated.
@@ -589,7 +606,7 @@ After a paid failure:
 >    `get_balance()` → 4,700 sats.
 > 2. `discover_api(query="weather")` → three results.
 > 3. Present the table: "Forecast API, 10 sats a call, 48 calls (session budget
->    binds); Marine Weather, 25 sats, over your 20-sat trial ceiling; Air Quality,
+>    binds); Marine Weather, 25 sats, over your 20-sat cap; Air Quality,
 >    price unknown." The human picks Forecast API.
 > 4. `discover_api(url="<manifest_url>")` → `GET /forecast` at 10 sats.
 >    "I will call `GET https://.../forecast`, which costs 10 sats. Go ahead?"

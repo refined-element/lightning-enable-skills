@@ -500,14 +500,14 @@ def test_skill_links_the_reference_sections_and_live_pages():
     "This path reads; it can't buy.",
     "Don't fetch one by slug to work around that.",
     "A row can also be hidden from search and still be returned by slug",
-    "read `listingState` and `buyable` on every row",
+    "read `listingState`, `healthStatus`, and `buyable` on every row",
     "Never frame a price difference as a reason to bypass Amazap.",
     NON_GOAL,
     DIRECT_PAY_SCOPE,
     # search_catalog hands back a ready buy call; searching must not run it.
     "Do not run that buy call; `buy` waits for the trial step and the human's yes.",
     "Stop sooner once you have enough relevant rows to pick five.",
-    "**Paused or degraded rows are shown, not bought.**",
+    "**Paused, degraded, or failing rows are shown, not bought.**",
     "**Hidden rows are dropped.**",
 ))
 def test_search_reads_both_sources_and_labels_every_row(phrase):
@@ -811,3 +811,69 @@ def test_known_url_hands_off_to_pay_l402_anywhere():
     step = skill_section("### 9. Hand off")
     assert "**A URL the user already has:** [`pay-l402-anywhere`](../pay-l402-anywhere/)" in step
     assert "not to listings Amazap surfaced" in step
+
+
+# --- Fix round 1: top-ups, direct-path stops, row state, yes, one cap name --
+
+
+@pytest.mark.parametrize("phrase", (
+    "The human chooses the top-up amount.",
+    "it is a separate payment with `pay_invoice`, and the human says yes to that exact amount first",
+    "The user's cap doesn't cover a top-up",
+    "The MCP `budget` limits do bound that payment",
+))
+def test_top_up_paid_from_the_mcp_wallet_is_its_own_payment(phrase):
+    assert phrase in skill_section("### 6. Buy one trial"), f"step 6 is missing {phrase!r}"
+
+
+@pytest.mark.parametrize("phrase", (
+    "Set `max_sats` to the listed price, never above the user's cap.",
+    "Never guess one.",
+    "Don't retry with a smaller `max_sats` to squeeze under a cap.",
+    "**Do not pay again**",
+))
+def test_direct_path_stops(phrase):
+    assert phrase in skill_section("### 6. Buy one trial"), f"step 6 is missing {phrase!r}"
+
+
+def test_comparison_shows_unhealthy_rows_as_not_buyable():
+    step = skill_section("### 3. Compare at most five candidates")
+    assert 'Show "no" for a paused, degraded, or failing row, even when `buyable` is true.' in step
+    assert "`healthStatus`, and `hidden`" in step
+
+
+@pytest.mark.parametrize("phrase", (
+    "state the fresh total and get a new yes before buying with its `quote_id` and `total_cost`",
+    "The first yes never covers a different total.",
+))
+def test_stale_quote_needs_a_new_yes(phrase):
+    assert phrase in skill_section("### 6. Buy one trial"), f"step 6 is missing {phrase!r}"
+
+
+@pytest.mark.parametrize("phrase", (
+    "For an Amazap buy, the same yes also covers the current Amazap terms.",
+    "Do you accept them and go ahead?",
+    'A bare "Go ahead?" is never consent to the terms, so it never sets `accept_terms`.',
+    "That call arrives with `accept_terms` and `max_total_sats` already filled in; never send it as it came.",
+    "getting the user's agreement in the same yes as the purchase",
+))
+def test_the_yes_covers_the_amazap_terms(phrase):
+    assert phrase in skill_section("### 6. Buy one trial"), f"step 6 is missing {phrase!r}"
+
+
+def test_unclear_outcome_is_checked_before_any_retry():
+    assert (
+        "When the outcome is unclear (a dropped connection, a timeout), check before any "
+        "retry: `get_order` or `orders` shows whether the buy went through."
+    ) in skill_section("### 6. Buy one trial")
+    assert (
+        "Check it before any retry: `get_order` or `orders` on the Amazap path, "
+        '`receipts(source="session")` on the direct path.'
+    ) in skill_section("### 8. When a paid trial fails")
+
+
+def test_one_name_for_the_cap():
+    text = flat(read(SKILL))
+    assert "ceiling" not in text.lower(), "call it the user's cap, never a trial ceiling"
+    assert "stated cap" not in text, "call it the user's cap"
+    assert "**The user's cap:**" in skill_section("### 0. Ask what the human wants")
