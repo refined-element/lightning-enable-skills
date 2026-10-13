@@ -519,3 +519,129 @@ def test_root_readme_mentions_the_step_in_a_sentence_not_a_row():
     assert "https://amazap.com/sell" in text
     rows = [line for line in text.splitlines() if line.startswith("|") and "amazap" in line.lower()]
     assert not rows, f"Amazap is an optional step, not a skill; no table row: {rows}"
+
+
+def test_root_readme_offers_the_step_after_any_self_test_for_the_human_to_submit():
+    text = flat(read(ROOT_README))
+    assert "After the self-test, `producer-setup`" in text
+    assert "After a paid self-test" not in text, "the step follows any self-test, paid or not"
+    assert "review and submit yourself" in text
+
+
+# --- Final-review guards ---------------------------------------------------
+
+READ_ONLY_COMMAND = re.compile(r"`python scripts/l402_check\.py <url>[^`]*`")
+NOT_READY_UNTIL_PAID = "do not offer the listing as ready until the paid check below lifts it"
+FULL_READY_CONDITION = (
+    "and only once example parameters are known, replay behavior is understood, "
+    "no error or output exposes a secret, and the human has chosen title, "
+    "description, category, and price"
+)
+PAY_ONCE_OPENING = "made no payment for this endpoint by any means"
+PAY_ONCE_OTHERWISE = "otherwise the cases below apply and the agent never pays again"
+SUBMITTING_PUBLISHES = re.compile(
+    r"Submitting (?:the form )?publishes the listing automatically once Amazap's checks pass"
+)
+REPORT_URL = (
+    "https://github.com/refined-element/lightning-enable-skills/tree/main/"
+    "skills/l402-compatibility-report"
+)
+
+
+@pytest.mark.parametrize("target", HANDOFF_TARGETS)
+def test_handoff_read_only_command_carries_max_sats(target):
+    commands = READ_ONLY_COMMAND.findall(handoff_text(target))
+    assert commands, f"{target} never shows the read-only command"
+    missing = [command for command in commands if "--max-sats <cap>" not in command]
+    assert not missing, f"{target}: the paid check needs a capped read-only report: {missing}"
+
+
+@pytest.mark.parametrize("target", HANDOFF_TARGETS)
+def test_handoff_challenge_compatible_waits_for_the_paid_check(target):
+    text = handoff_text(target)
+    assert NOT_READY_UNTIL_PAID in text, f"{target} is missing {NOT_READY_UNTIL_PAID!r}"
+    # The read-only check returns CHALLENGE_COMPATIBLE for a correct endpoint,
+    # so stopping there would skip the paid check entirely.
+    assert 'fulfillment unverified" and stop' not in text, f"{target} stops before the paid check"
+
+
+@pytest.mark.parametrize("skill", SELLER_SKILLS)
+def test_step_ready_condition_names_the_whole_gate(skill):
+    assert FULL_READY_CONDITION in flat(amazap_step(skill)), (
+        f"{skill}: FULFILLMENT_VERIFIED alone covers neither replay nor secrets"
+    )
+
+
+@pytest.mark.parametrize("target", HANDOFF_TARGETS)
+def test_handoff_pay_once_opens_with_any_payment_by_any_means(target):
+    text = handoff_text(target)
+    for phrase in (PAY_ONCE_OPENING, PAY_ONCE_OTHERWISE):
+        assert phrase in text, f"{target} is missing {phrase!r}"
+    # "did not pay this exact URL" is true after a pay_l402_challenge, by-hand,
+    # or from-code payment, and would invite a second payment.
+    for stale in ("did not pay this exact", "did not already pay"):
+        assert stale not in text, f"{target} still opens pay-once with {stale!r}"
+    assert text.find(PAY_ONCE_OPENING) < text.find("If that token is gone")
+
+
+@pytest.mark.parametrize("target", HANDOFF_TARGETS)
+def test_handoff_says_a_testnet_payment_is_not_reuse_evidence(target):
+    text = handoff_text(target)
+    assert "testnet invoice" in text and "is not reuse evidence" in text, target
+
+
+@pytest.mark.parametrize("target", HANDOFF_TARGETS)
+def test_handoff_without_the_report_skill_is_not_ready(target):
+    text = handoff_text(target)
+    assert "`l402-compatibility-report` is not installed, the listing is not ready" in text, target
+    assert REPORT_URL in text, f"{target} must give the report skill's GitHub URL"
+
+
+@pytest.mark.parametrize("target", HANDOFF_TARGETS)
+def test_handoff_says_submitting_publishes(target):
+    assert SUBMITTING_PUBLISHES.search(handoff_text(target)), f"{target} must say submitting publishes"
+
+
+@pytest.mark.parametrize("skill", SELLER_SKILLS)
+def test_readme_says_submitting_publishes_and_re_runs_after_a_price_change(skill):
+    text = flat(readme_step(skill))
+    for phrase in ("submitting publishes the listing once Amazap's checks pass",
+                   "After any price change", "re-run Amazap's checks"):
+        assert phrase in text, f"{skill}/README.md is missing {phrase!r}"
+
+
+@pytest.mark.parametrize("skill", SELLER_SKILLS)
+def test_step_asks_before_the_gate(skill):
+    step = flat(amazap_step(skill))
+    ask = step.find("**Ask first.**")
+    gate = step.find("**Gate.**")
+    assert 0 <= ask < gate, f"{skill}: ask about Amazap before any paid gate check"
+
+
+def test_reference_asks_before_the_gate():
+    flow = flat(reference_section("### Handoff flow"))
+    ask = flow.find("Ask whether the human wants Amazap distribution")
+    gate = flow.find("run the readiness gate above")
+    assert 0 <= ask < gate, "the reference must ask about Amazap before the gate"
+
+
+@pytest.mark.parametrize("heading, phrase", (
+    ("## Verification terminology",
+     "`MARKETPLACE_READY` is the target only for an endpoint on its own host"),
+    ("### Readiness gate",
+     "report such a proxy as `FULFILLMENT_VERIFIED` at most, never as `MARKETPLACE_READY`"),
+    ("### Handoff flow", "reports such a proxy as `FULFILLMENT_VERIFIED` at most"),
+))
+def test_reference_caps_a_proxy_at_fulfillment_verified(heading, phrase):
+    assert phrase in flat(reference_section(heading)), f"{heading} is missing {phrase!r}"
+
+
+def test_native_step_sets_the_price_with_a_yes_and_a_deploy_before_the_gate():
+    step = flat(amazap_step("l402-server-integration"))
+    check = step.find("python scripts/l402_check.py")
+    assert check >= 0
+    for phrase in ("with the human's explicit yes, set the route's chosen price",
+                   "(shown as a diff)", "have it deployed"):
+        at = step.find(phrase)
+        assert 0 <= at < check, f"{phrase!r} must come before the read-only check"
+    assert "Continue only when the read-only report's invoice amount equals the chosen price" in step
