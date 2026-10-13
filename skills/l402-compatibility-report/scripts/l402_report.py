@@ -279,6 +279,8 @@ def _paid(report: dict) -> list[str]:
         return _bullets(rows)
     rows = [
         f"Tool: {p['tool']}, cap {p['cap_sats']} sats",
+        f"Evidence source: {p.get('evidence_source') or 'not stated'}; paid check at "
+        f"{p.get('paid_checked_at') or 'unknown'}",
         f"Paid: {p['paid_sats']} sats in {p['payments_recorded']} recorded payment(s)",
         "Payment hashes: " + (", ".join(p["payment_hashes"]) or "none recorded"),
     ]

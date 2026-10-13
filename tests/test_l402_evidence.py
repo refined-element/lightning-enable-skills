@@ -602,6 +602,49 @@ def test_paid_report_keeps_the_rerun_key_and_fills_the_paid_sections():
     assert SEED_1_HASH in section
 
 
+def test_paid_report_says_its_facts_are_agent_recorded():
+    evidence, credential = evidence_for("fulfilled-2xx")
+    report = l402_evidence.evaluate(evidence, credential)
+    assert report["report_version"] == 1
+    assert report["paid_fulfillment"]["evidence_source"] == "agent-recorded access_l402_resource result"
+    text = l402_report.to_json(report)
+    assert next(iter(json.loads(text))) == "report_version"
+    assert "Evidence source: agent-recorded access_l402_resource result" in l402_report.to_markdown(report)
+
+
+@pytest.mark.parametrize("timestamps, recorded_at, wanted", [
+    (["2026-10-12T21:00:01.000Z"], "2026-10-12T21:05:00Z", "2026-10-12T21:00:01.000Z"),
+    ([None], "2026-10-12T21:05:00Z", "2026-10-12T21:05:00Z"),
+    ([None], None, None),
+])
+def test_paid_checked_at_prefers_the_receipt_then_the_recorded_time(timestamps, recorded_at, wanted):
+    evidence, credential = evidence_for("fulfilled-2xx")
+    for payment, stamp in zip(evidence["payments"], timestamps):
+        if stamp:
+            payment["timestamp"] = stamp
+    if recorded_at:
+        evidence["recorded_at"] = recorded_at
+    report = l402_evidence.evaluate(evidence, credential)
+    assert report["paid_fulfillment"]["paid_checked_at"] == wanted
+    assert f"paid check at {wanted or 'unknown'}" in l402_report.to_markdown(report)
+
+
+def test_paid_checked_at_is_the_latest_receipt_time():
+    evidence, credential = evidence_for("multiple-payments")
+    stamps = ["2026-10-12T21:00:09.000Z", "2026-10-12T21:00:01.000Z"]
+    for payment, stamp in zip(evidence["payments"], stamps):
+        payment["timestamp"] = stamp
+    report = l402_evidence.evaluate(evidence, credential)
+    assert report["paid_fulfillment"]["paid_checked_at"] == "2026-10-12T21:00:09.000Z"
+
+
+def test_a_non_string_recorded_at_is_refused():
+    evidence, credential = evidence_for("fulfilled-2xx")
+    evidence["recorded_at"] = 1760302800
+    with pytest.raises(l402_evidence.EvidenceError, match="evidence.recorded_at must be"):
+        l402_evidence.evaluate(evidence, credential)
+
+
 def test_paid_report_never_contains_the_credential():
     evidence, credential = evidence_for("fulfilled-2xx")
     token = f"L402 fixture-string-macaroon:{SEED_1_PREIMAGE}"

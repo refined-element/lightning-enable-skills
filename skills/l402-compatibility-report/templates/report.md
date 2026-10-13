@@ -27,7 +27,7 @@
 
 ## Paid fulfillment
 
-<Read-only: "Not tested", plus the preflight verdict when a cap was given. Paid: cap, sats paid, payments recorded, preimage check, the hash source it used (the macaroon identifier, or for an opaque token the wallet receipt, which ties the token to the recorded payment, not to the invoice), authorized retry status, expectations.>
+<Read-only: "Not tested", plus the preflight verdict when a cap was given. Paid: evidence source (agent-recorded) and paid check time, cap, sats paid, payments recorded, preimage check, the hash source it used (the macaroon identifier, or for an opaque token the wallet receipt, which ties the token to the recorded payment, not to the invoice), authorized retry status, expectations.>
 
 ## Replay/idempotency
 

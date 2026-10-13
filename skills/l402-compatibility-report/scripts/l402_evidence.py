@@ -51,6 +51,8 @@ MIN_SECRET_LENGTH = 8
 MODE_A_KEYS = ("checked_at", "target", "transport", "challenge", "invoice", "binding",
                "marketplace", "findings", "evidence")
 NOT_CHECKED_BY_PAID_CHECK = "a synchronous, bounded response"
+# Where the paid section's facts come from, so no downstream gate reads them as independently observed.
+EVIDENCE_SOURCE = "agent-recorded access_l402_resource result"
 
 # Server fixes for paid-check codes that l402_levels.FIXES does not hold.
 PAID_FIXES = {
@@ -244,6 +246,8 @@ def _require(evidence: dict) -> tuple[dict, int, dict, list, dict]:
     cap = evidence.get("cap_sats")
     if not _is_int(cap) or cap <= 0:
         raise EvidenceError("evidence.cap_sats must be the approved max_sats, a positive integer")
+    _optional(evidence, "recorded_at", "evidence", lambda v: isinstance(v, str),
+              "a string: when the evidence was recorded, in UTC ISO 8601")
     _optional(evidence, "method", "evidence", lambda v: isinstance(v, str) and bool(METHOD.fullmatch(v)),
               "the HTTP method the paid call used, such as GET or HEAD")
     checked = str(mode_a["target"]["method"]).upper()
@@ -323,8 +327,13 @@ def evaluate(evidence: dict, credential: str | None = None) -> dict:
 
     classification = _classify(mode_a, cap, tool, payments, paid_sats, receipt_sats, total_paid, status,
                                preimage_result, sources, expectations, marketplace["checks"], findings)
+    receipt_times = sorted(p["timestamp"] for p in payments if p.get("timestamp"))
     report["paid_fulfillment"] = {
         "tested": True,
+        # Mode B validates what the agent recorded; the script never observed the paid call itself.
+        "evidence_source": EVIDENCE_SOURCE,
+        # The latest receipt timestamp, else the evidence file's recorded_at, else unknown.
+        "paid_checked_at": receipt_times[-1] if receipt_times else evidence.get("recorded_at"),
         "tool": "access_l402_resource",
         "cap_sats": cap,
         "paid_sats": total_paid,

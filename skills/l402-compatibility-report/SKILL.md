@@ -203,7 +203,8 @@ receipts(source="durable")
 ```
 
 Pick the receipts written since step 5 for this URL and copy each one's
-`paymentHash`, `amountSats`, `status`, and `context` into `evidence.json`. The
+`paymentHash`, `amountSats`, `status`, `context`, and `timestamp` into
+`evidence.json`. The
 MCP stores the payment hash as SHA-256 of the preimage, never the preimage
 itself, so a receipt holds no credential. A receipt is supporting evidence: it
 records what the wallet paid, but it can't prove the preimage belongs to the
@@ -215,6 +216,7 @@ holds one):
 {
   "cap_sats": 50,
   "method": "GET",
+  "recorded_at": "2026-10-12T21:00:05Z",
   "tool_result": {
     "success": true,
     "status_code": 200,
@@ -224,7 +226,7 @@ holds one):
     "already_paid": false,
     "requires_confirmation": false
   },
-  "payments": [{"amount_sats": 21, "status": "settled", "payment_hash": "<64 hex>", "context": "<receipt context>"}],
+  "payments": [{"amount_sats": 21, "status": "settled", "payment_hash": "<64 hex>", "context": "<receipt context>", "timestamp": "<receipt timestamp>"}],
   "expected": {"status": 200, "content_type": "application/json"}
 }
 ```
@@ -237,13 +239,15 @@ holds one):
 | `paid_sats` | `paid_sats` | `payment.amountSats` |
 | `already_paid` | `alreadyPaid` | `alreadyPaid` |
 | `requires_confirmation` | `requiresConfirmation` | `requiresConfirmation` |
-| `payments[]` | receipts' `amountSats`, `status`, `paymentHash`, `context` | the same |
+| `payments[]` | receipts' `amountSats`, `status`, `paymentHash`, `context`, `timestamp` | the same |
 | the credential | `payment.l402Token`, only on the `alreadyPaid` path; piped in step 7, never in this file. That result has no `status_code`, so the outcome is still `INCONCLUSIVE` | `payment.l402Token`, piped in step 7, never in this file |
 
 `method` is optional: the method you passed in step 5. The script refuses
 evidence whose `method` differs from the read-only check's, and judges the
-result by that one method (a `HEAD` result needs no body). `expected` is
-optional: the status and content type the human expects.
+result by that one method (a `HEAD` result needs no body). `recorded_at` is
+optional: when you wrote the file, in UTC; the report's `paid_checked_at` uses
+the latest receipt `timestamp`, else `recorded_at`. `expected` is optional: the
+status and content type the human expects.
 
 ### 7. Validate the evidence
 
@@ -361,6 +365,12 @@ the person who owns the wallet.
 
 Never call an endpoint "L402 verified", or "verified" in any form, after a
 read-only check.
+
+**The JSON report is the contract.** Tools and gates read `--json`, never the
+Markdown: `report_version` (1), `mode`, `classification`, `evidence`, and
+`marketplace.checks`. After a paid check, `paid_fulfillment` adds
+`hash_source`, `paid_checked_at`, and `evidence_source` ("agent-recorded
+access_l402_resource result": validated, never independently observed).
 
 ## What can go wrong
 
