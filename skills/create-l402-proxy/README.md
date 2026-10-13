@@ -74,6 +74,25 @@ challenge. A paid Agentic Commerce plan lifts them; see
 - Everything in the manifest is public, so nothing private goes in a path or a
   description.
 
+## Optional: list on Amazap
+
+After the self-test, the agent can offer one more step: a draft listing on
+[Amazap](https://amazap.com/sell), a storefront where agents find and buy L402
+endpoints. It first checks whether Amazap already carries the proxy (imported
+from 402 Index) and asks whether you want a listing before it spends anything
+on a paid check. It offers the listing as ready only after
+[`l402-compatibility-report`](../l402-compatibility-report/) shows that paid
+delivery worked, then drafts the copy and stops. Because a proxy lives on
+`api.lightningenable.com`, you fill in the title, description, category, and
+example parameters yourself. You review the draft, the current Amazap seller
+terms, and the two prices (yours and Amazap's all-in price), enter your
+contact email, and submit it yourself; submitting publishes the listing once
+Amazap's checks pass. After any price change in the dashboard, re-run Amazap's
+checks. The agent never calls the proxy listed until it has read the listing
+back from Amazap. Lightning Enable does not hold funds; the payment provider
+facilitates custody and settlement. Details:
+[Amazap marketplace: Seller handoff](https://github.com/refined-element/lightning-enable-skills/blob/main/references/amazap-marketplace.md#seller-handoff).
+
 ## Other ways to do this
 
 - Prefer clicking? The dashboard

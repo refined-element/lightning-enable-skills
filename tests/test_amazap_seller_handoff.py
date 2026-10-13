@@ -67,9 +67,9 @@ REFERENCE_SECTIONS = (
 )
 
 # The seller skills whose Amazap step is guarded; Tasks 2 to 4 add one each.
-SELLER_SKILLS: tuple[str, ...] = ("producer-setup",)
+SELLER_SKILLS: tuple[str, ...] = ("producer-setup", "create-l402-proxy")
 # The seller skills whose endpoint is a proxy on api.lightningenable.com.
-PROXY_SKILLS: tuple[str, ...] = ("producer-setup",)
+PROXY_SKILLS: tuple[str, ...] = ("producer-setup", "create-l402-proxy")
 HANDOFF_TARGETS = ("reference", *SELLER_SKILLS)
 
 STEP_HEADING = re.compile(r"^### (\d+)\. Optional: list on Amazap[ \t]*$", re.MULTILINE)
