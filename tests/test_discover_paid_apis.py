@@ -442,8 +442,14 @@ def wallets_section() -> str:
     "show each row as its source returned it",
     DIRECT_PAY_SCOPE,
     "`quote_id`, `total_cost`, `max_total_sats`, and `accept_terms`",
-    "the current Amazap terms (https://amazap.com/terms)",
+    "the current Amazap terms (https://amazap.com/terms and https://amazap.com/credits)",
+    # max_total_sats is the quoted total; the user's cap is checked before the yes.
+    "Check the quoted total against the user's cap before the yes, set "
+    "`max_total_sats` to the quoted total,",
     "A stale quote returns a fresh quote in the error and charges nothing",
+    "show the fresh total with the current Amazap terms links again, and get a new yes before buying.",
+    "`feeBps` beside it.",
+    "Fetch the API with a plain HTTP GET, never with `access_l402_resource`.",
     "Repeating a `quote_id` never charges twice.",
     "A basket is one buy.",
     "`approval_required`",
@@ -690,7 +696,9 @@ def test_quote_states_the_cap_for_each_path():
     assert "Never present `budget` status or `get_balance` as bounding an Amazap buy." in step
     rows_by_path = {row[0]: row for row in table_rows(read(SKILL))}
     amazap = rows_by_path.get("Amazap `buy`")
-    assert amazap and "`max_total_sats`" in amazap[2] and "Amazap account limits" in amazap[2]
+    assert amazap and "Amazap account limits" in amazap[2]
+    assert "The user's cap, checked against the quoted total before the yes" in amazap[2]
+    assert "`max_total_sats` is set to the quoted total" in amazap[2]
     direct = rows_by_path.get("Lightning Enable registry result paid directly")
     assert direct and "MCP `budget` limits" in direct[2]
 
@@ -727,7 +735,8 @@ def test_quote_reads_the_amazap_limits_live(phrase):
     "the service is buyable",
     "**stop for a yes**",
     "this skill still asks the user first",
-    "set `max_total_sats` to the user's cap",
+    "set `max_total_sats` to the quoted total, not to the user's cap.",
+    "The user's cap is checked against that total before the yes;",
     "Set `accept_terms` only after showing the current Amazap terms",
     "https://amazap.com/terms",
     "the stale attempt charged nothing",
@@ -751,7 +760,7 @@ def test_trial_purchase_rules(phrase):
     # `buyable` says.
     "A paused or degraded row stays unbought this run, even with `buyable: true`, and so does a failing one.",
     # A stale quote's fresh quote is a new price: the cap and a new yes apply.
-    "its total is still within the cap",
+    "its total is still within the user's cap.",
 ))
 def test_trial_purchase_respects_listing_state_and_the_cap(phrase):
     assert phrase in skill_section("### 6. Buy one trial"), f"step 6 is missing {phrase!r}"
@@ -760,7 +769,7 @@ def test_trial_purchase_respects_listing_state_and_the_cap(phrase):
 def test_buy_call_carries_the_four_required_arguments():
     calls = test_tool_surface.calls_to("buy", read(SKILL))
     assert calls, "show the buy call"
-    for argument in ("quote_id=", "total_cost=", "max_total_sats=<the user's cap>", "accept_terms="):
+    for argument in ("quote_id=", "total_cost=", "max_total_sats=<that quote's total>", "accept_terms="):
         assert all(argument in call for call in calls), f"every buy call needs {argument}"
 
 
@@ -951,7 +960,10 @@ def test_comparison_shows_unhealthy_rows_as_not_buyable():
 
 
 @pytest.mark.parametrize("phrase", (
-    "state the fresh total and get a new yes before buying with its `quote_id` and `total_cost`",
+    "Then state the fresh total, show the current Amazap terms links again "
+    "(https://amazap.com/terms and https://amazap.com/credits), and get a new "
+    "yes, for the purchase and the terms, before buying with its `quote_id`, "
+    "its `total_cost`, and its total as `max_total_sats`.",
     "The first yes never covers a different total.",
 ))
 def test_stale_quote_needs_a_new_yes(phrase):
@@ -1027,7 +1039,10 @@ def test_what_this_is_not_keeps_amazap_separate():
     '"Lightning Enable registry" or "Amazap"',
     "for the direct path only",
     "13 sats all-in, paid from Amazap credits",
-    "`max_total_sats=30`",
+    # The example's yes carries the wallet and the cap clause of the template.
+    "for 13 sats all-in, paid from Amazap credits, within your 30-sat cap.",
+    # max_total_sats is the quoted total (13), not the user's cap (30).
+    "`max_total_sats=13`",
     "Had the quote been 31 sats",
 ))
 def test_example_shows_labeled_sources_and_the_amazap_wallet(phrase):
@@ -1065,7 +1080,10 @@ def test_reference_matches_the_skill_on_row_state_and_the_cap_name():
     ) in discovery_section()
     assert "paused or degraded" not in discovery_section()
     assert "stated cap" not in flat(read(REFERENCE)), "call it the user's cap"
-    assert "The user's cap, passed as `max_total_sats`" in flat(wallets_section())
+    assert (
+        "The user's cap, checked against the quoted total before the yes, and the "
+        "Amazap account limits; `max_total_sats` is set to the quoted total"
+    ) in flat(wallets_section())
 
 
 # Every ending step 6 and step 8 distinguish, with what the row must say.
@@ -1073,8 +1091,18 @@ ENDINGS = {
     # quote failure
     "No fresh quote, or it doesn't match the parameters": ("Nothing was charged.", "Never buy on an old or mismatched quote."),
     # stale quote: a fresh total needs a fresh yes
-    "`buy` reports a stale quote": ("Nothing was charged.", "within the user's cap", "get a new yes"),
-    "`buy` returns `approval_required`": ("Stop.", "Never re-quote or split the purchase"),
+    "`buy` reports a stale quote": (
+        "Nothing was charged.",
+        "within the user's cap",
+        "show the current Amazap terms links again",
+        "get a new yes",
+        "with that total as `max_total_sats`",
+    ),
+    "`buy` returns `approval_required`": (
+        "Stop.",
+        "Never re-quote or split the purchase",
+        "Once they say they approved it, the same `quote_id` can be bought once.",
+    ),
     "`buy` returns `terms_required`": ("Set `accept_terms` only on that yes.",),
     # policy refusals
     "The all-in total is above the user's cap": ("Refuse and buy nothing", "Never raise the cap"),
@@ -1173,6 +1201,67 @@ def test_example_runs_one_amazap_path_and_contrasts_the_direct_path():
     # Placeholder names only: the example never names a real listing.
     names = set(re.findall(r"`(fixture-string-[a-z0-9-]+)`", example))
     assert names <= {row[key] for row in rows() for key in ("name", "provider")}, names
+
+
+# --- Final-review follow-ups ------------------------------------------------
+
+# Owner ruling: `buy` gets the quoted total as `max_total_sats`, the tighter
+# bound. The user's cap is still checked against that total before the yes.
+OLD_MAX_TOTAL = (
+    "passed as `max_total_sats`",
+    "`max_total_sats` to the user's cap",
+    "max_total_sats=<the user's cap>",
+    "max_total_sats=30",
+)
+
+
+@pytest.mark.parametrize("doc", STEER_DOCS, ids=lambda p: p.relative_to(REPO_ROOT).as_posix())
+def test_max_total_sats_is_never_the_user_cap(doc):
+    text = flat(read(doc))
+    hits = [phrase for phrase in OLD_MAX_TOTAL if phrase in text]
+    assert not hits, f"{doc.name}: `max_total_sats` is the quoted total, not the user's cap: {hits}"
+
+
+@pytest.mark.parametrize("doc", STEER_DOCS, ids=lambda p: p.relative_to(REPO_ROOT).as_posix())
+def test_stale_quote_reshows_the_terms_instead_of_asking_about_them(doc):
+    # The user can't know whether Amazap's terms changed; show the links again.
+    text = flat(read(doc)).lower()
+    for phrase in ("terms are unchanged", "terms unchanged", "terms haven't changed"):
+        assert phrase not in text, f"{doc.name} asks the user to confirm the terms are unchanged"
+
+
+def test_comparison_shows_the_fee_beside_the_total():
+    step = skill_section("### 3. Compare at most five candidates")
+    assert "with `priceSats` (the seller price) and `feeBps` beside it." in step
+    assert "as its breakdown" not in flat(read(SKILL))
+
+
+@pytest.mark.parametrize(("heading", "phrase"), (
+    ("### 2. Search both sources",
+     "Fetch it with a plain HTTP GET (the host's fetch tool), never with "
+     "`access_l402_resource`: that tool pays any 402 it meets, and searching "
+     "never spends."),
+    ("### 4. Read the details, unpaid",
+     "`GET https://amazap.com/api/products/<idOrSlug>` with the same plain HTTP "
+     "GET as in step 2, never with `access_l402_resource`."),
+))
+def test_products_api_is_read_with_a_plain_get(heading, phrase):
+    assert phrase in skill_section(heading), f"{heading} is missing {phrase!r}"
+
+
+@pytest.mark.parametrize("phrase", (
+    # The yes names the wallet and the cap, not just the total.
+    'I will buy one call to `<listing>` from `<source>` for `<total>` sats '
+    'all-in, paid from `<wallet>`, within your `<cap>`-sat cap. `<who>` '
+    'receives your input. Go ahead?',
+    # After the person approves in Amazap, one buy on that quote, no more.
+    "Once they say they approved it, the same `quote_id` can be bought once.",
+    # The top-up invoice is the human's to pay.
+    "Never pay the invoice from the Lightning Enable MCP wallet unless the human explicitly asks.",
+    "Then read `balance` again before buying.",
+))
+def test_trial_step_pins_the_yes_the_approval_and_the_top_up(phrase):
+    assert phrase in skill_section("### 6. Buy one trial"), f"step 6 is missing {phrase!r}"
 
 
 # --- The skill's README -----------------------------------------------------

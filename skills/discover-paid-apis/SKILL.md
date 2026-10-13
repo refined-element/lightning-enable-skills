@@ -192,6 +192,10 @@ Do not run that buy call; `buy` waits for the trial step and the human's yes.
 GET https://amazap.com/api/products?q=weather&limit=50&offset=0
 ```
 
+Fetch it with a plain HTTP GET (the host's fetch tool), never with
+`access_l402_resource`: that tool pays any 402 it meets, and searching never
+spends.
+
 It takes `q`, `protocol`, `category`, `source`, `healthyOnly`, `synthetic`,
 `limit` (at most 200), and `offset`, and answers with `products`, `total`,
 `limit`, and `offset`. Page with `offset` until `offset >= total`. Stop
@@ -226,8 +230,8 @@ Show at most five candidates, one row each:
 |---|---|---|---|---|---|---|---|
 
 - **All-in price.** For an Amazap row, show `totalSats`, the all-in figure the
-  buyer pays, with `priceSats` (the seller price) and `feeBps` as its
-  breakdown. Never add `priceSats` and the fee yourself; the all-in total can
+  buyer pays, with `priceSats` (the seller price) and `feeBps` beside it.
+  Never add `priceSats` and the fee yourself; the all-in total can
   differ from that sum. For a registry row, show `default_price_sats`, or "see
   the manifest" when there is none. When neither source gives a fixed price,
   write "quote required".
@@ -306,7 +310,8 @@ this step never spends.
 
 **An Amazap row.** When the schema is unclear or `schemaConfidence` is low,
 call `describe_sku` when the host lists it, or read
-`GET https://amazap.com/api/products/<idOrSlug>`. Fill each required field in
+`GET https://amazap.com/api/products/<idOrSlug>` with the same plain HTTP GET
+as in step 2, never with `access_l402_resource`. Fill each required field in
 `inputSchema.fields[]` from the user's input. Neither call spends.
 
 **Check the input before it leaves.** Never send secrets, private URLs,
@@ -331,7 +336,7 @@ State which cap applies to which path before any purchase.
 
 | Path | Wallet | Caps that apply |
 |---|---|---|
-| Amazap `buy` | Prepaid Amazap credits, added with `top_up` | The user's cap, passed as `max_total_sats`, and the Amazap account limits |
+| Amazap `buy` | Prepaid Amazap credits, added with `top_up` | The user's cap, checked against the quoted total before the yes, and the Amazap account limits; `max_total_sats` is set to the quoted total |
 | Lightning Enable registry result paid directly | The Lightning Enable MCP wallet | The user's cap and the MCP `budget` limits |
 
 The Lightning Enable MCP `budget` and `get_balance` don't see Amazap credits
@@ -388,25 +393,28 @@ it never sets `accept_terms`.
 buy(<the listing and parameters from the quote>,
     quote_id="<quoteId from the current quote>",
     total_cost=<that quote's total>,
-    max_total_sats=<the user's cap>,
+    max_total_sats=<that quote's total>,
     accept_terms=<only after the user agreed to the current Amazap terms>)
 ```
 
 - Start from the buy call that `search_catalog`, `describe_sku`, or `quote`
   returned, and keep its listing and parameters. Pass `quote_id` and
-  `total_cost` from the current quote, and set `max_total_sats` to the user's
-  cap. That call arrives with `accept_terms` and `max_total_sats` already
-  filled in; never send it as it came.
+  `total_cost` from the current quote, and set `max_total_sats` to the quoted
+  total, not to the user's cap. The user's cap is checked against that total
+  before the yes; `max_total_sats` then holds the buy to the exact total the
+  user approved. That call arrives with `accept_terms` and `max_total_sats`
+  already filled in; never send it as it came.
 - Set `accept_terms` only after showing the current Amazap terms
   (https://amazap.com/terms and https://amazap.com/credits) and getting the
   user's agreement in the same yes as the purchase.
 - **A stale quote.** When `buy` reports a stale quote, the stale attempt
   charged nothing, and the error carries a fresh quote. Show the fresh quote
-  from the error, check that its total is still within the cap, and confirm
-  with the user that the terms are unchanged. Then state the fresh total and
-  get a new yes before buying with its `quote_id` and `total_cost`. The first
-  yes never covers a different total. Never buy on the fresh quote
-  automatically.
+  from the error, and check that its total is still within the user's cap.
+  Then state the fresh total, show the current Amazap terms links again
+  (https://amazap.com/terms and https://amazap.com/credits), and get a new
+  yes, for the purchase and the terms, before buying with its `quote_id`, its
+  `total_cost`, and its total as `max_total_sats`. The first yes never covers
+  a different total. Never buy on the fresh quote automatically.
 - **`approval_required`.** The total is above Amazap's auto-approve amount,
   and the person must confirm it in Amazap. Stop, and ask the person to
   confirm the exact quote in Amazap; nothing is charged until they do. Never
@@ -575,7 +583,7 @@ After a paid failure:
 | The user already has the URL | Nothing to discover | Hand off to `pay-l402-anywhere`. That handoff is for a URL the user already has, never for a listing Amazap surfaced. |
 | The input holds something sensitive | Secrets, a private or logged-in URL, credentials, personal data, or proprietary content | Don't send it unless the user explicitly approved that disclosure. Say what you found, and buy nothing. |
 | No fresh quote, or it doesn't match the parameters | Quote failure | Nothing was charged. Never buy on an old or mismatched quote. Quote again, or pick another candidate with the user. |
-| `buy` reports a stale quote | The quote expired, or the parameters changed | Nothing was charged. Show the fresh quote from the error. If its total is within the user's cap and the terms are unchanged, state that total and get a new yes before buying. |
+| `buy` reports a stale quote | The quote expired, or the parameters changed | Nothing was charged. Show the fresh quote from the error. If its total is within the user's cap, state that total, show the current Amazap terms links again, and get a new yes before buying, with that total as `max_total_sats`. |
 | The all-in total is above the user's cap | Policy refusal | Refuse and buy nothing; say the total and the cap. Never raise the cap or split the purchase to fit under it. |
 | `buy` refuses on an Amazap account limit | Policy refusal: a per-call, per-day, or per-session Amazap limit | Nothing was charged. Report the limit the error names. Only the account owner changes it, on Amazap. |
 | A budget denial on the direct path | Policy refusal: a per-payment or per-session cap on the MCP wallet | Report the limit the error names. Don't retry with a smaller `max_sats` to squeeze under it. Only the human changes the config file. |
@@ -608,13 +616,14 @@ After a paid failure:
   the Amazap path, or `receipts(source="session")` on the direct path. A
   pending or unclear payment is never replaced by a second one.
 - **The right cap for the right wallet.** An Amazap buy spends Amazap credits
-  under the user's cap, passed as `max_total_sats`, and the Amazap account
-  limits. A direct payment spends the MCP wallet under the user's cap and the
-  MCP budget. The MCP budget never bounds an Amazap buy. Pay a top-up from
-  the MCP wallet only when the human explicitly asks to pay it from the MCP
-  wallet. Then it is its own `pay_invoice` payment: the human chooses the
-  amount and says yes to it, the user's cap doesn't cover it, and the MCP
-  `budget` limits do. Never raise a limit.
+  under the user's cap, checked before the yes, and the Amazap account
+  limits, with `max_total_sats` set to the quoted total. A direct payment
+  spends the MCP wallet under the user's cap and the MCP budget. The MCP
+  budget never bounds an Amazap buy. Pay a top-up from the MCP wallet only
+  when the human explicitly asks to pay it from the MCP wallet. Then it is
+  its own `pay_invoice` payment: the human chooses the amount and says yes to
+  it, the user's cap doesn't cover it, and the MCP `budget` limits do. Never
+  raise a limit.
 - **No direct-pay steer.** Never steer a buyer away from Amazap's all-in price
   toward direct payment of a listing Amazap surfaced. Never offer an Amazap
   listing's `endpointUrl` as a cheaper way to pay. Direct payment is for a
@@ -675,7 +684,7 @@ terms or data.
 >    accepting its current terms (https://amazap.com/terms and
 >    https://amazap.com/credits). Do you accept them and go ahead?" The human
 >    says yes. `buy` with the quote's `quote_id` and `total_cost`,
->    `max_total_sats=30`, and `accept_terms` set on that yes delivers the
+>    `max_total_sats=13`, and `accept_terms` set on that yes delivers the
 >    forecast.
 > 7. "You asked for tomorrow's forecast for Berlin: a high of 14 °C and light
 >    rain. Charged 13 sats all-in from Amazap credits; the receipt's

@@ -40,7 +40,8 @@ observations near the end are a snapshot, not a rule.
 
 - **Discovery is read-only.** Amazap's `search_catalog` MCP tool, or
   `GET https://amazap.com/api/products?q=<terms>` paged with `limit` and
-  `offset` until `offset >= total`, finds listings and spends nothing. A
+  `offset` until `offset >= total`, finds listings and spends nothing. Fetch
+  the API with a plain HTTP GET, never with `access_l402_resource`. A
   search result may include paused, degraded, or failing rows. Paused,
   degraded, or failing rows are shown, not bought; read `listingState`,
   `healthStatus`, and `buyable` on every row. A row can also be hidden from
@@ -78,10 +79,12 @@ Every Amazap buy follows these rules:
   sources, show each row as its source returned it. Direct payment through
   `pay-l402-anywhere` is for a URL the user already has.
 - **The `buy` contract.** `buy` requires `quote_id`, `total_cost`,
-  `max_total_sats`, and `accept_terms`. Set `max_total_sats` to the user's
-  cap, and set `accept_terms` only after the user has agreed to the current
-  Amazap terms (https://amazap.com/terms). A stale quote returns a fresh
-  quote in the error and charges nothing; show the fresh quote and confirm
+  `max_total_sats`, and `accept_terms`. Check the quoted total against the
+  user's cap before the yes, set `max_total_sats` to the quoted total, and
+  set `accept_terms` only after the user has agreed to the current Amazap
+  terms (https://amazap.com/terms and https://amazap.com/credits). A stale
+  quote returns a fresh quote in the error and charges nothing; show the
+  fresh total with the current Amazap terms links again, and get a new yes
   before buying. Repeating a `quote_id` never charges twice. A basket is one
   buy. Above Amazap's auto-approve amount the person confirms, or `buy`
   returns `approval_required`; stop there and never work around it.
@@ -106,7 +109,7 @@ credits, and Amazap's limits don't apply to the MCP wallet.
 
 | Path | Wallet | Caps that apply |
 |---|---|---|
-| Amazap `buy` | Prepaid Amazap credits, added with `top_up` | The user's cap, passed as `max_total_sats`, and the Amazap account limits |
+| Amazap `buy` | Prepaid Amazap credits, added with `top_up` | The user's cap, checked against the quoted total before the yes, and the Amazap account limits; `max_total_sats` is set to the quoted total |
 | A Lightning Enable registry result, or a URL the user already has, paid directly (`access_l402_resource`) | The Lightning Enable MCP wallet | The user's cap and the MCP `budget` limits |
 
 State which cap applies to which path before any purchase. Never present
