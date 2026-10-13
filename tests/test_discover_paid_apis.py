@@ -814,7 +814,7 @@ def test_quote_reads_the_amazap_limits_live(phrase):
 
 @pytest.mark.parametrize("phrase", (
     "At most one trial purchase per run, unless the user explicitly asks for more.",
-    "the all-in total is within the lowest cap that applies to its path",
+    "the quoted price is within the lowest cap that applies to its path",
     "the service is buyable",
     "**stop for a yes**",
     "this skill still asks the user first",
@@ -940,8 +940,50 @@ def test_receipt_reports_spend_and_delivery_without_secrets(phrase):
     assert phrase in skill_section("### 7. Report the receipt"), f"step 7 is missing {phrase!r}"
 
 
-def test_receipt_reports_the_all_in_charge():
-    assert "the sats charged, all-in" in skill_section("### 7. Report the receipt")
+def test_receipt_reports_the_charge_for_each_path():
+    # An Amazap receipt is all-in. A direct receipt (the MCP's
+    # PaymentReceiptEntry) carries the invoice amount in amountSats and an
+    # optional feeSats, so report both, never as one all-in figure.
+    step = skill_section("### 7. Report the receipt")
+    for phrase in (
+        "the sats charged: for an Amazap buy, the all-in `chargedSats` from Amazap's receipt;",
+        "for a direct payment, the invoice amount (`amountSats`) and, when the "
+        "receipt reports a fee (`feeSats`), that fee beside it, never one combined figure;",
+        "and its `feeSats` when the receipt reports one.",
+    ):
+        assert phrase in step, f"step 7 is missing {phrase!r}"
+    assert "the sats charged, all-in" not in step
+
+
+def test_comparison_column_is_the_quoted_price():
+    assert "| Source | Product and provider | Protocol and rail | Quoted price |" in read(SKILL)
+    assert "All-in price" not in read(SKILL), "the column holds a registry invoice amount too"
+
+
+@pytest.mark.parametrize("phrase", (
+    "**Show the quoted price in sats.** The quoted price is the figure the user's "
+    "cap is checked against, and it differs by path.",
+    "For an Amazap row, it is Amazap's all-in total (`totalSats`), paid in Amazap credits.",
+    "For a registry result, it is the invoice amount, which is what the user's cap "
+    "and the MCP budget count; any Lightning routing fee is paid on top, within the "
+    "wallet's fee limit.",
+))
+def test_quote_defines_the_quoted_price_for_each_path(phrase):
+    assert phrase in skill_section("### 5. Quote, and state the cap that applies"), (
+        f"step 5 is missing {phrase!r}"
+    )
+
+
+def test_every_all_in_sentence_names_amazap():
+    # "All-in" is Amazap's term (an all-in total in credits). The direct path
+    # pays the invoice amount, with any routing fee on top, so a sentence that
+    # says "all-in" without naming Amazap would apply it to the direct path.
+    loose = [
+        sentence
+        for sentence in doc_sentences(read(SKILL))
+        if "all-in" in sentence.lower() and "amazap" not in sentence.lower()
+    ]
+    assert not loose, f"'all-in' outside an Amazap sentence: {loose}"
 
 
 def test_receipt_reads_the_payment_hash_from_the_durable_receipts():
@@ -1217,7 +1259,7 @@ ENDINGS = {
     # quote failure
     "No fresh quote, or it doesn't match the parameters": ("Nothing was charged.", "Never buy on an old or mismatched quote."),
     # policy refusals
-    "The all-in total is above the user's cap": ("Refuse and buy nothing", "Never raise the cap"),
+    "The quoted price is above the user's cap": ("Refuse and buy nothing", "Never raise the cap"),
     "A budget denial on the direct path": ("Don't retry with a smaller `max_sats`",),
     "The input holds something sensitive": ("Don't send it", "buy nothing"),
     # direct-path stops

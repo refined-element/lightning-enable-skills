@@ -79,7 +79,7 @@ the receipt.
 
 - **What to look for:** the outcome they need, not just a category.
 - **Which candidate to try,** from the comparison you present.
-- **Whether to pay,** at the moment of payment, with the all-in price and the
+- **Whether to pay,** at the moment of payment, with the quoted price and the
   cap that applies stated.
 - **What input to disclose,** when it holds anything sensitive.
 - **Whether to accept the current Amazap terms,** before an Amazap buy.
@@ -137,8 +137,8 @@ Collect, in one message, what you can't infer:
 1. **The outcome:** the result they need ("tomorrow's forecast for Berlin",
    not just "weather"), how fresh it must be, what input they will supply,
    and what output format they want.
-2. **The user's cap:** the most one trial may cost, all-in, in sats, and
-   whether a paid trial is authorized at all.
+2. **The user's cap:** the most one trial may cost, in sats, checked against
+   the quoted price (step 5), and whether a paid trial is authorized at all.
 3. **Restrictions:** providers to avoid, and any limits on data handling,
    jurisdiction, or content.
 
@@ -210,7 +210,8 @@ The registry is `L402_REGISTRY_URL` if set, otherwise
 
 **Amazap, through its MCP.** When the host lists `search_catalog`, call it
 with the outcome terms. It hides demo and unhealthy listings by default, and
-each result carries an all-in price, a quote, and a ready-to-use buy call.
+each result carries Amazap's all-in price, a quote, and a ready-to-use buy
+call.
 Do not run that buy call; `buy` waits for the trial step and the human's yes.
 
 **Amazap, without its MCP.** Use the read-only public products API:
@@ -256,15 +257,15 @@ For every row:
 
 Show at most five candidates, one row each:
 
-| Source | Product and provider | Protocol and rail | All-in price | Inputs | Signals | Buyable now | Wallet |
+| Source | Product and provider | Protocol and rail | Quoted price | Inputs | Signals | Buyable now | Wallet |
 |---|---|---|---|---|---|---|---|
 
-- **All-in price.** For an Amazap row, show `totalSats`, the all-in figure the
-  buyer pays, with `priceSats` (the seller price) and `feeBps` beside it.
-  Never add `priceSats` and the fee yourself; the all-in total can
-  differ from that sum. For a registry row, show `default_price_sats`, or "see
-  the manifest" when there is none. When neither source gives a fixed price,
-  write "quote required".
+- **Quoted price** (step 5 defines it for each path). For an Amazap row, show
+  `totalSats`, the all-in figure the buyer pays, with `priceSats` (the seller
+  price) and `feeBps` beside it. Never add `priceSats` and the fee yourself;
+  Amazap's all-in total can differ from that sum. For a registry row, show
+  `default_price_sats`, the invoice amount, or "see the manifest" when there
+  is none. When neither source gives a fixed price, write "quote required".
 - **Inputs.** For an Amazap row, list `inputSchema.fields[]` (each field's
   `name`, `type`, `required`, and `in`: `body`, `query`, or `path`) with
   `schemaConfidence`. For a registry row, step 4 reads them from the manifest.
@@ -369,7 +370,12 @@ Before any payment:
   For a registry result, the manifest price is the quote, and the 402 challenge
   confirms it.
 - **Match it** to the exact listing, parameters, quantity, and account.
-- **Show the exact all-in total in sats.**
+- **Show the quoted price in sats.** The quoted price is the figure the
+  user's cap is checked against, and it differs by path. For an Amazap row, it
+  is Amazap's all-in total (`totalSats`), paid in Amazap credits. For a
+  registry result, it is the invoice amount, which is what the user's cap and
+  the MCP budget count; any Lightning routing fee is paid on top, within the
+  wallet's fee limit.
 - **Say who receives the input,** as in step 3.
 
 State which cap applies to which path before any purchase.
@@ -390,8 +396,8 @@ The Amazap limits are per call, per day, and per session. Above the
 auto-approve amount, the person confirms the buy in Amazap, or `buy` returns
 `approval_required` and charges nothing.
 
-**Over the cap, refuse.** If the all-in total is above the lowest cap that
-applies to its path, refuse and buy nothing; say the total and the cap. A
+**Over the cap, refuse.** If the quoted price is above the lowest cap that
+applies to its path, refuse and buy nothing; say the price and the cap. A
 31-sat quote against a 30-sat cap is a refusal, not a negotiation.
 
 Search, describe, and quote never spend.
@@ -404,7 +410,7 @@ Buy only when every item holds:
 
 - the user authorized a paid trial, or an existing policy explicitly permits
   it;
-- the all-in total is within the lowest cap that applies to its path;
+- the quoted price is within the lowest cap that applies to its path;
 - the input passed the check in step 4;
 - the quote is fresh and matches the final parameters;
 - the service is buyable: `buyable: true` on an Amazap row, which is also
@@ -528,7 +534,9 @@ budget(action="status")
 ```
 
 Pick the receipt written since step 6 for this URL and take its
-`paymentHash`, `amountSats`, and `status`. The MCP stores the payment hash as
+`paymentHash`, `amountSats`, and `status`, and its `feeSats` when the receipt
+reports one. `amountSats` is the invoice amount; `feeSats`, an optional
+field, is the fee the wallet paid on top. The MCP stores the payment hash as
 SHA-256 of the preimage, never the preimage itself, so a receipt holds no
 credential. Read the payment hash only from `receipts(source="durable")`: the
 session receipts carry no payment hash on either port.
@@ -538,7 +546,10 @@ Report:
 - the requested outcome;
 - the delivered result, faithfully: summarize it, quote its key figures, say
   when it was truncated, and never claim data the call did not return;
-- the sats charged, all-in;
+- the sats charged: for an Amazap buy, the all-in `chargedSats` from Amazap's
+  receipt; for a direct payment, the invoice amount (`amountSats`) and, when
+  the receipt reports a fee (`feeSats`), that fee beside it, never one
+  combined figure;
 - the remaining Amazap credits or the remaining MCP budget, whichever wallet
   paid, when available;
 - the source, the provider, and the listing used;
@@ -618,7 +629,7 @@ After a paid failure:
 | The user already has the URL | Nothing to discover | Hand off to `pay-l402-anywhere`. That handoff is for a URL the user already has, never for a listing Amazap surfaced. |
 | The input holds something sensitive | Secrets, a private or logged-in URL, credentials, personal data, or proprietary content | Don't send it unless the user explicitly approved that disclosure. Say what you found, and buy nothing. |
 | No fresh quote, or it doesn't match the parameters | Quote failure | Nothing was charged. Never buy on an old or mismatched quote. Quote again, or pick another candidate with the user. |
-| The all-in total is above the user's cap | Policy refusal | Refuse and buy nothing; say the total and the cap. Never raise the cap or split the purchase to fit under it. |
+| The quoted price is above the user's cap | Policy refusal | Refuse and buy nothing; say the price and the cap. Never raise the cap or split the purchase to fit under it. |
 | A budget denial on the direct path | Policy refusal: a per-payment or per-session cap on the MCP wallet | Report the limit the error names. Don't retry with a smaller `max_sats` to squeeze under it. Only the human changes the config file. |
 | Payments refused while no BTC price is available | USD limits on the MCP wallet can't be checked during a price outage | Expected on the direct path: USD limits fail closed. When the operator set sats-denominated limits, small payments may keep working during a price outage. |
 | `requiresConfirmation: true` | The amount is above the MCP auto-approve tier | Ask the human for the code, then repeat the same call with `confirmation_nonce`. Never guess a code. |
@@ -635,7 +646,7 @@ After a paid failure:
 
 - **Free reads first, one paid trial last.** Searching, describing, quoting,
   and reading manifests never pay. Pay only after the human picked a
-  candidate and said yes to its all-in price, within the user's cap.
+  candidate and said yes to its quoted price, within the user's cap.
 - **At most one trial purchase per run,** unless the user explicitly asks for
   more. Never fan out paid calls across several services to compare them,
   and never buy a second candidate after a paid failure without asking.
