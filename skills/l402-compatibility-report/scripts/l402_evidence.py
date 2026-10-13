@@ -29,7 +29,6 @@ from l402_levels import (
     FULFILLMENT_VERIFIED,
     INCOMPATIBLE,
     INCONCLUSIVE,
-    MARKETPLACE_READY,
     PAYMENT_COMPATIBLE,
     TRANSIENT_STATUSES,
     Finding,
@@ -326,7 +325,7 @@ def evaluate(evidence: dict, credential: str | None = None) -> dict:
         item for item in marketplace.get("not_checked_by_script", []) if item != NOT_CHECKED_BY_PAID_CHECK]
 
     classification = _classify(mode_a, cap, tool, payments, paid_sats, receipt_sats, total_paid, status,
-                               preimage_result, sources, expectations, marketplace["checks"], findings)
+                               preimage_result, sources, expectations, findings)
     receipt_times = sorted(p["timestamp"] for p in payments if p.get("timestamp"))
     report["paid_fulfillment"] = {
         "tested": True,
@@ -384,11 +383,12 @@ def evaluate(evidence: dict, credential: str | None = None) -> dict:
     report["classification"] = classification
     report["summary"] = _summary(classification, total_paid, status, bool(payments) or paid_sats > 0,
                                  sources[0]["source"] if sources else None)
-    marketplace["listing_ready"] = classification == MARKETPLACE_READY
+    marketplace["listing_ready"] = classification == FULFILLMENT_VERIFIED and all(
+        check["pass"] for check in marketplace["checks"])
     marketplace["note"] = (
-        "Every listing check passed and the paid amount matched the quote."
-        if classification == MARKETPLACE_READY
-        else "Not marketplace-ready: see the failed checks and Paid fulfillment."
+        "Every listing check passed. Listing checks never change the classification."
+        if marketplace["listing_ready"]
+        else "Listing checks are optional and never change the classification."
     )
     report["marketplace"] = marketplace
     evidence_section = dict(report.get("evidence") or {})
@@ -488,7 +488,7 @@ def _payment_blockers(cap, tool, payments, paid_sats, receipt_sats, total_paid, 
 
 
 def _classify(mode_a, cap, tool, payments, paid_sats, receipt_sats, total_paid, status, preimage_result, sources,
-              expectations, marketplace_checks, findings) -> str:
+              expectations, findings) -> str:
     if mode_a.get("classification") != CHALLENGE_COMPATIBLE:
         findings.append(Finding("paid_check_without_challenge", "error", "paid",
                                 f"The read-only check was {mode_a.get('classification')}; the paid check should not "
@@ -577,11 +577,7 @@ def _classify(mode_a, cap, tool, payments, paid_sats, receipt_sats, total_paid, 
                                 f"The authorized retry returned {status}, but the evidence omits what these checks "
                                 "need: " + ", ".join(unreported) + ". The payment hash is retained; do not pay again."))
         return INCONCLUSIVE
-    gaps = [c["name"] for c in marketplace_checks if not c["pass"]]
-    if gaps:
-        findings.append(Finding("marketplace_gaps", "info", "marketplace", "Not yet marketplace-ready: " + ", ".join(gaps) + "."))
-        return FULFILLMENT_VERIFIED
-    return MARKETPLACE_READY
+    return FULFILLMENT_VERIFIED
 
 
 MATCHED_BY = {
@@ -595,9 +591,6 @@ MATCHED_BY = {
 
 def _summary(classification: str, paid: int, status, payment_recorded: bool, hash_source: str | None = None) -> str:
     matched = MATCHED_BY.get(hash_source, "SHA-256 of the preimage matched the payment hash")
-    if classification == MARKETPLACE_READY:
-        return (f"Paid {paid} sats; {matched}; the authorized retry returned {status} and every listing "
-                "check passed.")
     if classification == FULFILLMENT_VERIFIED:
         return (f"Paid {paid} sats; {matched}; the authorized retry returned {status}, meeting the stated "
                 "expectations.")

@@ -1,32 +1,31 @@
-"""The shared vocabulary of the compatibility report: the six classifications,
+"""The shared vocabulary of the compatibility report: the five classifications,
 the finding type, the server-fix table, and the JSON report's version.
 
 ``l402_analyze`` (read-only check), ``l402_evidence`` (paid check), and
 ``l402_report`` (rendering) all import from here, so the paid check never
-imports the analyzer. The six names match references/l402-verification-levels.md
+imports the analyzer. The five names match references/l402-verification-levels.md
 exactly; a test pins them to it.
 
 The JSON report is the contract for anything that reads a report (a readiness
 gate reads JSON, never the Markdown). ``REPORT_VERSION`` changes only when a
-field a reader relies on changes meaning or disappears.
+field a reader relies on changes meaning or disappears. Version 2 removed the
+former marketplace classification: ``FULFILLMENT_VERIFIED`` is the top.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-REPORT_VERSION = 1
+REPORT_VERSION = 2
 
 CHALLENGE_COMPATIBLE = "CHALLENGE_COMPATIBLE"
 PAYMENT_COMPATIBLE = "PAYMENT_COMPATIBLE"
 FULFILLMENT_VERIFIED = "FULFILLMENT_VERIFIED"
-MARKETPLACE_READY = "MARKETPLACE_READY"
 INCOMPATIBLE = "INCOMPATIBLE"
 INCONCLUSIVE = "INCONCLUSIVE"
 CLASSIFICATIONS = (
     CHALLENGE_COMPATIBLE,
     PAYMENT_COMPATIBLE,
     FULFILLMENT_VERIFIED,
-    MARKETPLACE_READY,
     INCOMPATIBLE,
     INCONCLUSIVE,
 )

@@ -62,7 +62,7 @@ Argument names below are the Python server's `snake_case`. The .NET server takes
 the same arguments in `camelCase`: `max_sats` → `maxSats`, `confirmation_nonce`
 → `confirmationNonce`.
 
-The six classifications, the redaction rules, and the ambiguous-payment rule
+The five classifications, the redaction rules, and the ambiguous-payment rule
 are shared with the other skills in
 [L402 verification levels](https://github.com/refined-element/lightning-enable-skills/blob/main/references/l402-verification-levels.md).
 This skill states the parts it needs below.
@@ -305,7 +305,7 @@ The report also compares the Mode A invoice's payment hash with the paid
 payment hash, as information only. A mismatch is normal, because a server may
 mint a fresh invoice for each 402, and it is never a finding.
 
-Paid-check finding codes and marketplace checks, as the report prints them:
+Paid-check finding codes, and the listing checks the paid check adds, as the report prints them:
 
 - **Nothing to evaluate (`INCONCLUSIVE`):** `paid_check_without_challenge` (the
   read-only check wasn't `CHALLENGE_COMPATIBLE`), `awaiting_confirmation` (the
@@ -333,10 +333,10 @@ Paid-check finding codes and marketplace checks, as the report prints them:
   `paid_retry_rejected` (another 4xx), `paid_retry_failed` (a 5xx or another
   non-2xx answer), `unexpected_result` (a 2xx that misses the stated
   expectations).
-- **Marketplace:** `marketplace_gaps` lists the failed listing checks under
-  `FULFILLMENT_VERIFIED`, including `stable_price` (the paid amount equals the
-  read-only quote) and `synchronous_response` (a reported 2xx other than
-  `202 Accepted`).
+- **Listing checks, never the classification:** the paid check adds
+  `stable_price` (the paid amount equals the read-only quote) and
+  `synchronous_response` (a reported 2xx other than `202 Accepted`) to the
+  marketplace checks.
 
 ### 8. Hand off
 
@@ -353,7 +353,6 @@ Paid-check finding codes and marketplace checks, as the report prints them:
 | `CHALLENGE_COMPATIBLE` | A valid unpaid L402 challenge and a priced invoice were observed. Paid fulfillment was not tested. |
 | `PAYMENT_COMPATIBLE` | The payment is confirmed: the wallet reports terminal success and SHA-256 of the preimage from the piped credential equals the payment hash in the macaroon identifier, or, for an opaque token, the receipt's hash, which ties the token to the wallet's recorded payment, not to the invoice. The authorized retry then returned a definitive answer that is not a 2xx meeting the stated expectations, such as a `500`, a `403`, or another `402`. |
 | `FULFILLMENT_VERIFIED` | Request, 402, payment, authorized retry, expected 2xx result: all of it worked, and SHA-256 of the preimage from the piped credential matched the payment hash in the macaroon identifier, or, for an opaque token, the receipt's hash (the report names which). Requires the credential. |
-| `MARKETPLACE_READY` | `FULFILLMENT_VERIFIED`, plus every listing check and a paid amount equal to the quote. |
 | `INCOMPATIBLE` | A deterministic protocol or transport defect prevents the flow. |
 | `INCONCLUSIVE` | The check couldn't decide: the payment is pending or unknown (no terminal wallet result, or no preimage obtained), no credential was piped so the preimage went unchecked (`preimage_unchecked`; a receipt never upgrades this), the authorized retry was ambiguous (a timeout, a dropped connection, or no answer), the unpaid request timed out or hit a server error or a DNS failure, the target was refused, or the behavior was opaque. |
 
@@ -367,7 +366,7 @@ Never call an endpoint "L402 verified", or "verified" in any form, after a
 read-only check.
 
 **The JSON report is the contract.** Tools and gates read `--json`, never the
-Markdown: `report_version` (1), `mode`, `classification`, `evidence`, and
+Markdown: `report_version` (2), `mode`, `classification`, `evidence`, and
 `marketplace.checks`. After a paid check, `paid_fulfillment` adds
 `hash_source`, `paid_checked_at`, and `evidence_source` ("agent-recorded
 access_l402_resource result": validated, never independently observed).

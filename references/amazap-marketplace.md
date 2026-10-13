@@ -138,16 +138,14 @@ margin, credits, terms, or ranking.
 
 ## Verification terminology
 
-Use the six classifications in
+Use the five classifications in
 [L402 verification levels](l402-verification-levels.md) exactly. For a
 listing:
 
 - `CHALLENGE_COMPATIBLE` means "challenge-compatible, fulfillment unverified".
   A `402` is a quote, not proof that anything gets delivered.
-- `FULFILLMENT_VERIFIED` is the minimum for calling an endpoint ready to list.
-- `MARKETPLACE_READY` is the target only for an endpoint on its own host. A
-  Lightning Enable proxy on `api.lightningenable.com` stops at
-  `FULFILLMENT_VERIFIED` (see Prefill under Seller handoff).
+- `FULFILLMENT_VERIFIED` is the top classification, and the one a listing
+  needs.
 - **Listed** means Amazap's product page or products API row has been read
   back and shows the listing as visible: the row has `hidden: false`, or the
   product page renders the listing as buyable. Otherwise report the row's
@@ -199,7 +197,7 @@ If `l402-compatibility-report` is not installed, the listing is not ready;
 give the human its GitHub URL,
 https://github.com/refined-element/lightning-enable-skills/tree/main/skills/l402-compatibility-report.
 Take the `classification` field from the JSON report, which is the script's
-contract (`report_version` 1), not from the Markdown:
+contract (`report_version` 2), not from the Markdown:
 
 - **`INCOMPATIBLE`:** not listing-ready. Give the fix the report names.
 - **`CHALLENGE_COMPATIBLE`:** the most the read-only check can return for a
@@ -210,12 +208,6 @@ contract (`report_version` 1), not from the Markdown:
 - **`FULFILLMENT_VERIFIED`:** ready, once items 6, 8, 9, and 10 hold. Pass on
   the report's `paid_fulfillment.hash_source`: for an opaque token the
   preimage was matched against the wallet's recorded payment, not the invoice.
-- **`MARKETPLACE_READY`:** the target for an endpoint on its own host. The
-  same remaining items apply. On `api.lightningenable.com`, the host-root
-  metadata check doesn't count for a proxy (see Prefill below), so report such
-  a proxy as
-  `FULFILLMENT_VERIFIED` at most, never as `MARKETPLACE_READY` on the strength
-  of that check.
 
 Three limits of the paid check:
 
@@ -299,10 +291,7 @@ host. Without them, it derives example parameters from parameter names in the
 under `/l402/proxy/{proxyId}/`, which the root lookup doesn't read, and the
 root of `api.lightningenable.com` describes Lightning Enable itself. On
 `api.lightningenable.com`, the host-root `openapi.json` and `llms.txt`
-describe the platform, not the proxy, so the host-root metadata check doesn't
-count for a proxy. The handoff reports such a proxy as `FULFILLMENT_VERIFIED`
-at most, even when the script's report says `MARKETPLACE_READY`, and never as
-`MARKETPLACE_READY` on that basis. Tell the human to supply the title,
+describe the platform, not the proxy. Tell the human to supply the title,
 description, category, and example parameters by hand. For an API on its own
 domain, an `openapi.json` or `llms.txt` at the host root gives the prefill
 something accurate to read.

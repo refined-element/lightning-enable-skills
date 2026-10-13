@@ -14,7 +14,7 @@ connection. They hold the spec's seller-handoff acceptance tests in guard form:
 * the gate rejects a private or non-HTTPS URL, a ``200`` to an unpaid request,
   and a ``400``/``415``/``422`` to a bodyless request;
 * a read-only result is labeled "challenge-compatible, fulfillment unverified",
-  and only ``FULFILLMENT_VERIFIED`` or ``MARKETPLACE_READY`` unlocks "ready";
+  and only ``FULFILLMENT_VERIFIED`` unlocks "ready";
 * the agent drafts but never publishes, and never invents a contact email;
 * nothing is called listed or live before it is read back, and "listed" is kept
   apart from "verified paid delivery";
@@ -339,10 +339,11 @@ def test_handoff_avoids_banned_words(target):
 
 
 @pytest.mark.parametrize("target", HANDOFF_TARGETS)
-def test_handoff_names_only_the_six_classifications(target):
+def test_handoff_names_only_the_five_classifications(target):
     named = set(CLASSIFICATION_NAME.findall(handoff_text(target)))
     assert named <= set(CLASSIFICATIONS), f"{target} names {sorted(named - set(CLASSIFICATIONS))}"
     assert "FULFILLMENT_VERIFIED" in named
+    assert "MARKETPLACE_READY" not in raw_handoff_text(target)
 
 
 @pytest.mark.parametrize("target", HANDOFF_TARGETS)
@@ -445,13 +446,8 @@ def test_step_checks_the_row_asks_first_and_reads_back_visibility(skill, phrase)
 
 
 @pytest.mark.parametrize("skill", PROXY_SKILLS)
-@pytest.mark.parametrize("phrase", (
-    "`FULFILLMENT_VERIFIED` at most",
-    "`FULFILLMENT_VERIFIED` is the ceiling",
-    "match the full endpoint URL the row stores",
-))
-def test_proxy_steps_cap_readiness_and_match_rows_by_endpoint_url(skill, phrase):
-    assert phrase in flat(amazap_step(skill)), f"{skill} is missing {phrase!r}"
+def test_proxy_steps_match_rows_by_endpoint_url(skill):
+    assert "match the full endpoint URL the row stores" in flat(amazap_step(skill))
 
 
 @pytest.mark.parametrize("skill", SELLER_SKILLS)
@@ -500,13 +496,11 @@ def test_native_step_points_the_prefill_at_the_apis_own_host_root():
 
 
 @pytest.mark.parametrize("skill", NATIVE_SKILLS)
-def test_native_step_targets_marketplace_ready_without_the_proxy_cap(skill):
+def test_native_step_carries_no_proxy_only_rule(skill):
     step = flat(amazap_step(skill))
-    assert "`MARKETPLACE_READY` is the target" in step
     assert "before body validation" in step
     # Proxy-only rules: an API on its own domain owns its host and its host root.
-    for phrase in ("`FULFILLMENT_VERIFIED` at most", "`FULFILLMENT_VERIFIED` is the ceiling",
-                   "not the host alone", "`api.lightningenable.com`"):
+    for phrase in ("not the host alone", "`api.lightningenable.com`"):
         assert phrase not in step, f"{skill} carries the proxy-only rule {phrase!r}"
 
 
@@ -639,15 +633,20 @@ def test_reference_asks_before_the_gate():
     assert 0 <= ask < gate, "the reference must ask about Amazap before the gate"
 
 
-@pytest.mark.parametrize("heading, phrase", (
-    ("## Verification terminology",
-     "`MARKETPLACE_READY` is the target only for an endpoint on its own host"),
-    ("### Readiness gate",
-     "report such a proxy as `FULFILLMENT_VERIFIED` at most, never as `MARKETPLACE_READY`"),
-    ("### Handoff flow", "reports such a proxy as `FULFILLMENT_VERIFIED` at most"),
-))
-def test_reference_caps_a_proxy_at_fulfillment_verified(heading, phrase):
-    assert phrase in flat(reference_section(heading)), f"{heading} is missing {phrase!r}"
+# The core no longer depends on host-root metadata, so nothing caps a proxy.
+CAP_PHRASES = (
+    "`FULFILLMENT_VERIFIED` at most",
+    "is the ceiling",
+    "doesn't count for a proxy",
+    "stops at `FULFILLMENT_VERIFIED`",
+)
+
+
+@pytest.mark.parametrize("target", HANDOFF_TARGETS)
+def test_no_handoff_caps_a_proxy_below_the_top_classification(target):
+    text = handoff_text(target)
+    hits = [phrase for phrase in CAP_PHRASES if phrase in text]
+    assert not hits, f"{target} still caps a proxy: {hits}"
 
 
 def test_native_step_sets_the_price_with_a_yes_and_a_deploy_before_the_gate():

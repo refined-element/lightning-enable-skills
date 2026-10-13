@@ -53,7 +53,7 @@ def paid_codes(report: dict) -> set[str]:
 @pytest.mark.parametrize(
     "name, classification, code",
     [
-        ("fulfilled-2xx", "FULFILLMENT_VERIFIED", "marketplace_gaps"),
+        ("fulfilled-2xx", "FULFILLMENT_VERIFIED", None),
         # Receipt-only mismatch: likely the wrong receipt, so the payment is unconfirmed.
         ("preimage-mismatch", "INCONCLUSIVE", "receipt_mismatch"),
         ("receipt-mismatch", "INCONCLUSIVE", "receipt_mismatch"),
@@ -80,7 +80,7 @@ def test_evidence_classification(name, classification, code):
     report = l402_evidence.evaluate(evidence, credential)
     assert report["mode"] == "paid"
     assert report["classification"] == classification
-    assert code in paid_codes(report)
+    assert code is None or code in paid_codes(report)
 
 
 # 6. The paid check proves preimage/payment-hash correspondence.
@@ -132,7 +132,7 @@ def test_a_readable_macaroon_names_the_macaroon_identifier_as_the_hash_source():
     assert "Hash source: the macaroon identifier's payment hash" in l402_report.to_markdown(report)
 
 
-@pytest.mark.parametrize("status, classification", [(200, "MARKETPLACE_READY"), (500, "PAYMENT_COMPATIBLE")])
+@pytest.mark.parametrize("status, classification", [(200, "FULFILLMENT_VERIFIED"), (500, "PAYMENT_COMPATIBLE")])
 def test_every_confirmed_summary_names_the_hash_source(status, classification):
     evidence, credential = evidence_for("fulfilled-2xx", root_metadata_ok=True)
     evidence["tool_result"]["status_code"] = status
@@ -199,7 +199,7 @@ def test_macaroon_and_receipt_both_disagreeing_is_incompatible():
 def test_macaroon_match_governs_when_only_the_receipt_disagrees():
     evidence, credential = evidence_for("macaroon-match-receipt-mismatch", root_metadata_ok=True)
     report = l402_evidence.evaluate(evidence, credential)
-    assert report["classification"] == "MARKETPLACE_READY"
+    assert report["classification"] == "FULFILLMENT_VERIFIED"
     paid = report["paid_fulfillment"]
     assert paid["preimage_check"] == "matched"
     assert paid["hash_sources"] == [
@@ -457,38 +457,30 @@ def test_quote_and_paid_hashes_are_compared_as_information_only(same):
     assert report["classification"] == baseline["classification"]
 
 
-# 10. Marketplace classification needs paid fulfillment plus metadata and bounded execution.
-def test_marketplace_ready_needs_fulfillment_and_every_listing_check():
-    evidence, credential = evidence_for("fulfilled-2xx", root_metadata_ok=True)
-    report = l402_evidence.evaluate(evidence, credential)
-    assert report["classification"] == "MARKETPLACE_READY"
-    assert report["marketplace"]["listing_ready"] is True
-
-    without_metadata, credential = evidence_for("fulfilled-2xx")
-    assert l402_evidence.evaluate(without_metadata, credential)["classification"] == "FULFILLMENT_VERIFIED"
-
+# The top classification is FULFILLMENT_VERIFIED. Listing checks never change it.
+def test_a_fulfilled_endpoint_tops_out_at_fulfillment_verified():
+    for metadata in (True, False):
+        evidence, credential = evidence_for("fulfilled-2xx", root_metadata_ok=metadata)
+        report = l402_evidence.evaluate(evidence, credential)
+        assert report["classification"] == "FULFILLMENT_VERIFIED"
+        assert "marketplace_gaps" not in paid_codes(report)
+        assert "marketplace" not in report["summary"].lower()
     unproven, _ = evidence_for("preimage-not-surfaced", root_metadata_ok=True)
     assert l402_evidence.evaluate(unproven, None)["classification"] == "INCONCLUSIVE"
 
 
-def test_price_change_between_quote_and_payment_blocks_marketplace_ready():
+@pytest.mark.parametrize("change", ["price", "deferred"])
+def test_listing_checks_never_lower_a_fulfilled_endpoint(change):
     evidence, credential = evidence_for("fulfilled-2xx", root_metadata_ok=True)
-    evidence["tool_result"]["paid_sats"] = 2
-    evidence["payments"][0]["amount_sats"] = 2
+    if change == "price":
+        evidence["tool_result"]["paid_sats"] = 2
+        evidence["payments"][0]["amount_sats"] = 2
+    else:
+        evidence["tool_result"]["status_code"] = 202
+        del evidence["expected"]["status"]
     report = l402_evidence.evaluate(evidence, credential)
     assert report["classification"] == "FULFILLMENT_VERIFIED"
-    gaps = next(f for f in report["findings"] if f["code"] == "marketplace_gaps")
-    assert "stable_price" in gaps["message"]
-
-
-def test_accepted_but_deferred_response_blocks_marketplace_ready():
-    evidence, credential = evidence_for("fulfilled-2xx", root_metadata_ok=True)
-    evidence["tool_result"]["status_code"] = 202
-    del evidence["expected"]["status"]
-    report = l402_evidence.evaluate(evidence, credential)
-    assert report["classification"] == "FULFILLMENT_VERIFIED"
-    gaps = next(f for f in report["findings"] if f["code"] == "marketplace_gaps")
-    assert "synchronous_response" in gaps["message"]
+    assert "marketplace_gaps" not in paid_codes(report)
 
 
 # 8. Paid success then ambiguous fulfillment: INCONCLUSIVE, correlators kept, no repay.
@@ -605,7 +597,7 @@ def test_paid_report_keeps_the_rerun_key_and_fills_the_paid_sections():
 def test_paid_report_says_its_facts_are_agent_recorded():
     evidence, credential = evidence_for("fulfilled-2xx")
     report = l402_evidence.evaluate(evidence, credential)
-    assert report["report_version"] == 1
+    assert report["report_version"] == 2
     assert report["paid_fulfillment"]["evidence_source"] == "agent-recorded access_l402_resource result"
     text = l402_report.to_json(report)
     assert next(iter(json.loads(text))) == "report_version"

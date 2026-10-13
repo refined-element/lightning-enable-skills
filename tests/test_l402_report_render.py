@@ -6,6 +6,7 @@ import pytest
 
 import l402_check_support as support
 import l402_report
+from test_shared_references import CLASSIFICATIONS
 
 TEMPLATE = support.SKILL_DIR / "templates" / "report.md"
 
@@ -20,6 +21,12 @@ def both(report, secrets):
 
 def test_template_lists_the_spec_sections_in_order():
     assert headings(TEMPLATE.read_text(encoding="utf-8")) == ["L402 Compatibility Report", *l402_report.SECTIONS]
+
+
+def test_template_classification_line_names_the_five_classifications():
+    line = next(row for row in TEMPLATE.read_text(encoding="utf-8").splitlines()
+                if row.startswith("- Classification:"))
+    assert tuple(re.findall(r"[A-Z]+(?:_[A-Z]+)+|INCOMPATIBLE|INCONCLUSIVE", line)) == CLASSIFICATIONS
 
 
 def test_rendered_markdown_follows_the_template():

@@ -574,14 +574,12 @@ public HTTPS URL, and only as an offer; no answer means no.
   ready; give the human its GitHub URL,
   https://github.com/refined-element/lightning-enable-skills/tree/main/skills/l402-compatibility-report.
   Take the `classification` field from the JSON. Offer the listing as ready
-  only at `FULFILLMENT_VERIFIED` or `MARKETPLACE_READY`, and only once example
+  only at `FULFILLMENT_VERIFIED`, and only once example
   parameters are known, replay behavior is understood, no error or output
   exposes a secret, and the human has chosen title, description, category,
-  and price. On the API's own domain, `MARKETPLACE_READY` is the target:
-  beyond `FULFILLMENT_VERIFIED` it needs a mainnet invoice, a 402 to a
-  bodyless request within 8 seconds, no redirect between the listed URL and
-  the 402, an `openapi.json` or `llms.txt` at the host root (see Fields), and
-  a paid amount equal to the read-only quote. `CHALLENGE_COMPATIBLE` is the
+  and price. It also needs a mainnet invoice, a 402 to a bodyless request
+  within 8 seconds, and no redirect between the listed URL and the 402.
+  `CHALLENGE_COMPATIBLE` is the
   most the read-only check can return for a correct endpoint: say
   "challenge-compatible, fulfillment unverified", and do not offer the listing
   as ready until the paid check below lifts it. A private, loopback, link-local, or
@@ -641,11 +639,10 @@ public HTTPS URL, and only as an offer; no answer means no.
   at listing time, so list the route at the human's chosen price, not step
   10's staging price, and after any price change in the code the seller must
   re-run Amazap's checks. The order matters: the chosen price goes in before
-  the gate's read-only check (see Gate). A 1-sat token from step 10 then fails
-  the report's `stable_price` check against the new quote, so its result is
-  at most `FULFILLMENT_VERIFIED`, which is ready; if the token no longer
+  the gate's read-only check (see Gate). A 1-sat token from step 10 still
+  gives `FULFILLMENT_VERIFIED`, which is ready; if the token no longer
   verifies after the price change, the result is lower and not ready. Either
-  way the agent never pays again to reach `MARKETPLACE_READY`.
+  way the agent never pays again.
 - **The human decides.** Without the human's explicit approval, never submit
   the listing, accept seller terms, provide or infer a contact email, opt into
   announcements, publish a Nostr handle, change the endpoint's price, or claim

@@ -15,9 +15,9 @@ fails and how to fix it.
 - **The default check never pays.** One unpaid request, decoded down to the
   invoice's amount, payment hash, and expiry, with no wallet needed.
 - **Honest about what was tested.** A valid challenge is
-  `CHALLENGE_COMPATIBLE`, not "verified". Paid delivery needs a paid check,
-  and marketplace readiness (`MARKETPLACE_READY`, a separate level above
-  `FULFILLMENT_VERIFIED`) needs both plus listing metadata.
+  `CHALLENGE_COMPATIBLE`, not "verified". Paid delivery needs a paid check:
+  `FULFILLMENT_VERIFIED`, the top result, needs the preimage matched to the
+  payment hash and the expected 2xx.
 - **Multi-scheme aware.** Servers that offer `L402` beside `Payment`, `LSAT`, or
   `x402` are normal; the report classifies the L402 challenge and lists the
   rest, and never treats `Payment` as L402.

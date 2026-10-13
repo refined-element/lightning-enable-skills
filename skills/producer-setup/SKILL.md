@@ -393,12 +393,10 @@ Offer it only after the self-test, and only as an offer; no answer means no.
   give the human its GitHub URL,
   https://github.com/refined-element/lightning-enable-skills/tree/main/skills/l402-compatibility-report.
   Take the `classification` field from the JSON. Offer the listing as ready
-  only at `FULFILLMENT_VERIFIED` or `MARKETPLACE_READY`, and only once example
+  only at `FULFILLMENT_VERIFIED`, and only once example
   parameters are known, replay behavior is understood, no error or output
   exposes a secret, and the human has chosen title, description, category,
-  and price. For a Lightning Enable proxy, `FULFILLMENT_VERIFIED` is the
-  ceiling: `MARKETPLACE_READY` is not reachable, because the host-root
-  metadata check doesn't count (see Fields by hand). `CHALLENGE_COMPATIBLE` is
+  and price. `CHALLENGE_COMPATIBLE` is
   the most the read-only check can return for a correct endpoint: say
   "challenge-compatible, fulfillment unverified", and do not offer the listing
   as ready until the paid check below lifts it. A private, loopback,
@@ -443,9 +441,7 @@ Offer it only after the self-test, and only as an offer; no answer means no.
 - **Fields by hand.** On `api.lightningenable.com`, the human supplies the
   title, description, category, and example parameters by hand: Amazap's
   prefill reads the host root, which describes Lightning Enable, not this
-  proxy. For the same reason the host-root metadata check doesn't count for a
-  proxy there, so report it as `FULFILLMENT_VERIFIED` at most, even when the
-  report says `MARKETPLACE_READY`.
+  proxy.
 - **Two prices.** Show the seller price (the invoice amount) and Amazap's
   all-in shopper price separately, never added together; the all-in figure
   comes from Amazap's draft or page. Amazap locks the price at listing time,

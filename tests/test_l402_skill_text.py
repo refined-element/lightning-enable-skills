@@ -5,7 +5,7 @@ import pytest
 
 import l402_check_support as support
 import test_tool_surface
-from test_shared_references import CLASSIFICATIONS, CUSTODY
+from test_shared_references import CLASSIFICATION_PATTERN, CLASSIFICATIONS, CUSTODY, PROFILES_HEADING, without_section
 
 SKILL = support.SKILL_DIR / "SKILL.md"
 README = support.SKILL_DIR / "README.md"
@@ -16,10 +16,11 @@ def flat(path):
     return " ".join(path.read_text(encoding="utf-8").split())
 
 
-def test_skill_names_exactly_the_six_classifications():
-    text = SKILL.read_text(encoding="utf-8")
-    named = set(re.findall(r"\b(?:[A-Z]+_)+(?:COMPATIBLE|VERIFIED|READY)\b|\bINCOMPATIBLE\b|\bINCONCLUSIVE\b", text))
+def test_skill_names_exactly_the_five_classifications():
+    core = without_section(SKILL.read_text(encoding="utf-8"), PROFILES_HEADING)
+    named = set(re.findall(CLASSIFICATION_PATTERN, core))
     assert named == set(CLASSIFICATIONS)
+    assert "MARKETPLACE_READY" not in core
 
 
 @pytest.mark.parametrize("path", (SKILL, README), ids=lambda p: p.name)
