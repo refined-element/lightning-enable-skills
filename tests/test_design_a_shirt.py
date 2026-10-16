@@ -61,7 +61,8 @@ def codes(findings):
 
 def test_a_full_size_rgba_png_is_accepted_at_300_dpi(tmp_path):
     code, report = run(tmp_path, png(3600, 4800))
-    assert code == 0 and report["ok"]
+    # Accepted on the header; exit 3 because --no-pixels left the pixels unchecked.
+    assert code == 3 and report["ok"] and report["pixelsChecked"] is False
     assert report["effectiveDpi"] == 300
     assert report["printInches"] == [12.0, 16.0]
     assert report["alphaChannel"] is True
@@ -103,7 +104,7 @@ def test_low_dpi_warns_below_150():
 
 def test_an_rgb_png_without_trns_warns_that_the_background_prints(tmp_path):
     code, report = run(tmp_path, png(3600, 4800, color_type=2))
-    assert code == 0
+    assert code == 3
     assert report["alphaChannel"] is False
     assert "NoTransparency" in codes(report["warnings"])
 
@@ -153,8 +154,8 @@ def test_without_pixel_checks_the_verdict_does_not_claim_acceptance(tmp_path):
     path = tmp_path / "art.png"
     path.write_bytes(png(3600, 4800))
     out = io.StringIO()
-    assert check_artwork.main([str(path), "--no-pixels"], stdout=out) == 0
-    assert "the pixels were not checked" in out.getvalue()
+    assert check_artwork.main([str(path), "--no-pixels"], stdout=out) == 3
+    assert "the pixels were not checked (exit 3)" in out.getvalue()
     assert "the store accepts this file" not in out.getvalue()
 
 
@@ -174,15 +175,17 @@ def histogram(**counts):
     return hist
 
 
-def test_fully_transparent_fails_after_the_fee():
+def test_fully_transparent_is_refused_at_upload():
+    # The store answers 400 nothing_to_print (failureCode NoVisibleContent) before any invoice.
     report = judged(100, 100, histogram(a0=10_000), None)
     assert not report.ok
-    assert [f.code for f in report.fails_after_fee] == ["NoVisibleContent"]
+    assert [f.code for f in report.refused] == ["NoVisibleContent"]
+    assert "nothing_to_print" in report.refused[0].message
 
 
 def test_faint_content_below_half_alpha_counts_as_nothing_to_print():
     report = judged(100, 100, histogram(a0=9_000, a127=1_000), (10, 10, 20, 20))
-    assert [f.code for f in report.fails_after_fee] == ["NoVisibleContent"]
+    assert [f.code for f in report.refused] == ["NoVisibleContent"]
 
 
 def test_tight_artwork_on_a_transparent_canvas_is_clean():
@@ -235,13 +238,36 @@ def test_pillow_end_to_end(tmp_path):
     report = check_artwork.check(tmp_path / "good.png", "black")
     assert report.ok and report.pixel_checks == "done" and report.warnings == []
     report = check_artwork.check(tmp_path / "empty.png", "black")
-    assert [f.code for f in report.fails_after_fee] == ["NoVisibleContent"]
+    assert [f.code for f in report.refused] == ["NoVisibleContent"]
+    assert check_artwork.main([str(tmp_path / "good.png")], stdout=io.StringIO()) == 0
+    assert check_artwork.main([str(tmp_path / "empty.png")], stdout=io.StringIO()) == 1
+
+
+def test_pixels_that_cannot_be_decoded_exit_2(tmp_path, capsys):
+    pytest.importorskip("PIL.Image")
+    path = tmp_path / "art.png"
+    path.write_bytes(png(3600, 4800))  # valid header and CRCs, but the IDAT holds one byte
+    assert check_artwork.main([str(path)], stdout=io.StringIO()) == 2
+    assert "cannot decode" in capsys.readouterr().err
+
+
+def test_without_pillow_the_script_exits_3(tmp_path, monkeypatch):
+    monkeypatch.setitem(sys.modules, "PIL", None)  # `from PIL import ...` now raises ImportError
+    path = tmp_path / "art.png"
+    path.write_bytes(png(3600, 4800))
+    out = io.StringIO()
+    assert check_artwork.main([str(path)], stdout=out) == 3
+    assert "Pillow is not installed" in out.getvalue()
 
 
 def test_the_script_documents_its_exit_codes_and_offline_use():
     doc = check_artwork.__doc__
     assert "makes no network request and never pays" in doc
-    assert "Exit status: 0" in doc and "Python 3.10" in doc
+    assert "Exit status: 0" in doc and "3 when the header checks pass" in doc and "Python 3.10" in doc
+    # The before/after-payment split, as the custom catalog's artworkChecks states it.
+    flat_doc = " ".join(doc.split())
+    assert "(NoVisibleContent is refused with 400 nothing_to_print)" in flat_doc
+    assert "LowEffectiveDpi, NoTransparency and ExcessiveEmptyMargins warnings" in flat_doc
 
 
 # --- text guards -------------------------------------------------------------
@@ -347,6 +373,11 @@ def test_the_skill_names_every_error_code_the_owner_listed():
         "invoice_outlives_quote",
         "publish_limit_reached",
         "mint_rate_limited",
+        "nothing_to_print",
+        "upload_busy",
+        "pricing_unavailable",
+        "claim_not_found",
+        "quote_not_found",
     ):
         assert f"`{code}`" in text or f" {code}`" in text, code
 

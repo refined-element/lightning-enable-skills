@@ -105,7 +105,7 @@ These come from the live custom catalog (`designRequirements` and
 | Pixel cap | At most 40 million pixels in total, so 12,000 x 12,000 is refused. 3,600 x 4,800 (17.3 million) is well inside |
 | File size | At most 50 MB (52,428,800 bytes) |
 | Resolution | 150 DPI or more recommended. 3,600 x 4,800 fills the area at 300 DPI; 2,400 x 2,400 prints 12 x 12 in at 200 DPI |
-| Background | Transparent, in practice required. An opaque PNG prints its background as a solid rectangle. A fully transparent PNG has nothing to print and fails |
+| Background | Transparent, in practice required. An opaque PNG prints its background as a solid rectangle. A fully transparent PNG (or one under 50% opacity everywhere) has nothing to print and is refused at upload, free |
 | Placement on the shirt | The image is fitted into the print area at its own aspect ratio, centred horizontally and aligned to the top of the area, never stretched |
 
 The effective DPI is the larger of `width / 12` and `height / 16`. A square
@@ -114,20 +114,35 @@ fills all of it.
 
 ### What the store warns about, and what to do
 
-The upload response carries `warnings` (it checks DPI only). The full print
-validation runs **after** Payment A and shows on the design status under
-`printValidation.warnings`, each with a `code` and a `message`. Fix what you
-can before paying: `scripts/check_artwork.py` runs the same checks locally.
+The store splits its checks around the design fee. The custom catalog states
+the split in `artworkChecks`:
 
-| Code | What it means | Do this |
-|---|---|---|
-| `LowEffectiveDpi` | Below 150 DPI at the print size; the print may look soft. At the 2,400 px minimum an accepted file always reaches 200 DPI, so this appears only where a store sets a lower minimum | Generate or export larger, aiming for 3,600 x 4,800. Upscaling a small raster helps little; regenerate if you can |
-| `NoTransparency` | No transparent pixels: the background prints as a solid rectangle | Re-export with an alpha channel and the background removed |
-| `ExcessiveEmptyMargins` | More than 40% of the canvas is empty, so the design prints smaller than the area | Crop the canvas to the artwork with a small border, then resize so it still meets the minimum |
-| `LowContrastWithGarment` | Half or more of the visible artwork is too close to the shirt color | Pick the other shirt color, or recolor the artwork |
-| `ColorProfileDiscarded` | An embedded color profile is removed; colors are treated as sRGB | Export in sRGB |
-| `AnimationDiscarded` | An animated PNG; only the first frame prints | Export a still PNG |
-| Nothing to print | No pixel is opaque enough (50% alpha or more). The upload accepts it, then preparation fails: `GenerationFailed` with `failureCode` `InvalidInput`, and the design fee is spent | Never upload it. `check_artwork.py` exits 1 with `NoVisibleContent` |
+- **Before payment (at upload, free):** "size and declared type, PNG
+  signature, dimensions and pixel count, decodability, visible content
+  (NoVisibleContent is refused with 400 nothing_to_print), and the
+  LowEffectiveDpi, NoTransparency and ExcessiveEmptyMargins warnings." These
+  come back in the upload response's `warnings`, each with a `code` and a
+  `message`. `ExcessiveEmptyMargins` is measured at upload only for artwork with
+  transparency; an opaque image's margins are measured after payment.
+- **After Payment A:** "metadata removal, colour-profile and animation
+  discard, contrast against the garment and the final print file. An
+  unprintable file ends in GenerationFailed with failureCode InvalidInput and
+  keeps the fee; only technical failures are retried free." These show on the
+  design status under `printValidation.warnings`.
+
+`scripts/check_artwork.py` runs both sets locally, so the person sees the
+after-payment findings, contrast above all, before anyone pays.
+
+| Code | When | What it means | Do this |
+|---|---|---|---|
+| `NoVisibleContent` (`400 nothing_to_print`) | Upload, refused | Fully transparent, or under 50% opacity everywhere: nothing would print. Nothing charged | Make artwork with visible pixels and upload again |
+| `LowEffectiveDpi` | Upload, warning | Below 150 DPI at the print size; the print may look soft. At the 2,400 px minimum an accepted file always reaches 200 DPI, so this appears only where a store sets a lower minimum | Generate or export larger, aiming for 3,600 x 4,800. Upscaling a small raster helps little; regenerate if you can |
+| `NoTransparency` | Upload, warning | No transparent pixels: the background prints as a solid rectangle | Re-export with an alpha channel and the background removed |
+| `ExcessiveEmptyMargins` | Upload (transparent artwork) or after payment (opaque), warning | More than 40% of the canvas is empty, so the design prints smaller than the area | Crop the canvas to the artwork with a small border, then resize so it still meets the minimum |
+| `LowContrastWithGarment` | After payment, warning | Half or more of the visible artwork is too close to the shirt color | Pick the other shirt color, or recolor the artwork. Check it before paying |
+| `ColorProfileDiscarded` | After payment, warning | An embedded color profile is removed; colors are treated as sRGB | Export in sRGB |
+| `AnimationDiscarded` | After payment, warning | An animated PNG; only the first frame prints | Export a still PNG |
+| `GenerationFailed`, `failureCode` `InvalidInput` | After payment, failure | The file passed the upload but still cannot be printed. The design fee is kept | Upload new artwork for a new design (new key, new fee) |
 
 A warning does not block the design; the person sees the warnings on the
 approval page and decides. A `GenerationFailed` with any other failure code is
@@ -173,13 +188,19 @@ python scripts/check_artwork.py design.png --color black
 ```
 
 It reports dimensions, whether there is an alpha channel, the effective DPI and
-printed size, and every finding: **refused at upload** (nothing is charged),
-**fails after the design fee** (never upload it), or a warning. Exit 0 means the
-store accepts the file; exit 1 means fix it first. `--json` gives the same
-report as JSON. It reads the local file only. Without Pillow it says the pixels
-were not checked: a fully transparent PNG passes every header check, so either
-install Pillow or look at the image's alpha channel some other way before
-paying the fee.
+printed size, and every finding: **refused at upload** (nothing is charged) or
+a warning, including the ones the store only reports after the fee. Exit codes:
+
+- `0`: the store accepts the file (warnings may still be listed).
+- `1`: the upload would be refused; fix it first.
+- `2`: a usage error, or a file that cannot be read or decoded (the store
+  refuses an undecodable PNG too).
+- `3`: the header checks pass but the pixels were not checked, because Pillow
+  is missing. The store still checks visible content and margins at upload,
+  but contrast with the shirt only after the fee, so install Pillow (or look at
+  the artwork against the shirt color yourself) before paying.
+
+`--json` gives the same report as JSON. It reads the local file only.
 
 Show the person the image and the findings, and get their go-ahead on the
 artwork before any payment.
@@ -241,9 +262,14 @@ curl -sS -X POST "$STORE/api/store/custom/uploads" \
 ```
 
 `201` returns `uploadId`, `sha256`, `widthPx`, `heightPx`, `effectiveDpi` and
-`warnings`. Uploading never charges; a file that fails a pre-invoice check is
-`400 upload_rejected` (or `file_required`, `file_too_large`), nothing charged.
-`productCode` is an optional form field, `classic-tshirt` by default.
+`warnings` (`LowEffectiveDpi`, `NoTransparency`, `ExcessiveEmptyMargins`).
+Uploading never charges. A file that fails a pre-invoice check is `400
+upload_rejected` (or `file_required`, `file_too_large`), and one with nothing
+visible is `400 nothing_to_print` (`failureCode: NoVisibleContent`); nothing is
+charged either way. `503 upload_busy` means the store is checking other
+uploads: wait `Retry-After` (5 seconds) and repeat the exact request; the same
+`Idempotency-Key` returns the stored upload. `productCode` is an optional form
+field, `classic-tshirt` by default.
 
 ### 3. Pay the design fee (Payment A)
 
@@ -396,9 +422,12 @@ curl -sS -X POST "$STORE/api/store/custom/checkout" \
   --data-binary @"$W/checkout.json" -o "$W/checkout-402.json" -w "%{http_code}\n"
 ```
 
-`402` carries `orderId` and an invoice for exactly the quote's `priceSats`. A
-quote with under two minutes left gets no invoice (`quote_expiring`): request a
-new quote and show the person the new total.
+`402` carries `orderId` and an invoice for exactly the quote's `priceSats`; the
+invoice expires no later than the quote. A quote with under two minutes left
+gets no invoice (`quote_expiring`): request a new quote and show the person the
+new total. `503 pricing_unavailable` means the quote could not be turned into
+an invoice: nothing was charged; request a new quote, show the new total, and
+check out again.
 
 1. Check `l402.amountSats` equals the quoted `priceSats`. If not, stop.
 2. `get_balance()` and `budget(action="status")`.
@@ -561,13 +590,17 @@ to do next. "Nothing charged" means no invoice was paid by that answer.
 |---|---|---|
 | `404 custom_products_disabled` | This store has custom products off | Stop. Offer the regular catalog, or another store |
 | `404 custom_listings_disabled` | Listings are off on this store | Publishing and listing purchases are unavailable here |
-| `400 upload_rejected`, `file_required`, `file_too_large` | The PNG failed a pre-invoice check | Fix it (run `check_artwork.py`), upload again. Nothing charged |
+| `400 upload_rejected`, `file_required`, `file_too_large` | The PNG failed a pre-invoice check (including a damaged or undecodable PNG) | Fix it (run `check_artwork.py`), upload again. Nothing charged |
+| `400 nothing_to_print` | `failureCode: NoVisibleContent`: fully transparent, or under 50% opacity everywhere | Upload artwork with visible pixels. Nothing charged |
+| `503 upload_busy` | The store is decoding other uploads | Honour `Retry-After` (5 seconds) and repeat the exact request, same `Idempotency-Key`. Nothing stored or charged |
 | `400 upload_expired` | The upload is over 24 hours old | Upload the PNG again |
 | `409 upload_design_limit` | The upload already started 5 designs | Upload the PNG again |
 | `400 idempotency_key_required`, `invalid_idempotency_key` | Missing or malformed key | Send a new UUID |
 | `409 idempotency_key_reuse` | The key was used for a different request | Use a new key for the new request; resend the original body for the original key |
 | `401 invalid_credential`, `invalid_preimage`, `credential_mismatch` | The credential is not for this exact request | Repeat the original request exactly: same body, same key, same path |
 | `401 claim_token_required` | No Bearer token | Send `Authorization: Bearer <claim token>` |
+| `404 claim_not_found` | Unknown design or order id, or a token that does not match it | Check you sent the right token for this id (the design token for designs and quotes, the order token for orders). Never guess or reuse another token |
+| `404 quote_not_found` | Unknown quote id, or the token does not match | Request a new quote with the design token |
 | `409 payment_pending` | An invoice is bound | See [Lost 402s](#lost-402s-and-retries): redeem it, pay it, or wait for `paymentExpiresAt` |
 | `409 payment_superseded` | The credential is for an invoice replaced twice | Do not pay anything else. If you paid it, contact support@lightningenable.com with the id and payment hash |
 | `409 design_already_paid`, `order_already_paid` | Already paid | Repeat with your L402 credential to get the claim token |
@@ -589,6 +622,7 @@ to do next. "Nothing charged" means no invoice was paid by that answer.
 | `400 invoice_outlives_quote` | Not listed in the store's reference: a Lightning Enable API refusal of an invoice that would stay payable too long after the quote. The current store bounds the invoice itself | No invoice reached you, so there is nothing to pay. Request a new quote and try once more; if it repeats, contact support |
 | `429 mint_rate_limited`, `listing_quote_limit`, or any rate limit | Too many requests | Wait `Retry-After` seconds (60 if absent). Nothing charged |
 | `503 store_api_unavailable`, `artwork_storage_unavailable`, `invoice_unavailable`, `price_unavailable` | A dependency is busy | Retry after `Retry-After`; nothing is charged twice |
+| `503 pricing_unavailable` | The quote could not be turned into an invoice | Nothing charged. Request a new quote, show the person the new total, then check out again |
 | `503 pricing_not_configured`, `store_subscription_inactive` | The store is not set up to sell right now | Try later or contact the store |
 | `503 fulfillment_unavailable`, `fulfillment_busy` | The order is saved; Printful is busy | Retry the fulfill nudge after `Retry-After`, or let the store finish it |
 
@@ -610,8 +644,10 @@ exception, email support@lightningenable.com with the design or order id.
   total in sats. Pass `max_sats` equal to the invoice amount you showed.
 - **Check the invoice matches**: `amountSats` equals `designPriceSats` for
   Payment A and the quote's `priceSats` for Payment B. A mismatch is a stop.
-- **Check the artwork before paying the fee.** Never upload a PNG that
-  `check_artwork.py` says fails after the fee.
+- **Check the artwork before paying the fee.** Run `check_artwork.py` with the
+  shirt color and show the person every finding, the after-payment ones
+  (contrast above all) included, before Payment A. Exit 3 means the pixels went
+  unchecked: say so rather than calling the file fine.
 - **Same key, same body, on every retry.** Never mint a second invoice to get
   around a 409.
 - **Never self-approve a payment.** Confirmation codes come from the person.

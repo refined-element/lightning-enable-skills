@@ -5,11 +5,17 @@
   python scripts/check_artwork.py design.png --color black
   python scripts/check_artwork.py design.png --color "#0c0c0c" --json
 
-Why it exists: the store's upload checks only the file (size, type, PNG
-signature, dimensions, pixel count). Transparency, contrast with the shirt and
-empty margins are checked AFTER the design fee is paid. A fully transparent
-PNG passes the upload and then fails preparation, so the design fee buys
-nothing. Checking here first costs nothing.
+Why it exists: the store splits its artwork checks around the design fee (the
+custom catalog's ``artworkChecks``). At upload, free: size and declared type,
+PNG signature, dimensions and pixel count, decodability, visible content
+(NoVisibleContent is refused with 400 nothing_to_print), and the
+LowEffectiveDpi, NoTransparency and ExcessiveEmptyMargins warnings (margins
+only for artwork with transparency). After Payment A: metadata removal,
+colour-profile and animation discard, contrast against the garment and the
+final print file; an unprintable file ends in GenerationFailed with failureCode
+InvalidInput and keeps the fee. This script runs both sets locally, so the
+person sees the after-payment findings (LowContrastWithGarment above all)
+before anyone pays. Checking here costs nothing.
 
 Two layers:
 
@@ -29,9 +35,9 @@ empty margin warns, contrast ratio below 1.5 on half the visible artwork warns.
 
 The script reads one local file. It makes no network request and never pays.
 Exit status: 0 when the store would accept the file (warnings may still be
-listed), 1 when the upload would be refused or preparation would fail after
-the design fee, 2 for a usage error or a file that cannot be read.
-Python 3.10 or later.
+listed), 1 when the upload would be refused, 2 for a usage error or a file that
+cannot be read or decoded, 3 when the header checks pass but the pixels were
+not checked (Pillow is missing). Python 3.10 or later.
 """
 from __future__ import annotations
 
@@ -100,21 +106,28 @@ class Report:
     effective_dpi: int | None = None
     print_inches: tuple[float, float] | None = None
     refused: list[Finding] = field(default_factory=list)  # refused at upload; nothing is charged
-    fails_after_fee: list[Finding] = field(default_factory=list)  # fails once the design fee is paid
     warnings: list[Finding] = field(default_factory=list)
     pixel_checks: str = "skipped"
     stats: dict = field(default_factory=dict)
 
     @property
     def ok(self) -> bool:
-        return not self.refused and not self.fails_after_fee
+        return not self.refused
+
+    @property
+    def pixels_checked(self) -> bool:
+        return self.pixel_checks == "done"
 
     def has(self, code: str) -> bool:
-        return any(f.code == code for f in self.refused + self.fails_after_fee + self.warnings)
+        return any(f.code == code for f in self.refused + self.warnings)
 
 
 class PngError(ValueError):
     """The bytes are not a readable PNG."""
+
+
+class ArtworkDecodeError(RuntimeError):
+    """The header is valid but Pillow could not decode the pixels: the store refuses it too."""
 
 
 def parse_png(data: bytes) -> PngInfo:
@@ -243,10 +256,10 @@ def pixel_findings(
     report.pixel_checks = "done"
     report.stats.update(has_transparency=has_transparency, visible_fraction=round(visible / total, 4))
     if visible == 0:
-        report.fails_after_fee.append(Finding(
+        report.refused.append(Finding(
             "NoVisibleContent",
-            "nothing is opaque enough to print (no pixel at 50% alpha or more). The upload would "
-            "pass, then preparation fails and the design fee is spent."))
+            "nothing is opaque enough to print (no pixel at 50% alpha or more). The store refuses "
+            "it at upload with 400 nothing_to_print; nothing is charged. Make artwork with visible pixels."))
         return
     if not has_transparency and not report.has("NoTransparency"):
         report.warnings.append(Finding(
@@ -327,7 +340,10 @@ def check(path: Path, garment: str | None = None, pixels: bool = True) -> Report
     report.info = info
     header_findings(report, info)
     if pixels and not report.has("TooManyPixels"):
-        pillow_pixel_checks(report, path, garment)
+        try:
+            pillow_pixel_checks(report, path, garment)
+        except Exception as exc:  # noqa: BLE001 - any decoder failure means the same thing
+            raise ArtworkDecodeError(f"cannot decode the pixels ({type(exc).__name__}: {exc})") from exc
     return report
 
 
@@ -341,20 +357,18 @@ def render(report: Report) -> str:
         lines.append(
             f"  effective DPI {report.effective_dpi}; prints about {report.print_inches[0]} x "
             f"{report.print_inches[1]} in (fitted into 12 x 16 in, centred horizontally, top-aligned)")
-    if report.ok and report.pixel_checks != "done":
-        lines.append("VERDICT: the header checks pass, but the pixels were not checked. Whether anything "
-                     "is visible to print and how much margin is empty are unknown: install Pillow and "
-                     "check again before paying the design fee.")
+    if report.ok and not report.pixels_checked:
+        lines.append("VERDICT: the header checks pass, but the pixels were not checked (exit 3). Visible "
+                     "content, empty margins and contrast with the shirt are unknown here; the store checks "
+                     "the first two at upload, but contrast only after the design fee. Install Pillow and "
+                     "check again before paying.")
     elif report.ok:
         lines.append("VERDICT: the store accepts this file."
                      + (" Fix the warnings first if you can." if report.warnings else ""))
-    elif report.refused:
-        lines.append("VERDICT: the upload would be refused (nothing is charged). Fix it and check again.")
     else:
-        lines.append("VERDICT: do not upload. It passes the upload but fails after the design fee is paid.")
+        lines.append("VERDICT: the upload would be refused (nothing is charged). Fix it and check again.")
     for label, items in (
         ("refused at upload", report.refused),
-        ("fails after the design fee", report.fails_after_fee),
         ("warning", report.warnings),
     ):
         for finding in items:
@@ -379,7 +393,7 @@ def to_json(report: Report) -> str:
         "effectiveDpi": report.effective_dpi,
         "printInches": list(report.print_inches) if report.print_inches else None,
         "refusedAtUpload": items(report.refused),
-        "failsAfterDesignFee": items(report.fails_after_fee),
+        "pixelsChecked": report.pixels_checked,
         "warnings": items(report.warnings),
         "pixelChecks": report.pixel_checks,
         "stats": report.stats,
@@ -405,8 +419,14 @@ def main(argv: list[str] | None = None, stdout=None) -> int:
     except OSError as exc:
         print(f"error: cannot read {args.png}: {exc.strerror or exc}", file=sys.stderr)
         return 2
+    except ArtworkDecodeError as exc:
+        print(f"error: {args.png}: {exc}. The store refuses a PNG it cannot decode; export it again.",
+              file=sys.stderr)
+        return 2
     print(to_json(report) if args.json else render(report), file=stdout)
-    return 0 if report.ok else 1
+    if not report.ok:
+        return 1
+    return 0 if report.pixels_checked else 3
 
 
 if __name__ == "__main__":

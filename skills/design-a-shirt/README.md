@@ -23,9 +23,11 @@ does not hold funds; the payment provider facilitates custody and settlement.
   in.
 - **No account, no card.** Two Lightning invoices: a small design fee, then the
   shirt. Each is an L402 exchange the store verifies cryptographically.
-- **Checked before you pay.** `scripts/check_artwork.py` runs the store's print
-  checks locally (size, transparency, DPI, empty margins, contrast with the
-  shirt), so a file that would waste the design fee never gets uploaded.
+- **Checked before you pay.** The store refuses a PNG with nothing visible at
+  upload, free, and warns about DPI, an opaque background and empty margins.
+  `scripts/check_artwork.py` runs those checks locally and adds the ones the
+  store only reports after the design fee, contrast with the shirt above all,
+  so you see every finding before anyone pays.
 - **Sell it too, where the store allows.** An approved design can be published
   as a listing other people buy, after the store operator reviews it.
 
