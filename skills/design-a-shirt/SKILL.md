@@ -661,10 +661,10 @@ exception, email support@lightningenable.com with the design or order id.
 >
 > 1. `check_artwork.py bolt.png --color black` → 3,600 x 4,800, alpha yes,
 >    300 DPI, no findings. The person says the artwork is right.
-> 2. Catalog → design fee 1,000 sats. Upload → `upl_...`, no warnings.
-> 3. "The design fee is 1,000 sats and is not refunded if you don't like the
+> 2. Catalog → design fee 1,250 sats. Upload → `upl_...`, no warnings.
+> 3. "The design fee is 1,250 sats and is not refunded if you don't like the
 >    mockup. Pay it?" Yes. `POST /designs` → 402 → `get_balance()`,
->    `budget(action="status")` → `pay_invoice(invoice="lnbc...", max_sats=1000)`
+>    `budget(action="status")` → `pay_invoice(invoice="lnbc...", max_sats=1250)`
 >    → paid retry → `202`, claim token saved privately.
 > 4. Poll → `AwaitingApproval`, Printful mockup ready, no warnings.
 > 5. "Here is your approval link (keep it to yourself): ... Look at the mockup,
