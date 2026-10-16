@@ -20,6 +20,10 @@ What the suite holds, and where:
   ``l402_producer`` action and avoids the REST layer's field names.
 * ``test_shared_references.py``: the repo-level ``references/`` notes, and that
   the guards above scan them.
+* ``test_design_a_shirt.py``: the ``design-a-shirt`` skill. Offline tests of its
+  standard-library artwork checker (PNGs built in the test; the Pillow path runs
+  only where Pillow is installed), and text guards that pin every store route
+  the skill names to the store's documented ``/api/store/custom/*`` routes.
 * ``test_l402_*.py``: the ``l402-compatibility-report`` skill. These are
   behavioral tests of its standard-library script, run offline against the
   fixtures in ``fixtures/l402-challenges`` and ``fixtures/l402-evidence``, plus

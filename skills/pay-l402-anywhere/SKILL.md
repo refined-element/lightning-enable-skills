@@ -13,7 +13,7 @@ description: >-
   MCP or connect a wallet from nothing (use agent-wallet-setup), to find a
   paid API when the user has no URL yet (use discover-paid-apis), or to sell
   access to something (use sell-this or producer-setup). Buying physical goods
-  from a store is out of scope.
+  from a store is out of scope (for a custom T-shirt, use design-a-shirt).
 ---
 
 # Pay L402 anywhere

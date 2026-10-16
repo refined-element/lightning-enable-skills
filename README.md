@@ -32,6 +32,7 @@ default `standard` profile advertises.
 | ⚡ **[pay-l402-anywhere](skills/pay-l402-anywhere/)** | Pay any L402-gated endpoint from a bounded wallet: discover, confirm, pay per call. The general buyer. |
 | 🔭 **[discover-paid-apis](skills/discover-paid-apis/)** | Search the Lightning Enable registry, with Amazap as an additional source, compare labeled results, and try one with a single bounded purchase. |
 | 📚 **[cited-answer](skills/cited-answer/)** | Answer a question by buying exactly the paid data it needs over L402, cite every figure, show the sats receipt. |
+| 👕 **[design-a-shirt](skills/design-a-shirt/)** | Design a custom T-shirt from a PNG on a Lightning Enable store: check the artwork, pay the design fee and the shirt over L402, hand the approval and the address to the person, optionally publish it as a listing. |
 
 ### Sell
 
@@ -58,7 +59,10 @@ Each skill folder has a human-facing `README.md` (what it is) and an agent-facin
 and `lightning-enable-account` keeps a seller's plan paid in sats. On the buy
 side, `pay-l402-anywhere` is the general buyer, `discover-paid-apis` finds
 something worth buying in the Lightning Enable registry, and on Amazap as an
-additional source, and `cited-answer` is a task-specific buyer. On the sell
+additional source, and `cited-answer` is a task-specific buyer.
+`design-a-shirt` buys a physical product: a custom T-shirt from a store built
+on Lightning Enable's Run your own Lightning store product, with the person
+approving the design and entering the address. On the sell
 side, `producer-setup` is how an agent *becomes* a seller from a standing
 start, `create-l402-proxy` puts a whole API behind a paywall on an existing
 account, and `sell-this` charges for a single resource. The first two publish
