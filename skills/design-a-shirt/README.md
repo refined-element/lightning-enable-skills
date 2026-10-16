@@ -35,7 +35,7 @@ does not hold funds; the payment provider facilitates custody and settlement.
 
 1. **Specs and artwork.** Read the store's custom catalog, make or check the
    PNG (transparent background, 3,600 x 4,800 px ideal, PNG only).
-2. **Upload** (free), then **pay the design fee** (Payment A, 1,000 sats by
+2. **Upload** (free), then **pay the design fee** (Payment A, 1,250 sats on store.lightningenable.com; read the catalog, each store sets its own
    default) with `pay_invoice` and repeat the request with the L402 credential.
 3. **Mockup.** Poll the design until Printful's mockup is ready.
 4. **You approve** on the store's approval page, from a private link the agent
