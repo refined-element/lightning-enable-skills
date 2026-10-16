@@ -75,8 +75,8 @@ it. **Never tick, send or claim an acknowledgement on the person's behalf.**
   header only and says so.
 - **The artwork**: the person's PNG, or an image model to make one (see
   [Making the artwork](#making-the-artwork-with-an-image-model)).
-- Budget for two payments: the design fee (`designPriceSats`, 1,000 sats by
-  default) and the shirt (tens of thousands of sats).
+- Budget for two payments: the design fee (`designPriceSats`, set by the store; 1,250 sats on
+  store.lightningenable.com) and the shirt (a flat USD price converted to sats at quote time there).
 - Tools this skill uses:
   - `get_balance` and `budget(action="status")`: the funds and the spend caps,
     before each payment.
