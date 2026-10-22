@@ -54,6 +54,7 @@ from test_amazap_seller_handoff import (
     section_at,
 )
 from test_shared_references import CUSTODY
+from pinned_ref import SKILL_LINK_REF
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SKILL_DIR = REPO_ROOT / "skills" / "discover-paid-apis"
@@ -65,7 +66,7 @@ FIXTURE = Path(__file__).resolve().parent / "fixtures" / "amazap-products.json"
 DETAIL_FIXTURE = Path(__file__).resolve().parent / "fixtures" / "amazap-product-detail.json"
 
 REFERENCE_BASE = (
-    "https://github.com/refined-element/lightning-enable-skills/blob/main/"
+    f"https://github.com/refined-element/lightning-enable-skills/blob/{SKILL_LINK_REF}/"
     "references/amazap-marketplace.md"
 )
 REFERENCE_LINKS = (

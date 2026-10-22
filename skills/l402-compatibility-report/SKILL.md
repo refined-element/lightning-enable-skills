@@ -71,7 +71,7 @@ the same arguments in `camelCase`: `max_sats` → `maxSats`, `confirmation_nonce
 
 The five classifications, the redaction rules, and the ambiguous-payment rule
 are shared with the other skills in
-[L402 verification levels](https://github.com/refined-element/lightning-enable-skills/blob/main/references/l402-verification-levels.md).
+[L402 verification levels](https://github.com/refined-element/lightning-enable-skills/blob/587a7b7f5e867cde0bf3a0bc2a65bfbce48c42a0/references/l402-verification-levels.md).
 This skill states the parts it needs below.
 
 ## Flow

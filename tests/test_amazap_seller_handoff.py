@@ -34,12 +34,13 @@ import test_skill_metadata
 import test_tool_arguments_surface
 import test_tool_surface
 from test_shared_references import CLASSIFICATIONS, CUSTODY
+from pinned_ref import SKILL_LINK_REF
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SKILLS_DIR = REPO_ROOT / "skills"
 REFERENCE = REPO_ROOT / "references" / "amazap-marketplace.md"
 REFERENCE_URL = (
-    "https://github.com/refined-element/lightning-enable-skills/blob/main/"
+    f"https://github.com/refined-element/lightning-enable-skills/blob/{SKILL_LINK_REF}/"
     "references/amazap-marketplace.md#seller-handoff"
 )
 LIVE_PAGES = (
@@ -511,7 +512,7 @@ SUBMITTING_PUBLISHES = re.compile(
     r"Submitting (?:the form )?publishes the listing automatically once Amazap's checks pass"
 )
 REPORT_URL = (
-    "https://github.com/refined-element/lightning-enable-skills/tree/main/"
+    f"https://github.com/refined-element/lightning-enable-skills/tree/{SKILL_LINK_REF}/"
     "skills/l402-compatibility-report"
 )
 

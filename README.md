@@ -97,17 +97,53 @@ and settlement.
 ## Install
 
 Skills live in `~/.claude/skills/` (personal, all projects) or `.claude/skills/`
-(per-project). For example:
+(per-project). A skill is instructions your agent acts on, and several of these
+can spend from a wallet — so install them from a pinned commit, verified against
+hashes you reviewed, rather than copying whatever `main` happens to say today.
 
 ```bash
 git clone https://github.com/refined-element/lightning-enable-skills
-cp -r lightning-enable-skills/skills/agent-wallet-setup ~/.claude/skills/
+cd lightning-enable-skills
+
+# Read the installer, then check it against the digest the manifest records.
+# This is the one step nothing can do for you: it is what makes the rest trustworthy.
+sha256sum tools/install_skills.py
+python3 -c "import glob,json; print(json.load(open(sorted(glob.glob('manifests/*.json'))[-1]))['installer_sha256'])"
+
+# Stage the pinned bundle somewhere that is NOT a skills folder. The commit
+# comes from the manifest, so there is no version for you to type.
+python3 tools/install_skills.py fetch \
+    --manifest manifests/eebb4163519cf23bef592a44e453809fc9f79b10.json \
+    --staging ./le-skills-staging
+
+# Verify the whole bundle against that local manifest, then install
+python3 tools/install_skills.py install \
+    --manifest manifests/eebb4163519cf23bef592a44e453809fc9f79b10.json \
+    --staging ./le-skills-staging \
+    --dest ~/.claude/skills \
+    --skill agent-wallet-setup
 ```
+
+`--skill` is repeatable, `--all-skills` takes the lot, and `status --dest
+~/.claude/skills` shows which commit each installed skill came from. The
+installer refuses a branch name, a tag or a short SHA; refuses a manifest given
+as a URL; refuses to stage into a skills folder; and installs nothing unless
+every file in the bundle matches the manifest. Moving to a newer commit is an
+explicit `--allow-update`, never a background refresh.
+
+If you were given a release commit out of band, `git checkout <that SHA>` before
+the `sha256sum` step and you are reading a frozen installer rather than whichever
+one `main` served you. Either way the bundle you install is pinned by the
+manifest; this only pins the tool doing the checking.
+
+The full flow, the trust chain, and what it does *not* protect against:
+**[docs/INSTALL.md](docs/INSTALL.md)**. Manifest review and the installer
+digest: **[manifests/README.md](manifests/README.md)**.
 
 Then ask your agent to set you up to pay over Lightning. `agent-wallet-setup`
 installs the [Lightning Enable MCP](https://github.com/refined-element/lightning-enable-mcp),
 connects a wallet, sets a spend ceiling, and proves the loop with a 1-sat
-payment. Copy any other skill folder the same way.
+payment.
 
 ## How a skill works (30 seconds)
 
@@ -137,6 +173,12 @@ Every skill here that spends money follows the same rules:
 - **No secrets in this repo.** Payment authority lives only in your local MCP
   wallet and, for an Amazap buy, in your prepaid Amazap credits. Skills report
   a wallet string or API key as set or not set, never its value.
+- **Installed from a pinned commit, verified before it loads.** The skill files
+  your agent follows are fetched at one immutable commit, staged outside your
+  skills folder, and checked file by file against a manifest you reviewed
+  locally. A mutable ref is refused, a mismatch installs nothing, and an update
+  is an explicit choice — not a silent refresh. See
+  [docs/INSTALL.md](docs/INSTALL.md).
 - **Lightning Enable does not hold funds.** The wallet or the payment provider
   facilitates custody and settlement.
 

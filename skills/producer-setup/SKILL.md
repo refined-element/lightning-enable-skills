@@ -337,7 +337,7 @@ L402 compatibility report,
 step 5's purchase is its paid evidence. If `l402-compatibility-report` is not
 installed, paid delivery stays unverified and no classification is
 available: say so, and give the human its GitHub URL,
-https://github.com/refined-element/lightning-enable-skills/tree/main/skills/l402-compatibility-report.
+https://github.com/refined-element/lightning-enable-skills/tree/587a7b7f5e867cde0bf3a0bc2a65bfbce48c42a0/skills/l402-compatibility-report.
 
 - **Read-only check.** From that skill's folder, run it on the endpoint `url`
   from step 4, with the route's `http_method` from step 4 and the human's cap
@@ -469,7 +469,7 @@ after the hand-off, as an option; no answer means no.
 
 Lightning Enable does not hold funds; the payment provider facilitates custody
 and settlement. Full rules:
-[Amazap marketplace: Seller handoff](https://github.com/refined-element/lightning-enable-skills/blob/main/references/amazap-marketplace.md#seller-handoff).
+[Amazap marketplace: Seller handoff](https://github.com/refined-element/lightning-enable-skills/blob/587a7b7f5e867cde0bf3a0bc2a65bfbce48c42a0/references/amazap-marketplace.md#seller-handoff).
 
 ## What can go wrong
 
