@@ -24,6 +24,13 @@ What the suite holds, and where:
   standard-library artwork checker (PNGs built in the test; the Pillow path runs
   only where Pillow is installed), and text guards that pin every store route
   the skill names to the store's documented ``/api/store/custom/*`` routes.
+* ``test_install_skills.py``: the pinned-commit installer in ``tools/``. The
+  only module here that writes to disk: it builds staging directories and
+  tarballs under ``tmp_path``, runs the real verify/install code against them,
+  and asserts what ended up installed. Covers mutable-ref refusal, a clean
+  install, tampering, missing and extra files, unsafe paths and symlinks,
+  update opt-in, and that the shipped manifest still describes this checkout.
+  It opens no sockets -- ``fetch`` is exercised through its ``--archive`` path.
 * ``test_l402_*.py``: the ``l402-compatibility-report`` skill. These are
   behavioral tests of its standard-library script, run offline against the
   fixtures in ``fixtures/l402-challenges`` and ``fixtures/l402-evidence``, plus
@@ -32,7 +39,9 @@ What the suite holds, and where:
   pytest does not collect it.
 
 The suite has no shared pytest fixtures. Each module resolves the repo root from
-its own path, so any test file can run on its own. Cross-module imports: the
+its own path, so any test file can run on its own. ``test_install_skills.py``
+additionally puts ``tools/`` on ``sys.path`` to import the installer it tests.
+Cross-module imports: the
 ``l402_producer`` action table, which ``test_producer_setup_surface.py`` reads
 from ``test_tool_arguments_surface.py``; the guard file lists, which
 ``test_shared_references.py`` and ``test_l402_skill_text.py`` read from the
