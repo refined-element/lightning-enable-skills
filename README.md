@@ -104,19 +104,21 @@ hashes you reviewed, rather than copying whatever `main` happens to say today.
 ```bash
 git clone https://github.com/refined-element/lightning-enable-skills
 cd lightning-enable-skills
-git checkout 587a7b7f5e867cde0bf3a0bc2a65bfbce48c42a0   # the commit, not main
 
-# Read the installer once, and check it against the digest the manifest records
+# Read the installer, then check it against the digest the manifest records.
+# This is the one step nothing can do for you: it is what makes the rest trustworthy.
 sha256sum tools/install_skills.py
+python3 -c "import glob,json; print(json.load(open(sorted(glob.glob('manifests/*.json'))[-1]))['installer_sha256'])"
 
-# Stage the pinned commit somewhere that is NOT a skills folder
+# Stage the pinned bundle somewhere that is NOT a skills folder. The commit
+# comes from the manifest, so there is no version for you to type.
 python3 tools/install_skills.py fetch \
-    --manifest manifests/587a7b7f5e867cde0bf3a0bc2a65bfbce48c42a0.json \
+    --manifest manifests/eebb4163519cf23bef592a44e453809fc9f79b10.json \
     --staging ./le-skills-staging
 
-# Check the whole bundle against the local manifest, then install
+# Verify the whole bundle against that local manifest, then install
 python3 tools/install_skills.py install \
-    --manifest manifests/587a7b7f5e867cde0bf3a0bc2a65bfbce48c42a0.json \
+    --manifest manifests/eebb4163519cf23bef592a44e453809fc9f79b10.json \
     --staging ./le-skills-staging \
     --dest ~/.claude/skills \
     --skill agent-wallet-setup
@@ -128,6 +130,11 @@ installer refuses a branch name, a tag or a short SHA; refuses a manifest given
 as a URL; refuses to stage into a skills folder; and installs nothing unless
 every file in the bundle matches the manifest. Moving to a newer commit is an
 explicit `--allow-update`, never a background refresh.
+
+If you were given a release commit out of band, `git checkout <that SHA>` before
+the `sha256sum` step and you are reading a frozen installer rather than whichever
+one `main` served you. Either way the bundle you install is pinned by the
+manifest; this only pins the tool doing the checking.
 
 The full flow, the trust chain, and what it does *not* protect against:
 **[docs/INSTALL.md](docs/INSTALL.md)**. Manifest review and the installer

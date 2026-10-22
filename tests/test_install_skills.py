@@ -37,6 +37,7 @@ tests build.
 """
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import os
@@ -57,7 +58,7 @@ import make_manifest  # noqa: E402
 
 import pinned_ref  # noqa: E402  - tests/, already on the path
 
-PINNED_COMMIT = "587a7b7f5e867cde0bf3a0bc2a65bfbce48c42a0"
+PINNED_COMMIT = "eebb4163519cf23bef592a44e453809fc9f79b10"
 MANIFEST_PATH = REPO_ROOT / "manifests" / f"{PINNED_COMMIT}.json"
 INSTALLER = TOOLS / "install_skills.py"
 
@@ -1029,6 +1030,45 @@ def test_the_shipped_manifest_is_regenerable_from_this_checkout():
     assert rebuilt == MANIFEST_PATH.read_text(encoding="utf-8")
 
 
+def test_the_manifest_commit_really_contains_this_bundle():
+    """The pinned commit must be the commit whose tree these hashes come from.
+
+    ``make_manifest`` hashes the working tree and records whatever ``--commit``
+    it was given, so nothing stopped a manifest from pinning one commit while
+    describing another tree. Here the bundle is read back out of git at the
+    pinned commit and re-hashed.
+
+    Skipped when that object is not in the clone -- CI checks out a shallow
+    single commit, so the pinned parent may genuinely be absent. It is a full
+    check locally and in any complete clone.
+    """
+    import subprocess
+
+    commit = manifest().commit
+    present = subprocess.run(
+        ["git", "-C", str(REPO_ROOT), "cat-file", "-e", f"{commit}^{{commit}}"],
+        capture_output=True,
+    )
+    if present.returncode != 0:
+        pytest.skip(f"commit {commit[:12]} is not in this clone (shallow checkout)")
+
+    mismatched = []
+    for rel, digest in sorted(manifest().files.items()):
+        blob = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "show", f"{commit}:{rel}"],
+            capture_output=True,
+        )
+        if blob.returncode != 0:
+            mismatched.append(f"{rel} (absent at {commit[:12]})")
+        elif hashlib.sha256(blob.stdout).hexdigest() != digest:
+            mismatched.append(f"{rel} (differs at {commit[:12]})")
+    assert not mismatched, (
+        f"manifests/{commit}.json pins a commit whose tree does not match it: "
+        f"{mismatched[:5]}. Generate the manifest from a checkout of the commit "
+        "it names."
+    )
+
+
 def test_the_manifest_covers_every_skill_in_the_repo():
     on_disk = {p.name for p in (REPO_ROOT / "skills").iterdir() if p.is_dir()}
     assert set(manifest().skills) == on_disk
@@ -1119,7 +1159,10 @@ def test_the_readme_install_section_uses_the_verified_flow():
     assert "--staging" in section, "the example must stage before installing"
     assert "manifests/" in section, "the example must verify against a local manifest"
     assert re.search(r"\b[0-9a-f]{40}\b", section), "the example must show a full SHA"
-    assert "git checkout" in section, "the example must check out a pinned commit"
+    assert "sha256sum tools/install_skills.py" in section, (
+        "the example must tell the reader to check the installer out of band -- it is "
+        "the only real control on the tool doing the verifying"
+    )
     assert "cp -r" not in section, (
         "copying a clone of main straight into a skills folder is the flow this "
         "replaces -- point at the verified installer instead"
