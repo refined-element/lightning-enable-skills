@@ -258,7 +258,7 @@ Reuse that JSON report: never run a second paid check for the listing, and
 never pay again for the gate. It covers items 1 to 5 and 7. If there is no
 such report because `l402-compatibility-report` is not installed, the listing
 is not ready; give the human its GitHub URL,
-https://github.com/refined-element/lightning-enable-skills/tree/main/skills/l402-compatibility-report.
+https://github.com/refined-element/lightning-enable-skills/tree/587a7b7f5e867cde0bf3a0bc2a65bfbce48c42a0/skills/l402-compatibility-report.
 Read two fields from the JSON, the script's contract (`report_version` 2),
 never from the Markdown:
 

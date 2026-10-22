@@ -33,13 +33,14 @@ from test_amazap_seller_handoff import (
     section_at,
 )
 from test_shared_references import CLASSIFICATIONS, CUSTODY
+from pinned_ref import SKILL_LINK_REF
 
 LEVELS = REPO_ROOT / "references" / "l402-verification-levels.md"
 LEVELS_HEADING = "## Verifying your own endpoint"
 VERIFY_HEADING = re.compile(r"^### (\d+)\. Verify your endpoint[ \t]*$", re.MULTILINE)
 PAY_ONCE_TARGETS = ("levels", *SELLER_SKILLS)
 REPORT_URL = (
-    "https://github.com/refined-element/lightning-enable-skills/tree/main/"
+    f"https://github.com/refined-element/lightning-enable-skills/tree/{SKILL_LINK_REF}/"
     "skills/l402-compatibility-report"
 )
 READ_ONLY_COMMAND = re.compile(r"`python scripts/l402_check\.py <url>[^`]*`")

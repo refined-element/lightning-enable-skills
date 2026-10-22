@@ -38,7 +38,7 @@ Standard library only, Python 3.10+.
 Usage::
 
     python3 tools/install_skills.py fetch \
-        --commit <40-hex-sha> --staging ./staging
+        --manifest manifests/<sha>.json --staging ./staging
 
     python3 tools/install_skills.py verify \
         --manifest manifests/<sha>.json --staging ./staging
@@ -828,7 +828,29 @@ def install_skill(
 
 
 def cmd_fetch(args: argparse.Namespace) -> int:
-    commit = require_pinned_commit(args.commit)
+    # The commit may come from the reviewed manifest instead of being retyped.
+    # That is not a weakening of "an explicit full SHA is required": the SHA
+    # still comes from a pinned, local, reviewed artifact rather than a branch
+    # name -- and it is one fewer value for a human to paste wrong. A manifest
+    # pinning anything but a 40-hex SHA is refused when it is loaded.
+    manifest = load_manifest(args.manifest) if args.manifest else None
+    if manifest is not None:
+        check_installer_integrity(manifest)
+        commit = manifest.commit
+        if args.commit and require_pinned_commit(args.commit) != commit:
+            raise InstallError(
+                "commit_mismatch",
+                f"--commit {args.commit} does not match the commit this manifest "
+                f"pins ({commit}).",
+            )
+    elif args.commit:
+        commit = require_pinned_commit(args.commit)
+    else:
+        raise InstallError(
+            "mutable_ref",
+            "Pass --manifest <local manifest> (the commit comes from it) or "
+            "--commit <40-hex SHA>.",
+        )
     staging = Path(args.staging).expanduser()
     reject_autoload_dir(staging, "Staging directory")
 
@@ -866,7 +888,8 @@ def cmd_fetch(args: argparse.Namespace) -> int:
     print(f"  staging: {staging.resolve()}")
     print()
     print("Nothing is installed yet. Next:")
-    print(f"  python3 {sys.argv[0]} verify --manifest <local manifest> --staging {staging}")
+    manifest_arg = args.manifest or "<local manifest>"
+    print(f"  python3 {sys.argv[0]} verify --manifest {manifest_arg} --staging {staging}")
     return 0
 
 
@@ -999,7 +1022,14 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     fetch = sub.add_parser("fetch", help="download a pinned commit into a staging directory")
-    fetch.add_argument("--commit", required=True, help="full 40-character commit SHA")
+    fetch.add_argument(
+        "--manifest",
+        help="LOCAL reviewed manifest; the commit to fetch is read from it",
+    )
+    fetch.add_argument(
+        "--commit",
+        help="full 40-character commit SHA (not needed when --manifest is given)",
+    )
     fetch.add_argument("--staging", required=True, help="empty directory to stage into")
     fetch.add_argument("--repo", default=DEFAULT_REPO, help=f"owner/name (default {DEFAULT_REPO})")
     fetch.add_argument("--archive", help="use this local .tar.gz instead of downloading")

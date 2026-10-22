@@ -120,7 +120,7 @@ its paid evidence. These are the rules for that step.
    Markdown. If `l402-compatibility-report` is not installed, paid delivery
    stays unverified and no classification is available; give the human its
    GitHub URL,
-   https://github.com/refined-element/lightning-enable-skills/tree/main/skills/l402-compatibility-report.
+   https://github.com/refined-element/lightning-enable-skills/tree/587a7b7f5e867cde0bf3a0bc2a65bfbce48c42a0/skills/l402-compatibility-report.
 2. Read the result:
    - `INCOMPATIBLE`: give the fix the report names. A private, loopback,
      link-local, or non-HTTPS URL, a `200` to an unpaid request, or a `400`,

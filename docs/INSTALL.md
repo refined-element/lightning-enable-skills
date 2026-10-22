@@ -10,23 +10,29 @@ after it checks out.
 Three commands, in order. Nothing is installed until the third.
 
 ```bash
-# 1. Stage a pinned commit. Not main. Not a tag. The full 40-character SHA.
+# 1. Stage the pinned commit. The commit comes from the manifest, so there is
+#    exactly one version you handle: the one you checked out and reviewed.
 python3 tools/install_skills.py fetch \
-    --commit 587a7b7f5e867cde0bf3a0bc2a65bfbce48c42a0 \
+    --manifest manifests/<RELEASE_SHA>.json \
     --staging ./le-skills-staging
 
 # 2. Check the whole bundle against a manifest you already have locally.
 python3 tools/install_skills.py verify \
-    --manifest manifests/587a7b7f5e867cde0bf3a0bc2a65bfbce48c42a0.json \
+    --manifest manifests/<RELEASE_SHA>.json \
     --staging ./le-skills-staging
 
 # 3. Copy verified local files into your skills folder.
 python3 tools/install_skills.py install \
-    --manifest manifests/587a7b7f5e867cde0bf3a0bc2a65bfbce48c42a0.json \
+    --manifest manifests/<RELEASE_SHA>.json \
     --staging ./le-skills-staging \
     --dest ~/.claude/skills \
     --skill agent-wallet-setup
 ```
+
+`<RELEASE_SHA>` is the commit you checked out; `ls manifests/` in that checkout
+shows it. `--commit <sha>` is still accepted on `fetch` if you want to assert it
+explicitly, and is required if you pass no manifest — a branch name, a tag or a
+short SHA is refused either way.
 
 `--skill` is repeatable; `--all-skills` installs every skill the manifest
 covers. `status --dest ~/.claude/skills` prints what is installed and which
@@ -38,7 +44,14 @@ commit each skill came from.
 can change what your agent does, after you reviewed it, without touching your
 machine. `HEAD`, `latest`, a tag and an abbreviated SHA are all refused for the
 same reason — each can be repointed. A 40-character SHA names one tree of
-bytes forever.
+bytes forever. Taking it from the manifest rather than the command line keeps
+that property and removes a value you could paste wrong.
+
+**Links inside skill files are pinned too.** A hash-verified `SKILL.md` that
+says *"follow the rules at ‹URL on main⁠›"* is not pinned in any useful sense —
+and several of these skills did exactly that about money-spending rules. Every
+link from this repository to itself, in `skills/**/*.md` and `references/*.md`,
+now names a commit. A test fails the build if one goes back to a branch.
 
 **Staging is not your skills folder.** The download lands in a directory you
 name, and the installer refuses a staging path that has a `skills` component
@@ -172,14 +185,19 @@ you do not have:
   `SKILL.md`, and anything that can write that directory can also write it
   again after a `--force` repair. Detection plus repair is what this gives you,
   not prevention.
-- **Shared reference files are verified but not installed.** `references/` is
-  in the manifest and is hash-checked in staging, and then only `skills/<name>/`
-  is copied to your skills folder. Several installed `SKILL.md` files cite those
-  references by `blob/main/` URL, and a few do so as operative instructions
-  ("follow the row for that outcome in …"). Those documents are therefore still
-  read from a mutable branch at runtime, which is the one place the pinning
-  argument does not yet hold end to end. Tracked as the next change; see the
-  repository README.
+- **Shared reference files are fetched, not installed.** `references/` is in
+  the manifest and is hash-checked in staging, but only `skills/<name>/` is
+  copied to your skills folder. The `SKILL.md` files cite those references by
+  URL, and those URLs are now pinned to a commit — so the agent reads reviewed
+  bytes, but it does read them over the network at that moment. If GitHub is
+  unreachable the citation cannot be followed; a pinned URL cannot serve
+  different content.
+- **One link still points at a branch**, in
+  `skills/agent-wallet-setup/SKILL.md`: the `mcpb/` folder of the separate
+  `lightning-enable-mcp` repository. It is left deliberately. Pinning a commit
+  in a repository this manifest does not cover would pin bytes nobody reviewed
+  here, which is worse than naming the branch openly. It points at an installer
+  bundle for a human to download, not at rules an agent applies.
 - **The MCP server and the wallet.** Spend limits, the confirmation channel and
   the auto-approve threshold live in the Lightning Enable MCP and your
   `~/.lightning-enable/config.json`, not here. This flow changes nothing about

@@ -6,6 +6,7 @@ import pytest
 import l402_check_support as support
 import test_skill_metadata
 import test_tool_surface
+from pinned_ref import SKILL_LINK_REF
 from test_shared_references import (
     CLASSIFICATION_PATTERN,
     CLASSIFICATIONS,
@@ -18,7 +19,10 @@ from test_shared_references import (
 SKILL = support.SKILL_DIR / "SKILL.md"
 README = support.SKILL_DIR / "README.md"
 SHARED_REFERENCE = support.REPO_ROOT / "references" / "l402-verification-levels.md"
-REFERENCE_URL = "https://github.com/refined-element/lightning-enable-skills/blob/main/references/l402-verification-levels.md"
+REFERENCE_URL = (
+    f"https://github.com/refined-element/lightning-enable-skills/blob/{SKILL_LINK_REF}"
+    "/references/l402-verification-levels.md"
+)
 
 
 def flat(path):

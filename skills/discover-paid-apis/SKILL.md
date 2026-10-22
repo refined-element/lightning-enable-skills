@@ -42,9 +42,9 @@ change without notice, so read them from the current Amazap pages
 (https://amazap.com/llms.txt, https://amazap.com/mcp,
 https://amazap.com/credits) each time, never from memory. The shared rules
 for buying through Amazap are in the
-[Amazap reference](https://github.com/refined-element/lightning-enable-skills/blob/main/references/amazap-marketplace.md#discovery-versus-purchase),
+[Amazap reference](https://github.com/refined-element/lightning-enable-skills/blob/587a7b7f5e867cde0bf3a0bc2a65bfbce48c42a0/references/amazap-marketplace.md#discovery-versus-purchase),
 with its
-[two-wallet rule](https://github.com/refined-element/lightning-enable-skills/blob/main/references/amazap-marketplace.md#two-wallets).
+[two-wallet rule](https://github.com/refined-element/lightning-enable-skills/blob/587a7b7f5e867cde0bf3a0bc2a65bfbce48c42a0/references/amazap-marketplace.md#two-wallets).
 
 ## Two ways to buy
 
@@ -442,7 +442,7 @@ it never sets `accept_terms`.
 **Through Amazap, with `buy`.** These rules hold on every Amazap buy. The
 full mechanics, with retries, baskets, top-ups, and a row for each Amazap
 `buy` error, are in
-[Amazap marketplace: Buying through Amazap](https://github.com/refined-element/lightning-enable-skills/blob/main/references/amazap-marketplace.md#buying-through-amazap).
+[Amazap marketplace: Buying through Amazap](https://github.com/refined-element/lightning-enable-skills/blob/587a7b7f5e867cde0bf3a0bc2a65bfbce48c42a0/references/amazap-marketplace.md#buying-through-amazap).
 
 ```
 buy(<the listing and parameters from the quote>,
@@ -625,7 +625,7 @@ After a paid failure:
 | Amazap's tools aren't listed | Amazap's MCP isn't connected in this host | Search with `GET https://amazap.com/api/products`. For a buy, point the human at https://amazap.com/mcp. Never claim Amazap MCP access. |
 | An Amazap row shows `buyable: false` | The listing isn't payable now | Show it, unless it has `hidden: true`; a hidden row is dropped. Never buy it. |
 | An Amazap row is paused, degraded, or failing | `listingState` or `healthStatus` says so | Show it as not buyable, and never buy it, even with `buyable: true`. |
-| `buy` reports a stale quote, `approval_required`, `terms_required`, `not_yet_supported`, or an Amazap account limit; too few credits; or a paid Amazap call failed | An Amazap buy outcome | Follow the row for that outcome in [Amazap marketplace: Buying through Amazap](https://github.com/refined-element/lightning-enable-skills/blob/main/references/amazap-marketplace.md#buying-through-amazap). Never buy on an old yes, never work around `approval_required`, and never buy a replacement without asking. |
+| `buy` reports a stale quote, `approval_required`, `terms_required`, `not_yet_supported`, or an Amazap account limit; too few credits; or a paid Amazap call failed | An Amazap buy outcome | Follow the row for that outcome in [Amazap marketplace: Buying through Amazap](https://github.com/refined-element/lightning-enable-skills/blob/587a7b7f5e867cde0bf3a0bc2a65bfbce48c42a0/references/amazap-marketplace.md#buying-through-amazap). Never buy on an old yes, never work around `approval_required`, and never buy a replacement without asking. |
 | The user already has the URL | Nothing to discover | Hand off to `pay-l402-anywhere`. That handoff is for a URL the user already has, never for a listing Amazap surfaced. |
 | The input holds something sensitive | Secrets, a private or logged-in URL, credentials, personal data, or proprietary content | Don't send it unless the user explicitly approved that disclosure. Say what you found, and buy nothing. |
 | No fresh quote, or it doesn't match the parameters | Quote failure | Nothing was charged. Never buy on an old or mismatched quote. Quote again, or pick another candidate with the user. |

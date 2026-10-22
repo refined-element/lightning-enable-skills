@@ -55,6 +55,8 @@ sys.path.insert(0, str(TOOLS))
 import install_skills as inst  # noqa: E402
 import make_manifest  # noqa: E402
 
+import pinned_ref  # noqa: E402  - tests/, already on the path
+
 PINNED_COMMIT = "587a7b7f5e867cde0bf3a0bc2a65bfbce48c42a0"
 MANIFEST_PATH = REPO_ROOT / "manifests" / f"{PINNED_COMMIT}.json"
 INSTALLER = TOOLS / "install_skills.py"
@@ -644,6 +646,36 @@ def test_fetch_then_verify_accepts_an_archive_of_the_pinned_commit(tmp_path: Pat
     ) == 0
 
 
+def test_fetch_takes_the_commit_from_the_manifest(tmp_path: Path):
+    """One SHA for the human: the bundle commit comes from the reviewed file."""
+    members = {rel: (REPO_ROOT / rel).read_bytes() for rel in sorted(manifest().files)}
+    archive = make_archive(
+        tmp_path / "b.tar.gz", members, prefix=f"lightning-enable-skills-{PINNED_COMMIT}"
+    )
+    staging = tmp_path / "staging"
+    assert inst.main(
+        ["fetch", "--manifest", str(MANIFEST_PATH), "--staging", str(staging),
+         "--archive", str(archive)]
+    ) == 0
+    assert inst.main(
+        ["verify", "--manifest", str(MANIFEST_PATH), "--staging", str(staging)]
+    ) == 0
+
+
+def test_fetch_refuses_a_commit_that_contradicts_the_manifest(tmp_path: Path):
+    archive = make_archive(tmp_path / "b.tar.gz", {"skills/a/SKILL.md": b"x\n"})
+    assert inst.main(
+        ["fetch", "--manifest", str(MANIFEST_PATH), "--commit", "a" * 40,
+         "--staging", str(tmp_path / "s"), "--archive", str(archive)]
+    ) == 2
+    assert not (tmp_path / "s").exists()
+
+
+def test_fetch_still_refuses_with_neither_commit_nor_manifest(tmp_path: Path):
+    assert inst.main(["fetch", "--staging", str(tmp_path / "s")]) == 2
+    assert not (tmp_path / "s").exists()
+
+
 def test_fetch_refuses_a_non_empty_staging_directory(tmp_path: Path):
     staging = tmp_path / "staging"
     staging.mkdir()
@@ -1084,14 +1116,16 @@ def test_the_readme_install_section_uses_the_verified_flow():
     section = text[start : end if end > 0 else len(text)]
 
     assert "tools/install_skills.py" in section
-    assert "--commit" in section
-    assert "--staging" in section
-    assert "manifests/" in section
+    assert "--staging" in section, "the example must stage before installing"
+    assert "manifests/" in section, "the example must verify against a local manifest"
     assert re.search(r"\b[0-9a-f]{40}\b", section), "the example must show a full SHA"
+    assert "git checkout" in section, "the example must check out a pinned commit"
     assert "cp -r" not in section, (
         "copying a clone of main straight into a skills folder is the flow this "
         "replaces -- point at the verified installer instead"
     )
+    # The pinned version must not be a branch anywhere in the example.
+    assert not re.search(r"(--commit|git checkout)\s+(main|master|HEAD|latest)\b", section)
 
 
 def test_the_install_doc_exists_and_explains_the_trust_chain():
@@ -1107,6 +1141,87 @@ def test_the_install_doc_exists_and_explains_the_trust_chain():
     ):
         assert needle in text, f"docs/INSTALL.md should cover {needle}"
     assert re.search(r"\b[0-9a-f]{40}\b", text)
+
+
+# --- Pinned links inside skill files ----------------------------------------
+#
+# A hash-verified SKILL.md that says "follow the rules at <mutable URL>" is not
+# pinned in any useful sense. These guard the fix.
+
+
+# One rule, repo-wide: a link from this repository to itself names a commit.
+# SKILL.md and references/*.md because an agent reads them; the skill READMEs
+# too, so a human browsing a pinned skill sees the matching version of the
+# reference rather than a newer one.
+AGENT_LOADED = sorted(
+    list((REPO_ROOT / "skills").glob("*/*.md"))
+    + list((REPO_ROOT / "references").glob("*.md"))
+)
+
+
+@pytest.mark.parametrize(
+    "path", AGENT_LOADED, ids=lambda p: p.relative_to(REPO_ROOT).as_posix()
+)
+def test_skill_files_never_link_to_this_repos_mutable_branch(path: Path):
+    """An operative link must name a commit, not a branch.
+
+    `discover-paid-apis/SKILL.md` tells the agent to "follow the row for that
+    outcome in <link>" about spending money. On `main` that is a document anyone
+    with push access can rewrite after the user reviewed the skill.
+
+    Links to OTHER repositories are out of scope: pinning a SHA in a repository
+    this manifest does not cover would pin something unreviewed. One such link
+    remains, to lightning-enable-mcp, and is recorded in docs/INSTALL.md.
+    """
+    text = path.read_text(encoding="utf-8")
+    offenders = re.findall(
+        rf"https://{re.escape(pinned_ref.SELF_REPO)}/(?:blob|tree)/"
+        r"(main|master|HEAD|latest|v[0-9][^/\s)]*)/",
+        text,
+    )
+    assert not offenders, (
+        f"{path.relative_to(REPO_ROOT)} links to {sorted(set(offenders))} in this "
+        "repository. Agent-loaded files must pin a commit -- see tests/pinned_ref.py."
+    )
+
+
+@pytest.mark.parametrize(
+    "path", AGENT_LOADED, ids=lambda p: p.relative_to(REPO_ROOT).as_posix()
+)
+def test_every_pinned_self_link_uses_the_one_reviewed_ref(path: Path):
+    """One ref across the repo, so a repoint cannot be done by halves."""
+    refs = set(
+        re.findall(
+            rf"https://{re.escape(pinned_ref.SELF_REPO)}/(?:blob|tree)/([^/\s)]+)/",
+            path.read_text(encoding="utf-8"),
+        )
+    )
+    unexpected = refs - {pinned_ref.SKILL_LINK_REF}
+    assert not unexpected, (
+        f"{path.relative_to(REPO_ROOT)} pins {sorted(unexpected)}; "
+        f"tests/pinned_ref.py says {pinned_ref.SKILL_LINK_REF}."
+    )
+
+
+def test_the_pinned_ref_is_a_full_commit_sha():
+    assert inst.require_pinned_commit(pinned_ref.SKILL_LINK_REF)
+
+
+def test_the_pinned_links_resolve_to_files_that_exist():
+    """A pinned link to a path that was since renamed is a dead instruction."""
+    missing = []
+    for path in AGENT_LOADED:
+        for rel in re.findall(
+            rf"https://{re.escape(pinned_ref.SELF_REPO)}/(?:blob|tree)/"
+            rf"{pinned_ref.SKILL_LINK_REF}/([^\s)#]+)",
+            path.read_text(encoding="utf-8"),
+        ):
+            # Several of these are bare URLs ending a sentence, so the period
+            # belongs to the prose, not the path.
+            rel = rel.rstrip(".,;:")
+            if not (REPO_ROOT / rel).exists():
+                missing.append(f"{path.relative_to(REPO_ROOT)} -> {rel}")
+    assert not missing, missing
 
 
 def test_no_doc_tells_a_reader_to_pipe_a_raw_url_into_a_skills_folder():

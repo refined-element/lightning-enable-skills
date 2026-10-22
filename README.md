@@ -111,7 +111,7 @@ sha256sum tools/install_skills.py
 
 # Stage the pinned commit somewhere that is NOT a skills folder
 python3 tools/install_skills.py fetch \
-    --commit 587a7b7f5e867cde0bf3a0bc2a65bfbce48c42a0 \
+    --manifest manifests/587a7b7f5e867cde0bf3a0bc2a65bfbce48c42a0.json \
     --staging ./le-skills-staging
 
 # Check the whole bundle against the local manifest, then install

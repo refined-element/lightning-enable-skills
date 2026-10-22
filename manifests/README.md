@@ -66,6 +66,13 @@ sha256sum tools/install_skills.py        # add to the table above
 Commit the manifest on top of `<sha>`, then update the table and the examples
 in `README.md` and `docs/INSTALL.md` to the new commit.
 
+**If this release changed anything under `references/`**, repoint the pinned
+self-links first, in a commit of its own, before generating the manifest: set
+`SKILL_LINK_REF` in `tests/pinned_ref.py` to a commit carrying the new reference
+content and re-run the freeze. `skills/**/*.md` and `references/*.md` may not
+link to `main` — `test_install_skills.py` fails the build on any that do, and on
+a repo where the pinned refs disagree with each other.
+
 Two things to keep straight:
 
 - **`tools/` is not in the bundle.** You do not download your own verifier. The

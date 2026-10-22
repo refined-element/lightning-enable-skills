@@ -95,7 +95,7 @@ any price change in your code, re-run Amazap's checks. The agent never calls
 the API listed until it has read the listing back from Amazap. Lightning
 Enable does not hold funds; the payment provider facilitates custody and
 settlement. Details:
-[Amazap marketplace: Seller handoff](https://github.com/refined-element/lightning-enable-skills/blob/main/references/amazap-marketplace.md#seller-handoff).
+[Amazap marketplace: Seller handoff](https://github.com/refined-element/lightning-enable-skills/blob/587a7b7f5e867cde0bf3a0bc2a65bfbce48c42a0/references/amazap-marketplace.md#seller-handoff).
 
 ## Related skills
 
