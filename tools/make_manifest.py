@@ -12,9 +12,12 @@ is empty, the manifest describes that commit and nothing else.
     diff <(git show <sha>:manifests/<sha>.json) manifests/<sha>.json
 
 The manifest covers ``skills/`` and ``references/``: everything an installed
-skill is made of, plus the shared instruction files skills cite. Never-tracked
-build artifacts (``__pycache__``, ``*.pyc``, ``.DS_Store``) are skipped, since a
-fetched archive never carries them; the verifier still refuses them in staging. It does not
+skill is made of, plus the shared instruction files skills cite. Note that
+``references/`` is VERIFIED but not INSTALLED -- ``install_skill`` copies only
+``skills/<name>/`` -- so the cited documents are still read from the repository
+at runtime. Never-tracked build artifacts (``__pycache__``, ``*.pyc``,
+``.DS_Store``) are skipped, since a fetched archive never carries them; the
+verifier still refuses them in staging. It does not
 cover ``tools/`` -- the installer is not fetched by the installer. It records
 the installer's SHA-256 separately so a mismatched pair is caught, and so the
 digest can be published for an out-of-band check.

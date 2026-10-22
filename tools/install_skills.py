@@ -80,18 +80,32 @@ SKILL_NAME = re.compile(r"\A[a-z0-9]+(-[a-z0-9]+)*\Z")
 
 RECEIPT_NAME = ".lightning-enable-install.json"
 
-# Staging must never be a folder an agent loads skills from. Downloaded,
-# not-yet-verified instructions sitting in one of these is the whole failure
-# mode this installer exists to prevent.
-AUTOLOAD_DIR_NAMES = (
-    ("claude", "skills"),
-    (".claude", "skills"),
-    ("agent", "skills"),
-    (".agent", "skills"),
-    (".codeium", "skills"),
-    (".cursor", "skills"),
-    (".config", "claude", "skills"),
+# Staging must never be a folder an agent loads skills from: downloaded,
+# not-yet-verified instructions sitting in one is the whole failure mode this
+# installer exists to prevent.
+#
+# Matched as a "skills" directory under any agent-configuration directory. Not adjacency:
+# plugin-distributed skills live at ~/.claude/plugins/<plugin>/skills, which is
+# how this repo is consumed, and an adjacent-pair check misses it. This is a
+# blocklist and cannot know every host's layout -- the docs say "these paths",
+# not "every path an agent loads from".
+AGENT_CONFIG_DIRS = frozenset(
+    {
+        "claude",
+        ".claude",
+        "agent",
+        ".agent",
+        "agents",
+        ".agents",
+        ".codeium",
+        ".cursor",
+        "codex",
+        ".codex",
+        "plugins",
+        ".config",
+    }
 )
+SKILLS_DIR_NAMES = frozenset({"skills"})
 
 MAX_ARCHIVE_BYTES = 256 * 1024 * 1024
 MAX_MEMBER_BYTES = 32 * 1024 * 1024
@@ -175,24 +189,35 @@ def require_bundle_path(raw: str) -> PurePosixPath:
             "unexpected_file",
             f"Path {raw!r} is outside the bundle roots {list(BUNDLE_ROOTS)}.",
         )
+    if len(path.parts) < 2:
+        raise InstallError(
+            "unexpected_file",
+            f"Path {raw!r} is a bundle root, not a file inside one.",
+        )
     return path
 
 
 def reject_autoload_dir(path: Path, what: str) -> None:
-    """Refuse a staging directory that is (or is inside) a skills folder."""
+    """Refuse a staging directory that is, or sits under, a skills folder.
+
+    Matches a ``skills`` component that has an agent-configuration directory
+    somewhere above it, so ``~/.claude/skills``, ``~/.claude/plugins/x/skills``
+    and ``~/.config/claude/skills`` are all caught. ``resolve()`` runs first, so
+    a symlink pointing into one of these is caught too.
+    """
     resolved = path.expanduser().resolve()
-    parts = tuple(resolved.parts)
-    lowered = tuple(p.lower() for p in parts)
-    for marker in AUTOLOAD_DIR_NAMES:
-        width = len(marker)
-        for i in range(len(lowered) - width + 1):
-            if lowered[i : i + width] == marker:
-                raise InstallError(
-                    "staging_is_autoload_dir",
-                    f"{what} {resolved} is inside an agent's skills folder "
-                    f"({'/'.join(marker)}). Unverified downloads must never land "
-                    "where an agent loads them. Stage somewhere else, then install.",
-                )
+    lowered = [part.lower() for part in resolved.parts]
+    for index, part in enumerate(lowered):
+        if part in SKILLS_DIR_NAMES and any(
+            ancestor in AGENT_CONFIG_DIRS for ancestor in lowered[:index]
+        ):
+            matched = "/".join(resolved.parts[: index + 1])
+            raise InstallError(
+                "staging_is_autoload_dir",
+                f"{what} {resolved} is inside an agent's skills folder ({matched}). "
+                "Unverified downloads must never land where an agent loads them. "
+                "Stage somewhere else, then install.",
+            )
 
 
 def sha256_file(path: Path) -> str:
@@ -589,25 +614,98 @@ def read_receipt(skill_dir: Path) -> dict | None:
     return data if isinstance(data, dict) else None
 
 
-def _locally_modified(skill_dir: Path, receipt: dict) -> list[str]:
-    """Files whose on-disk bytes no longer match what the receipt recorded."""
-    recorded = receipt.get("files")
-    if not isinstance(recorded, dict):
-        return []
-    drifted = []
-    for rel, digest in sorted(recorded.items()):
-        try:
-            path = skill_dir / safe_relpath(str(rel))
-        except InstallError:
-            drifted.append(str(rel))
-            continue
+def _destination_drift(skill_dir: Path, expected: dict[str, str]) -> list[str]:
+    """How the installed directory differs from what the MANIFEST says it holds.
+
+    ``expected`` maps skill-relative path -> SHA-256, taken from the manifest.
+    The receipt is deliberately NOT the source of truth here: it lives inside
+    the directory it vouches for, with the same permissions as the files it
+    describes, so anyone who can edit a ``SKILL.md`` can edit the digest beside
+    it. The receipt records only WHICH commit is installed; the manifest says
+    what that commit contains.
+
+    Set-exact in both directions, like ``scan_staging``: a changed file, a
+    missing file and an ADDED file are all drift. Added files matter --
+    ``skills/l402-compatibility-report/scripts/*.py`` sibling-import each other,
+    so a planted ``__pycache__/*.pyc`` in the installed directory can be loaded
+    in place of a verified ``.py``. That is why the destination is enumerated
+    rather than just spot-checked against a list.
+    """
+    drifted: list[str] = []
+    for rel, digest in sorted(expected.items()):
+        path = skill_dir / PurePosixPath(rel)
         if (
             not path.is_file()
             or path.is_symlink()
-            or not hmac.compare_digest(sha256_file(path), str(digest))
+            or not hmac.compare_digest(sha256_file(path), digest)
         ):
-            drifted.append(str(rel))
-    return drifted
+            drifted.append(rel)
+
+    if not skill_dir.is_dir() or skill_dir.is_symlink():
+        return drifted or ["<missing>"]
+    for dirpath, dirnames, filenames in os.walk(skill_dir, followlinks=False):
+        here = Path(dirpath)
+        for name in sorted(dirnames):
+            if (here / name).is_symlink():
+                drifted.append((here / name).relative_to(skill_dir).as_posix() + "/")
+        for name in sorted(filenames):
+            rel = (here / name).relative_to(skill_dir).as_posix()
+            if rel != RECEIPT_NAME and rel not in expected:
+                drifted.append(rel)
+    return sorted(set(drifted))
+
+
+def preflight_skill(
+    manifest: Manifest,
+    dest: Path,
+    name: str,
+    *,
+    allow_update: bool = False,
+    force: bool = False,
+) -> None:
+    """Raise whatever ``install_skill`` would raise, before anything is copied.
+
+    Lets ``cmd_install`` decide every per-skill refusal up front, so a multi-skill
+    run is all-or-nothing rather than stopping half way through with some skills
+    already replaced.
+    """
+    target = dest / name
+    existing = read_receipt(target)
+    expected = {
+        str(PurePosixPath(rel).relative_to(f"skills/{name}")): digest
+        for rel, digest in manifest.files.items()
+        if rel.startswith(f"skills/{name}/")
+    }
+    if existing is not None:
+        if existing.get("commit") == manifest.commit:
+            drifted = _destination_drift(target, expected)
+            if drifted and not force:
+                raise InstallError(
+                    "local_modification",
+                    f"{target} is installed from the same commit, but the directory no "
+                    f"longer matches the manifest: {', '.join(drifted)}. Something "
+                    "changed the instructions your agent loads. Review them, then "
+                    "re-run with --force to restore the verified copies.",
+                )
+        elif not allow_update:
+            raise InstallError(
+                "update_requires_opt_in",
+                f"{target} already holds {name} from commit "
+                f"{existing.get('commit', 'unknown')}. This manifest pins "
+                f"{manifest.commit}. Updating replaces instructions your agent runs, "
+                "so it is an explicit choice: review the new version, then re-run with "
+                "--allow-update.",
+            )
+    elif target.exists():
+        if target.is_symlink():
+            raise InstallError("unsafe_symlink", f"{target} is a symlink. Refusing to replace it.")
+        if not force:
+            raise InstallError(
+                "unmanaged_destination",
+                f"{target} exists and was not installed by this tool (no {RECEIPT_NAME}). "
+                "Refusing to overwrite it. Move it aside, or pass --force if you are "
+                "sure it can be replaced.",
+            )
 
 
 def install_skill(
@@ -633,20 +731,28 @@ def install_skill(
     existing = read_receipt(target)
     restoring = False
 
+    files = sorted(p for p in manifest.files if p.startswith(f"skills/{name}/"))
+    expected = {
+        str(PurePosixPath(rel).relative_to(f"skills/{name}")): manifest.files[rel]
+        for rel in files
+    }
+
     if existing is not None:
         if existing.get("commit") == manifest.commit:
-            drifted = _locally_modified(target, existing)
-            if not drifted:
-                return "unchanged"
-            restoring = True
-            if not force:
+            drifted = _destination_drift(target, expected)
+            if drifted and not force:
                 raise InstallError(
                     "local_modification",
-                    f"{target} is installed from the same commit, but these files have "
-                    f"changed on disk since: {', '.join(drifted)}. Something edited the "
-                    "instructions your agent loads. Review them, then re-run with --force "
-                    "to restore the verified copies.",
+                    f"{target} is installed from the same commit, but the directory no "
+                    f"longer matches the manifest: {', '.join(drifted)}. Something "
+                    "changed the instructions your agent loads. Review them, then "
+                    "re-run with --force to restore the verified copies.",
                 )
+            if not force:
+                return "unchanged"
+            # --force always re-copies, drift or not: it is the documented repair,
+            # and a short-circuit here would leave planted extra files in place.
+            restoring = True
         elif not allow_update:
             raise InstallError(
                 "update_requires_opt_in",
@@ -667,7 +773,6 @@ def install_skill(
                 "sure it can be replaced.",
             )
 
-    files = sorted(p for p in manifest.files if p.startswith(f"skills/{name}/"))
     dest.mkdir(parents=True, exist_ok=True)
 
     staged_target = Path(
@@ -689,10 +794,7 @@ def install_skill(
             "manifest_path": str(manifest.path.resolve()),
             "manifest_sha256": sha256_file(manifest.path),
             "installer_sha256": manifest.installer_sha256,
-            "files": {
-                str(PurePosixPath(rel).relative_to(f"skills/{name}")): manifest.files[rel]
-                for rel in files
-            },
+            "files": dict(expected),
         }
         (staged_target / RECEIPT_NAME).write_text(
             json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8"
@@ -755,7 +857,12 @@ def cmd_fetch(args: argparse.Namespace) -> int:
         written = extract_bundle(archive, staging)
 
     print(f"Fetched {len(written)} bundle files from {origin}")
-    print(f"  commit:  {commit}")
+    if args.archive:
+        # Nothing here checked that this archive IS that commit; `verify` against
+        # the local manifest is what binds it. Don't print an unchecked claim.
+        print(f"  declared commit (UNVERIFIED until you run verify): {commit}")
+    else:
+        print(f"  commit:  {commit}")
     print(f"  staging: {staging.resolve()}")
     print()
     print("Nothing is installed yet. Next:")
@@ -834,6 +941,12 @@ def cmd_install(args: argparse.Namespace) -> int:
                 "unknown_skill",
                 f"{name!r} is not in this manifest. It covers: {', '.join(manifest.skills)}",
             )
+
+    # Pre-flight: a refusal on the third skill must not leave the first two
+    # replaced. Every per-skill refusal is decided from state on disk, so it can
+    # be decided for all of them before the first copy happens.
+    for name in wanted:
+        preflight_skill(manifest, dest, name, allow_update=args.allow_update, force=args.force)
 
     print(f"Verified {len(manifest.files)} files against {manifest.path}")
     print(f"Installing from commit {manifest.commit} into {dest.resolve() if dest.exists() else dest}")

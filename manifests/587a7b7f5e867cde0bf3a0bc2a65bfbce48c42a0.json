@@ -49,7 +49,7 @@
     "skills/sell-this/README.md": "5fee75f2d17edbbc4d93adf08a53f9e608b953a50d6ff0f477d74f67a4b38148",
     "skills/sell-this/SKILL.md": "0aa1f74eac81dc101cebe6d788b4f58bdc96dcc54817d99af607cf54ef797f5a"
   },
-  "installer_sha256": "373ffe184f76cbb8877235c0f9fd5247b52daf66181beafb9360d51dd00d33c2",
+  "installer_sha256": "03baadce117eee56fd1ecb7c6db2eb45f8473b5ab5caae3e8e18552261719fc9",
   "repo": "refined-element/lightning-enable-skills",
   "schema": "lightning-enable-skills/bundle-manifest@1"
 }

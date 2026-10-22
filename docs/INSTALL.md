@@ -41,10 +41,13 @@ same reason — each can be repointed. A 40-character SHA names one tree of
 bytes forever.
 
 **Staging is not your skills folder.** The download lands in a directory you
-name, and the installer refuses a staging path inside `~/.claude/skills`,
-`.claude/skills`, `.cursor/skills` and the other paths agents auto-load from.
-Unverified instructions must never sit somewhere an agent might pick them up
-mid-check.
+name, and the installer refuses a staging path that has a `skills` component
+under an agent-configuration directory — `~/.claude/skills`,
+`~/.claude/plugins/<plugin>/skills`, `~/.config/claude/skills`, `.cursor/skills`
+and so on. Unverified instructions must never sit somewhere an agent might pick
+them up mid-check. This is a blocklist, not an exhaustive one: it cannot know
+every host's layout, so choose a staging directory well away from your agent
+config rather than relying on the check to catch it.
 
 **The manifest has to be local.** `--manifest` takes a file path; a URL is
 refused outright. This is the part that is easy to get wrong: downloading a
@@ -75,9 +78,23 @@ It opens no connection.
 same commit is a no-op. A manifest pinning a *different* commit is refused
 until you pass `--allow-update`, which is you saying you reviewed the new
 version. There is no "check for updates" anywhere in this tool; it never
-contacts GitHub during install. If a skill was edited on disk after
-installation, the installer says so instead of calling it unchanged, and
-`--force` restores the verified copy.
+contacts GitHub during install.
+
+**Drift in an installed skill is checked against the manifest, not the
+receipt.** The receipt says *which* commit is installed; the manifest says what
+that commit contains. That split matters: the receipt sits inside the directory
+it describes, with the same permissions as the files it vouches for, so anything
+able to edit a `SKILL.md` could edit a digest beside it. The check is also
+set-exact in both directions — a changed file, a missing file **and an added
+file** are all drift. Added files are the sharp case: the report skill's helper
+scripts import each other from their own directory, so a planted
+`__pycache__/*.pyc` could be loaded in place of a verified `.py`. `--force`
+always re-copies the whole directory, which is what makes "restores the verified
+copy" true: planted files are removed, not merely overwritten.
+
+**A multi-skill install is all-or-nothing.** Every per-skill refusal is decided
+before the first file is copied, so a refusal on the third skill cannot leave
+the first two already replaced.
 
 ## Verifying the installer itself
 
@@ -149,9 +166,20 @@ you do not have:
   skills from a remote source by itself, this installer never sees it. It
   manages files in the destination directory you name, and nothing else. Check
   your host's own skill-loading behavior; the installer cannot constrain it.
-- **Changes after install.** The receipt lets the installer *detect* on-disk
-  edits the next time it runs. It is not a running integrity monitor, and
-  nothing stops another process from editing an installed `SKILL.md`.
+- **Changes after install.** The installer *detects* drift the next time it
+  runs, against the manifest and set-exactly (see above). It is not a running
+  integrity monitor: nothing stops another process from editing an installed
+  `SKILL.md`, and anything that can write that directory can also write it
+  again after a `--force` repair. Detection plus repair is what this gives you,
+  not prevention.
+- **Shared reference files are verified but not installed.** `references/` is
+  in the manifest and is hash-checked in staging, and then only `skills/<name>/`
+  is copied to your skills folder. Several installed `SKILL.md` files cite those
+  references by `blob/main/` URL, and a few do so as operative instructions
+  ("follow the row for that outcome in …"). Those documents are therefore still
+  read from a mutable branch at runtime, which is the one place the pinning
+  argument does not yet hold end to end. Tracked as the next change; see the
+  repository README.
 - **The MCP server and the wallet.** Spend limits, the confirmation channel and
   the auto-approve threshold live in the Lightning Enable MCP and your
   `~/.lightning-enable/config.json`, not here. This flow changes nothing about
