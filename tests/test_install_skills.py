@@ -1171,6 +1171,19 @@ def test_the_readme_install_section_uses_the_verified_flow():
     assert not re.search(r"(--commit|git checkout)\s+(main|master|HEAD|latest)\b", section)
 
 
+def test_manifest_link_labels_match_their_targets():
+    """A truncated SHA in a link label must be the SHA it links to.
+
+    Caught after a blanket SHA update rewrote the link target but left the
+    abbreviated label naming the previous commit.
+    """
+    text = (REPO_ROOT / "manifests" / "README.md").read_text(encoding="utf-8")
+    for label, target in re.findall(r"\[`([0-9a-f]+)[^`]*`\]\(([0-9a-f]{40})\.json\)", text):
+        assert target.startswith(label), (
+            f"manifests/README.md links to {target} but labels it {label}"
+        )
+
+
 def test_the_install_doc_exists_and_explains_the_trust_chain():
     doc = REPO_ROOT / "docs" / "INSTALL.md"
     assert doc.is_file(), "docs/INSTALL.md is the install flow of record"

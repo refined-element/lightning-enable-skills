@@ -15,7 +15,7 @@ See [`../docs/INSTALL.md`](../docs/INSTALL.md) for the install flow.
 
 | Commit | Manifest | Bundle files | `tools/install_skills.py` SHA-256 |
 |---|---|---|---|
-| `eebb4163519cf23bef592a44e453809fc9f79b10` | [`587a7b7f…json`](eebb4163519cf23bef592a44e453809fc9f79b10.json) | 43 | see the manifest's `installer_sha256` |
+| `eebb4163519cf23bef592a44e453809fc9f79b10` | [`eebb4163…json`](eebb4163519cf23bef592a44e453809fc9f79b10.json) | 43 | see the manifest's `installer_sha256` |
 
 The installer digest is recorded in each manifest's `installer_sha256` field
 and is what `verify` and `install` check themselves against. Read it out of the
