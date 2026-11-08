@@ -3,7 +3,7 @@
     "references",
     "skills"
   ],
-  "commit": "4e1ded274917647d1ccd5a9032e0e1b7535b2ab9",
+  "commit": "8a30904ded0d893682dc5d987a7224e9996ace9b",
   "files": {
     "references/amazap-marketplace.md": "a135343ab0c93eca91b3667efc62d750a9b84bc7a80eda8672ce90dddaf5a6dc",
     "references/l402-verification-levels.md": "2ff00cf1479862b8323a14c07aa14c12090791d51c89cf4995496eef66d5a090",
@@ -48,11 +48,11 @@
     "skills/producer-setup/SKILL.md": "816bca262de407567a801d308141ff85a5fe51851201655c224fc1fd9dfd44e6",
     "skills/sell-this/README.md": "5fee75f2d17edbbc4d93adf08a53f9e608b953a50d6ff0f477d74f67a4b38148",
     "skills/sell-this/SKILL.md": "0aa1f74eac81dc101cebe6d788b4f58bdc96dcc54817d99af607cf54ef797f5a",
-    "skills/sell-with-lightning-address/README.md": "f7e4bc5d34956ab7714566ca15df387a57dacec798b4aa680eb23a24333c2bbe",
-    "skills/sell-with-lightning-address/SKILL.md": "353d0270f81b29e8134e60da4d812885e9f7205cf52ea6742ed619bdfbf36d19",
+    "skills/sell-with-lightning-address/README.md": "63f5b76f0dda3cad4cb1f7089393a0bc87950f61e828efbbafc6fbb30b04a8b2",
+    "skills/sell-with-lightning-address/SKILL.md": "a0dfe7c35f3ca286462f73696f4b0a92c6e48db01dfaf26e3e6b1e8ff733c37e",
     "skills/sell-with-lightning-address/scripts/claim.sh": "24f1cc5af93d1e2a13c108e8fbab871ee3b73483addf2f06b983998aa315e4c7",
     "skills/verify-producer/README.md": "a5083dc1c131764d9f15c9f5270da8927fdf5be1ee9031ca188ebc517291b174",
-    "skills/verify-producer/SKILL.md": "6d92488d315de51021f1aeb141cef82462d14826c4606edb364d79b1d8c1d14c",
+    "skills/verify-producer/SKILL.md": "47e3f9f5eac92d6b0a34d9dbf5220da18dad52b8930bbe2d37f8ea4203ce4de3",
     "skills/verify-producer/scripts/verify.sh": "4aca539f8cee55cb917fd7868a96d218f6bc039ed64e204eefd6cfc85426af3c"
   },
   "installer_sha256": "b7a80efd7a77e4cabd800b54820944b58162a0aacb333958747bc61ca9a55389",

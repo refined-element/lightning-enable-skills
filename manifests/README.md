@@ -15,7 +15,7 @@ See [`../docs/INSTALL.md`](../docs/INSTALL.md) for the install flow.
 
 | Commit | Manifest | Bundle files | `tools/install_skills.py` SHA-256 |
 |---|---|---|---|
-| `4e1ded274917647d1ccd5a9032e0e1b7535b2ab9` | [`4e1ded27…json`](4e1ded274917647d1ccd5a9032e0e1b7535b2ab9.json) | 49 | see the manifest's `installer_sha256` |
+| `8a30904ded0d893682dc5d987a7224e9996ace9b` | [`8a30904d…json`](8a30904ded0d893682dc5d987a7224e9996ace9b.json) | 49 | see the manifest's `installer_sha256` |
 | `43173d80720d614509bda1f7d6f9ecab676faf30` | [`43173d80…json`](43173d80720d614509bda1f7d6f9ecab676faf30.json) | 46 | see the manifest's `installer_sha256` |
 | `c17088ce495190b31e9653a84908feb51bc456ec` | [`c17088ce…json`](c17088ce495190b31e9653a84908feb51bc456ec.json) | 43 | see the manifest's `installer_sha256` |
 
@@ -25,7 +25,7 @@ manifest and compare before the first run:
 
 ```bash
 sha256sum tools/install_skills.py
-python3 -c "import json;print(json.load(open('manifests/4e1ded274917647d1ccd5a9032e0e1b7535b2ab9.json'))['installer_sha256'])"
+python3 -c "import json;print(json.load(open('manifests/8a30904ded0d893682dc5d987a7224e9996ace9b.json'))['installer_sha256'])"
 ```
 
 Those two must agree. They are published together on purpose: the manifest you
