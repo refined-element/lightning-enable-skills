@@ -111,17 +111,17 @@ cd lightning-enable-skills
 # Read the installer, then check it against the digest the manifest records.
 # This is the one step nothing can do for you: it is what makes the rest trustworthy.
 sha256sum tools/install_skills.py
-python3 -c "import json; print(json.load(open('manifests/a1ec74fb5adb1599e0c0984ae1c92e33d54214ea.json'))['installer_sha256'])"
+python3 -c "import json; print(json.load(open('manifests/3c5797ead93233c71b4acdf30e7c34fe060087f9.json'))['installer_sha256'])"
 
 # Stage the pinned bundle somewhere that is NOT a skills folder. The commit
 # comes from the manifest, so there is no version for you to type.
 python3 tools/install_skills.py fetch \
-    --manifest manifests/a1ec74fb5adb1599e0c0984ae1c92e33d54214ea.json \
+    --manifest manifests/3c5797ead93233c71b4acdf30e7c34fe060087f9.json \
     --staging ./le-skills-staging
 
 # Verify the whole bundle against that local manifest, then install
 python3 tools/install_skills.py install \
-    --manifest manifests/a1ec74fb5adb1599e0c0984ae1c92e33d54214ea.json \
+    --manifest manifests/3c5797ead93233c71b4acdf30e7c34fe060087f9.json \
     --staging ./le-skills-staging \
     --dest ~/.claude/skills \
     --skill agent-wallet-setup
