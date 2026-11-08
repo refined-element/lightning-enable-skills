@@ -354,3 +354,5 @@ again.
 >    restart the MCP to manage the account with `l402_producer`.
 > 5. Hand off: proxy URL, manifest URL, paid through `<paidThrough>`, unlisted
 >    until verification ships, where the key is. Offer the self-test.
+
+**Verify next:** to list the endpoint publicly, prove ownership with [`verify-producer`](../verify-producer/).

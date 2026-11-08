@@ -41,6 +41,7 @@ default `standard` profile advertises.
 | 🏗️ **[producer-setup](skills/producer-setup/)** | From nothing to a live paid API on your own wallet: connect, sign up over L402, publish to the Lightning Enable registry, self-test, verify. |
 | 🔁 **[create-l402-proxy](skills/create-l402-proxy/)** | Put an existing API behind a paid L402 proxy on an account you already have: receive wallet, proxy, priced routes, publish to the Lightning Enable registry, self-test, verify. |
 | ⚡ **[sell-with-lightning-address](skills/sell-with-lightning-address/)** | A URL plus a Lightning Address becomes a paid L402 endpoint in one conversation: read the quote, say yes once, `l402_producer` `sell_url` pays the claim and returns the proxy URL and the API key. |
+| ✅ **[verify-producer](skills/verify-producer/)** | Prove you own the API behind a proxy so it can be listed publicly: get the token, publish it as a well-known file, a DNS TXT record, or a response header, run the check, then turn on listing with your yes. |
 | 🏷️ **[sell-this](skills/sell-this/)** | Charge for one resource: mint an L402 challenge, verify payment, deliver. |
 | 🤝 **[negotiate-and-buy](skills/negotiate-and-buy/)** | Agent-to-agent commerce, buyer side: discover another agent's service over Nostr, vet it, settle over Lightning. |
 | 📣 **[offer-agent-service](skills/offer-agent-service/)** | Agent-to-agent commerce, seller side: publish a service on the agent relay, price it, get paid over Lightning. |
@@ -71,6 +72,8 @@ to the Lightning Enable registry, where buyers' agents find an endpoint with
 `discover_api` and pay it directly from their own wallets.
 `sell-with-lightning-address` is the shortest path: one paid claim turns a
 URL and a Lightning Address into a paid proxy, with no account first.
+`verify-producer` then proves the operator owns the API behind a proxy, which
+public listing requires.
 `negotiate-and-buy` and `offer-agent-service` are the two halves of agents
 transacting with each other on the Nostr relay. The `l402-*-integration`
 skills move the same protocol into your own code. `l402-compatibility-report`,
