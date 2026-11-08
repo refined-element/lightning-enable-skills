@@ -15,6 +15,7 @@ See [`../docs/INSTALL.md`](../docs/INSTALL.md) for the install flow.
 
 | Commit | Manifest | Bundle files | `tools/install_skills.py` SHA-256 |
 |---|---|---|---|
+| `a1ec74fb5adb1599e0c0984ae1c92e33d54214ea` | [`a1ec74fb…json`](a1ec74fb5adb1599e0c0984ae1c92e33d54214ea.json) | 45 | see the manifest's `installer_sha256` |
 | `c17088ce495190b31e9653a84908feb51bc456ec` | [`c17088ce…json`](c17088ce495190b31e9653a84908feb51bc456ec.json) | 43 | see the manifest's `installer_sha256` |
 
 The installer digest is recorded in each manifest's `installer_sha256` field
@@ -23,7 +24,7 @@ manifest and compare before the first run:
 
 ```bash
 sha256sum tools/install_skills.py
-python3 -c "import json;print(json.load(open('manifests/c17088ce495190b31e9653a84908feb51bc456ec.json'))['installer_sha256'])"
+python3 -c "import json;print(json.load(open('manifests/a1ec74fb5adb1599e0c0984ae1c92e33d54214ea.json'))['installer_sha256'])"
 ```
 
 Those two must agree. They are published together on purpose: the manifest you

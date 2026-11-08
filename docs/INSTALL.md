@@ -121,7 +121,7 @@ hash the installer with a tool you already trust:
 ```bash
 git clone https://github.com/refined-element/lightning-enable-skills
 cd lightning-enable-skills
-git checkout c17088ce495190b31e9653a84908feb51bc456ec   # the commit, not main
+git checkout a1ec74fb5adb1599e0c0984ae1c92e33d54214ea   # the commit, not main
 sha256sum tools/install_skills.py
 ```
 
