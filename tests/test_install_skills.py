@@ -58,7 +58,7 @@ import make_manifest  # noqa: E402
 
 import pinned_ref  # noqa: E402  - tests/, already on the path
 
-PINNED_COMMIT = "43173d80720d614509bda1f7d6f9ecab676faf30"
+PINNED_COMMIT = "4e1ded274917647d1ccd5a9032e0e1b7535b2ab9"
 MANIFEST_PATH = REPO_ROOT / "manifests" / f"{PINNED_COMMIT}.json"
 INSTALLER = TOOLS / "install_skills.py"
 
