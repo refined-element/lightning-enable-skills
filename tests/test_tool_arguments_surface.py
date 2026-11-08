@@ -48,6 +48,20 @@ ARGS_BY_TOOL = {
         },
         "publish": {"proxy_id", "service_name", "service_description", "categories"},
         "list_challenges": {"challenge_status", "limit", "offset"},
+        # MCP feat/sell-url (lightning-enable-mcp PR #130): `sellUrlArguments` in
+        # shared/l402-producer-sell-url.json.
+        "sell_url": {
+            "target_url",
+            "lightning_address",
+            "price_sats",
+            "name",
+            "description",
+            "recovery_email",
+            "recovery_nostr_pubkey",
+            "list_publicly",
+            "accept_terms",
+            "confirmation_nonce",
+        },
     },
     "agent_services": {
         "discover": {"category", "query", "hashtags", "limit"},

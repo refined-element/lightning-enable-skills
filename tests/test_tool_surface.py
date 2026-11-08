@@ -118,6 +118,8 @@ ACTION_TOOLS = {
             "add_endpoint",
             "publish",
             "list_challenges",
+            # MCP feat/sell-url (lightning-enable-mcp PR #130); shared/l402-producer-sell-url.json.
+            "sell_url",
         },
     ),
     "agent_services": (
