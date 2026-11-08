@@ -3,7 +3,7 @@
 **Give Lightning Enable a URL and a Lightning Address. Get back a URL that charges.**
 
 This skill has your agent turn an API you already run into a paid
-[L402](https://github.com/lightninglabs/L402) endpoint in one conversation turn.
+[L402](https://github.com/lightninglabs/L402) endpoint in one conversation.
 Your agent reads the price, asks you once, pays one Lightning invoice from its
 own wallet, and hands you a proxy URL. Every call to that URL answers HTTP 402
 Payment Required until the caller pays, and every payment goes to your Lightning
@@ -16,8 +16,10 @@ custody and settlement.
 ## What you need
 
 - [Lightning Enable MCP](https://github.com/refined-element/lightning-enable-mcp)
-  with a funded spending wallet that returns preimages (NWC, LND, or Strike),
-  and a shell with `curl`.
+  with a funded spending wallet that returns preimages (NWC, LND, or Strike).
+  An MCP with `l402_producer` `sell_url` does the whole claim in one call; on an
+  older MCP the skill falls back to `scripts/claim.sh`, which needs a shell with
+  `curl`.
 - An API on a public `https` hostname.
 - A Lightning Address (`name@domain`) from a wallet provider that supports them.
 - Optionally, a recovery email or Nostr public key. Without one, the API key is
@@ -33,9 +35,12 @@ custody and settlement.
 1. Reads the claim quote: the price, the trial it buys, the renewal, and the
    terms version. Nothing is quoted from memory.
 2. Asks you once for anything missing and for a yes.
-3. Sends the claim, pays the 402 from the agent's wallet within its ceiling,
-   and sends the same claim again with the payment token.
-4. Stores the new API key in a local file and tells you which one.
+3. Calls `l402_producer(action="sell_url", ...)`, which sends the claim, pays
+   the 402 from the agent's wallet within its ceiling, and sends the same claim
+   again with the payment token.
+4. Stores the new API key in a local file (mode 600) and tells you which one.
+   If a retry makes the server issue a fresh key, the agent replaces the old
+   one, which stops working.
 5. Gives you the proxy URL and the manifest URL, and offers one self-test
    purchase.
 

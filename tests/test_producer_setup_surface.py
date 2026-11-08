@@ -32,6 +32,10 @@ SKILL = REPO_ROOT / "skills" / "producer-setup" / "SKILL.md"
 
 ARGS_BY_ACTION = ARGS_BY_TOOL["l402_producer"]
 
+# Actions producer-setup does not drive: `sell_url` is the one-call claim, owned by
+# the sell-with-lightning-address skill.
+NOT_PRODUCER_SETUP = {"sell_url"}
+
 # Names that read plausibly but are not on the tool: the REST layer's own field
 # names, and the status/challenge_status collision.
 NEVER_ON_THE_TOOL = ("path_pattern", "pathPattern", "priority", "targetUrl")
@@ -43,7 +47,10 @@ def skill_text() -> str:
 
 
 def test_the_skill_documents_all_eight_actions(skill_text: str):
-    missing = [a for a in ARGS_BY_ACTION if f"action=\"{a}\"" not in skill_text]
+    missing = [
+        a for a in ARGS_BY_ACTION
+        if a not in NOT_PRODUCER_SETUP and f"action=\"{a}\"" not in skill_text
+    ]
     assert not missing, (
         f"producer-setup should name every l402_producer action at least once; "
         f"missing: {missing}"

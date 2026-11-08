@@ -40,7 +40,7 @@ default `standard` profile advertises.
 |---|---|
 | 🏗️ **[producer-setup](skills/producer-setup/)** | From nothing to a live paid API on your own wallet: connect, sign up over L402, publish to the Lightning Enable registry, self-test, verify. |
 | 🔁 **[create-l402-proxy](skills/create-l402-proxy/)** | Put an existing API behind a paid L402 proxy on an account you already have: receive wallet, proxy, priced routes, publish to the Lightning Enable registry, self-test, verify. |
-| ⚡ **[sell-with-lightning-address](skills/sell-with-lightning-address/)** | A URL plus a Lightning Address becomes a paid L402 endpoint in one turn: read the quote, pay one claim, get the proxy URL and the API key. |
+| ⚡ **[sell-with-lightning-address](skills/sell-with-lightning-address/)** | A URL plus a Lightning Address becomes a paid L402 endpoint in one conversation: read the quote, say yes once, `l402_producer` `sell_url` pays the claim and returns the proxy URL and the API key. |
 | 🏷️ **[sell-this](skills/sell-this/)** | Charge for one resource: mint an L402 challenge, verify payment, deliver. |
 | 🤝 **[negotiate-and-buy](skills/negotiate-and-buy/)** | Agent-to-agent commerce, buyer side: discover another agent's service over Nostr, vet it, settle over Lightning. |
 | 📣 **[offer-agent-service](skills/offer-agent-service/)** | Agent-to-agent commerce, seller side: publish a service on the agent relay, price it, get paid over Lightning. |
