@@ -104,9 +104,12 @@ Enable account?"** An email that already belongs to an account is refused only
 **after** payment (`merchant_exists`). If it does, use a Nostr key, no
 recovery, or a different email.
 
-On listing: a claimed endpoint stays unlisted until ownership verification
-ships, which is not available yet. The proxy works by direct URL meanwhile.
-`list_publicly` records the operator's wish for later.
+On listing: public listing requires ownership verification, so a claimed
+endpoint starts unlisted. The proxy works by direct URL meanwhile. The claim
+response carries the verification token and instructions (`verification`),
+and the next step is the [`verify-producer`](../verify-producer/) skill.
+`list_publicly` records the operator's wish; listing is turned on after the
+proxy is verified.
 
 Then **stop and wait for an explicit yes.** The next step spends their money.
 Before going on, check `budget(action="status")` and `get_balance()`. If
@@ -174,7 +177,8 @@ Report from the result:
 - **Manifest URL:** `manifestUrl`, which agents read to find the price.
 - **Paid through:** `paidThrough`, and how to renew: `renew`. Renewing in sats
   is the [`lightning-enable-account`](../lightning-enable-account/) skill.
-- **Listing:** `listing`. Repeat each entry in `warnings` word for word.
+- **Listing:** `listing`. Repeat each entry in `warnings` word for word. To
+  list publicly, verify ownership next with [`verify-producer`](../verify-producer/).
 - **Where the key is stored** (step 4).
 
 ### 6. Offer the self-test
@@ -353,6 +357,6 @@ again.
 > 4. The key is in `~/.lightning-enable/config.json` (`apiKeyStorage.path`);
 >    restart the MCP to manage the account with `l402_producer`.
 > 5. Hand off: proxy URL, manifest URL, paid through `<paidThrough>`, unlisted
->    until verification ships, where the key is. Offer the self-test.
+>    until ownership is verified (`verify-producer`), where the key is. Offer the self-test.
 
 **Verify next:** to list the endpoint publicly, prove ownership with [`verify-producer`](../verify-producer/).

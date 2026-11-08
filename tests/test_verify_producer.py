@@ -217,6 +217,8 @@ def test_poll_is_bounded():
     poll = flat(section("### 5. Poll while DNS or a deploy settles"))
     assert "scripts/verify.sh poll <proxyId>" in poll
     assert "up to 5 attempts" in poll and "up to 10" in poll
+    assert "A failed manual `verify` on a proxy that is already verified counts toward the three-failure drop" in poll
+    assert "Don't poll a proxy that is already verified." in poll
 
 
 def test_listing_step_explains_the_rules():

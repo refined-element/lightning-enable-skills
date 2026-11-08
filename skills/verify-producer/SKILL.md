@@ -197,9 +197,10 @@ Waits are capped at 120 seconds (`LE_MAX_WAIT`). If it ends unverified, stop and
 explain the last `reason`; don't start another round without a change on the
 target.
 
-Each failed check adds one to `failures`, and on a verified proxy failed checks
-count toward the three-failure rule in step 6. Don't poll a proxy that is
-already verified.
+Each failed check adds one to `failures`. A failed manual `verify` on a proxy
+that is already verified counts toward the three-failure drop in step 6 just
+like a failed daily re-check, so polling a verified proxy can unlist it. Don't
+poll a proxy that is already verified.
 
 ### 6. Offer public listing
 
