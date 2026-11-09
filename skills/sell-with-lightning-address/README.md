@@ -54,5 +54,6 @@ same claim with the same token until it goes through, and never pays twice.
   [`create-l402-proxy`](../create-l402-proxy/).
 - Charge for one file or answer: [`sell-this`](../sell-this/).
 
-Public listing waits for ownership verification, which is not available yet.
-The endpoint works by direct URL meanwhile.
+Public listing requires ownership verification. The endpoint works by direct
+URL meanwhile; to list it, verify ownership with
+[`verify-producer`](../verify-producer/).

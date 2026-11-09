@@ -259,10 +259,20 @@ def test_target_url_rules(rule: str):
     assert rule in flat(section("## What you need"))
 
 
-def test_listing_is_pending_verification_and_the_proxy_works_by_direct_url():
+def test_listing_requires_verification_and_points_at_verify_producer():
     text = flat(read(SKILL))
-    assert "stays unlisted until ownership verification ships" in text
+    assert "public listing requires ownership verification" in text
     assert "The proxy works by direct URL meanwhile." in text
+    assert "The claim response carries the verification token and instructions (`verification`)" in text
+    assert "the next step is the [`verify-producer`](../verify-producer/) skill" in text
+    assert text.rstrip().endswith("prove ownership with [`verify-producer`](../verify-producer/).")
+
+
+@pytest.mark.parametrize("path", FILES, ids=lambda p: p.name)
+def test_no_stale_verification_wording(path: Path):
+    text = flat(read(path)).lower()
+    for stale in ("not available yet", "until verification ships", "until ownership verification ships"):
+        assert stale not in text, stale
 
 
 # --------------------------------------------------------------------------- #
